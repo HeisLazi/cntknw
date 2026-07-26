@@ -5,9 +5,24 @@ import { RouteLoading } from '@components/shell/RouteStates';
 import { LibraryRoute } from './LibraryRoute';
 import { GalleryRoute } from './GalleryRoute';
 import { NotesRoute } from './NotesRoute';
-import { StudyRoute } from './StudyRoute';
 import { SettingsRoute } from './SettingsRoute';
 import { NotFoundRoute } from './NotFoundRoute';
+
+/**
+ * The Study Workspace is loaded on demand.
+ *
+ * It pulls in pdf.js, which is roughly half the application's byte
+ * weight. Library, Gallery and Notes do not render a PDF and should
+ * not wait for the machinery that does — importing it eagerly made
+ * the first paint of every route pay for a feature only one of them
+ * uses.
+ *
+ * The worker is already a separate asset via the `?url` import in
+ * `features/reader/pdfjs.ts`; this splits the core too.
+ */
+const LazyStudyRoute = lazy(async () => ({
+  default: (await import('./StudyRoute')).StudyRoute,
+}));
 
 /**
  * The component lab, behind a statically-eliminable branch.
@@ -56,7 +71,14 @@ export function createRoutes(includeDevRoutes: boolean): RouteObject[] {
     { path: 'notes', element: <NotesRoute /> },
 
     // Books and artworks. One route, per INV-002.
-    { path: 'study/:sourceId', element: <StudyRoute /> },
+    {
+      path: 'study/:sourceId',
+      element: (
+        <Suspense fallback={<RouteLoading label="Opening source…" />}>
+          <LazyStudyRoute />
+        </Suspense>
+      ),
+    },
 
     { path: 'settings', element: <SettingsRoute /> },
   ];

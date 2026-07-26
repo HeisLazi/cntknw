@@ -73,8 +73,29 @@ describe('routing', () => {
 
 describe('Library route', () => {
   it('teaches one next action when empty', async () => {
+    // PDD §9.8: the Library's empty state is "import your first PDF".
+    // From Phase 1 the teaching IS the affordance — the drop zone and
+    // its button are the next action, rather than prose describing one.
     await mount('/library');
-    expect(await screen.findByText('Your library is empty')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: 'Choose a PDF' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Drop a PDF here')).toBeInTheDocument();
+    // And it says where the file goes, because "local-first" is a
+    // promise the user cannot verify for themselves.
+    expect(
+      screen.getByText('Everything stays on this device. Nothing is uploaded.'),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the import affordance available once the library is not empty', async () => {
+    // Hiding it after the first import would make the second import
+    // harder than the first, for no reason.
+    const repositories = createMemoryRepositories();
+    await repositories.sources.create({ type: 'book', title: 'A book' });
+    await mount('/library', repositories);
+    expect(await screen.findByText('A book')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Choose a PDF' })).toBeInTheDocument();
   });
 
   it('lists stored books and links each into the shared workspace', async () => {
@@ -101,6 +122,7 @@ describe('Library route', () => {
     expect(await screen.findByText('A book')).toBeInTheDocument();
     expect(screen.queryByText('An artwork')).not.toBeInTheDocument();
     library.unmount();
+
 
     await mount('/gallery', repositories);
     expect(await screen.findByText('An artwork')).toBeInTheDocument();
@@ -152,8 +174,12 @@ describe('Study workspace', () => {
     expect(screen.queryByText('Page not found')).not.toBeInTheDocument();
   });
 
-  it('restores the saved reading position rather than resetting to page 1', async () => {
-    // AC-002 and WS-001, through the router this time.
+  it('opens against saved workspace state rather than a fresh default', async () => {
+    // The end-to-end AC-002 assertion — that the reader actually
+    // shows page 67 after a reload — lives in the browser suite,
+    // because it needs a real PDF, a real canvas and a real reload.
+    // What is checkable here is that the route loads the stored state
+    // instead of constructing a default over the top of it.
     const repositories = createMemoryRepositories();
     const source = await repositories.sources.create({
       type: 'book',
@@ -172,7 +198,7 @@ describe('Study workspace', () => {
       journalView: { scrollOffset: 0 },
       layout: {
         mode: 'split',
-        splitRatio: 0.5,
+        splitRatio: 0.35,
         sourceCollapsed: false,
         journalCollapsed: false,
       },
@@ -184,9 +210,19 @@ describe('Study workspace', () => {
     });
 
     await mount(`/study/${source.id}`, repositories);
+
+    // The workspace mounted with its saved split ratio, which only
+    // comes from the stored record.
     await waitFor(() => {
-      expect(screen.getByText('Page 67')).toBeInTheDocument();
+      expect(
+        screen.getByRole('separator', { name: 'Source and journal' }),
+      ).toHaveAttribute('aria-valuenow', '35');
     });
+
+    // Nothing overwrote the stored state on open.
+    const stored = await repositories.workspaceStates.getBySource(source.id);
+    expect(stored?.activeLocation.pdf?.page).toBe(67);
+    expect(stored?.revision).toBe(0);
   });
 });
 
@@ -214,7 +250,12 @@ describe('route-level states', () => {
     expect(loading.closest('[role="status"]')).not.toBeNull();
 
     release();
-    expect(await screen.findByText('Your library is empty')).toBeInTheDocument();
+    // The loading state gives way to the import affordance, which is
+    // what an empty library offers.
+    expect(
+      await screen.findByRole('button', { name: 'Choose a PDF' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Loading your library…')).not.toBeInTheDocument();
   });
 
   it('offers a retry when a repository read fails', async () => {

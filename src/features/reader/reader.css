@@ -1,0 +1,191 @@
+.cn-reader {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background-color: var(--cn-surface-sunken);
+}
+
+.cn-reader__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cn-space-lg);
+  padding: var(--cn-space-2xs) var(--cn-space-md);
+  border-bottom: var(--cn-border-width) solid var(--cn-border-subtle);
+  background-color: var(--cn-surface);
+  /* Stays put while the pages scroll under it. */
+  position: sticky;
+  top: 0;
+  z-index: var(--cn-z-sticky);
+}
+
+.cn-reader__group {
+  display: flex;
+  align-items: center;
+  gap: var(--cn-space-2xs);
+}
+
+.cn-reader__page,
+.cn-reader__zoom {
+  font-size: var(--cn-text-xs);
+  color: var(--cn-ink-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cn-reader__zoom {
+  min-width: 3.5rem;
+  text-align: center;
+}
+
+.cn-reader__scroll {
+  flex: 1;
+  min-height: 0;
+  padding: var(--cn-space-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--cn-space-lg);
+}
+
+.cn-pdf-page {
+  position: relative;
+  /* The page itself is white paper regardless of theme — inverting
+   * a scanned document makes it unreadable, and recolouring an
+   * author's figures misrepresents them. */
+  background-color: var(--cn-palette-ink-050);
+  box-shadow: var(--cn-shadow-md);
+  border-radius: var(--cn-radius-xs);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.cn-pdf-page__canvas {
+  display: block;
+}
+
+.cn-pdf-page__number {
+  position: absolute;
+  right: var(--cn-space-sm);
+  bottom: var(--cn-space-sm);
+  padding: var(--cn-space-3xs) var(--cn-space-2xs);
+  border-radius: var(--cn-radius-xs);
+  background-color: var(--cn-surface);
+  color: var(--cn-ink-muted);
+  font-size: var(--cn-text-2xs);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.cn-pdf-page--error {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cn-space-2xs);
+  padding: var(--cn-space-xl);
+  background-color: var(--cn-surface);
+  color: var(--cn-danger);
+  font-size: var(--cn-text-sm);
+  box-shadow: none;
+  border: var(--cn-border-width) solid var(--cn-danger);
+}
+
+.cn-pdf-page__detail {
+  color: var(--cn-ink-muted);
+  font-family: var(--cn-font-mono);
+  font-size: var(--cn-text-xs);
+}
+
+/* ── Import ─────────────────────────────────────────────────────── */
+
+.cn-import {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cn-space-md);
+}
+
+.cn-import__drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--cn-space-sm);
+  min-height: 9rem;
+  padding: var(--cn-space-xl);
+  border: var(--cn-border-width-thick) dashed var(--cn-border);
+  border-radius: var(--cn-radius-lg);
+  color: var(--cn-ink-muted);
+  text-align: center;
+  transition:
+    border-color var(--cn-duration-fast) var(--cn-ease-standard),
+    background-color var(--cn-duration-fast) var(--cn-ease-standard);
+}
+
+/* Drag-over state: border weight and a background shift, not colour
+ * alone — and the text changes too. */
+.cn-import__drop[data-dragging='true'] {
+  border-color: var(--cn-accent);
+  background-color: var(--cn-accent-quiet);
+  color: var(--cn-ink);
+}
+
+.cn-import__hint {
+  font-size: var(--cn-text-xs);
+}
+
+.cn-import__error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--cn-space-2xs);
+  color: var(--cn-danger);
+  font-size: var(--cn-text-sm);
+}
+
+.cn-import__error::before {
+  content: '!';
+  display: inline-grid;
+  place-items: center;
+  width: 1.1em;
+  height: 1.1em;
+  border: var(--cn-border-width) solid currentColor;
+  border-radius: var(--cn-radius-full);
+  font-weight: var(--cn-weight-semibold);
+  flex-shrink: 0;
+}
+
+/* ── Library cards ──────────────────────────────────────────────── */
+
+.cn-source-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cn-space-2xs);
+  height: 100%;
+}
+
+.cn-source-card__title {
+  font-size: var(--cn-text-base);
+  line-height: var(--cn-leading-snug);
+}
+
+.cn-source-card__title a {
+  color: var(--cn-ink-strong);
+  text-decoration: none;
+}
+
+.cn-source-card__title a:hover {
+  color: var(--cn-accent);
+  text-decoration: underline;
+}
+
+.cn-source-card__meta {
+  color: var(--cn-ink-muted);
+  font-size: var(--cn-text-xs);
+}
+
+.cn-source-card__progress {
+  margin-top: auto;
+  padding-top: var(--cn-space-sm);
+  color: var(--cn-ink-subtle);
+  font-size: var(--cn-text-xs);
+  font-variant-numeric: tabular-nums;
+}
