@@ -1,6 +1,6 @@
 # CNTKNW Current Implementation Status
 
-**Updated:** 26 July 2026 (Phase 0D complete; Phase 0E next)
+**Updated:** 27 July 2026 (Phase 1 core landed; Phase 0E editor spike next)
 **Repository:** `philosophy-journal-complete`
 **Git baseline:** `4494f24`, tag `phase-0c-impl` — the tree as Phase 0C left it
 **Status:** Living document. Update at every phase boundary.
@@ -38,6 +38,7 @@ be read* — is met.
 | 0C | Persistence — Dexie, schema versions, migrations, v1 readers | **Complete and verified**, contract and real browser |
 | 0D | Shell, routing, providers, design tokens, UI primitives | **Complete and verified** |
 | 0E | Editor spike, then journal vertical slice | **Not started** |
+| 1 | Reliable PDF core — import, render, exact resume | **AC-001 and AC-002 accepted**; text layer and outline outstanding |
 
 Phase order per ADR-0001 §1, which supersedes Handoff §19.
 
@@ -146,7 +147,11 @@ That is checked in five tests, not asserted in prose — the earlier phrase
 - **`applyMigration`.** Dry run only — deliberately no destructive path exists.
 - **Soft deletion beyond blocks and claims.** Every other entity hard-deletes; NFR-008 partial.
 - **`appState` migration.** Needs a settings store.
-- **PDF rendering, annotation UI, editor, dictionary, search, maps.**
+- **A PDF text layer.** Pages render as canvas only, so text cannot be
+  selected, searched or read by a screen reader. Phase 3 needs it for
+  annotation anchoring; it is the largest single gap in the reader.
+- **Document outline, thumbnails, page-number entry, search within a source.**
+- **Annotation UI, editor, dictionary, cross-source search, maps.**
 - **Atlas entities.** Primitives only.
 - **Read Aloud playback, TTS, OCR.**
 - **3D, chess, AI, sync.**
@@ -161,9 +166,9 @@ Node v22.16.0, npm 10.9.2, Windows 11 (10.0.26200) x64, clean `npm ci`.
 npm ci                PASS
 npm run typecheck     PASS   0 errors      (src/ and e2e/)
 npm run lint          PASS   0 errors, 0 warnings
-npm run test          PASS   417 tests, 15 test files, 0 skipped
-npm run test:e2e      PASS   34 tests, chromium, 0 skipped
-npm run build         PASS   489.87 kB, 149.06 kB gzipped
+npm run test          PASS   425 tests, 16 test files, 0 skipped
+npm run test:e2e      PASS   43 tests, chromium, 0 skipped
+npm run build         PASS   491.60 kB, 149.33 kB gzipped (main chunk)
 npm audit --omit=dev  PASS   0 vulnerabilities
 npm audit             exit 1, 5 high, all dev-only (ESLint transitive)
 ```
