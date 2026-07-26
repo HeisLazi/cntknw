@@ -35,6 +35,20 @@ export default tseslint.config(
     },
   },
   {
+    // Node-side files: the Playwright runner, the harness Vite config
+    // and the spec files all execute outside the browser.
+    files: [
+      'playwright.config.ts',
+      'vite.e2e.config.ts',
+      'e2e/browser/**/*.ts',
+    ],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
+  {
     ignores: [
       'dist/',
       'node_modules/',

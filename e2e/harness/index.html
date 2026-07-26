@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CNTKNW browser verification harness</title>
+  </head>
+  <body>
+    <!--
+      Development-only test harness. This page is served by
+      vite.e2e.config.ts, whose root is this directory, so it can
+      never enter the production build produced by `npm run build`.
+
+      It exists so the browser verification suite can drive real
+      IndexedDB through the SAME public composition the application
+      uses, rather than through raw indexedDB calls from the test
+      file — which would prove that IndexedDB works, not that CNTKNW
+      persistence works.
+    -->
+    <main id="harness">
+      <h1>CNTKNW browser verification harness</h1>
+      <p id="status">loading…</p>
+    </main>
+    <script type="module" src="./harness.ts"></script>
+  </body>
+</html>
