@@ -7,7 +7,7 @@ import type {
   UpdateBlockInput,
   MoveBlockInput,
 } from '@domain/index';
-import type { ExpectedRevision } from './concurrency';
+import type { ConcurrencyGuard } from './concurrency';
 
 export interface JournalRepository {
   getJournalForSource(sourceId: EntityId): Promise<Journal | null>;
@@ -15,25 +15,38 @@ export interface JournalRepository {
   getJournalById(id: EntityId): Promise<Journal | null>;
   createJournal(input: CreateJournalInput): Promise<Journal>;
 
+  // Journal itself is revisioned but has no mutating method in this
+  // phase — a journal is created with a source and never edited or
+  // deleted through this interface. There is therefore no unguarded
+  // write path to close. Any future updateJournal/deleteJournal must
+  // take a ConcurrencyGuard (ADR-0003).
+
   /** Live blocks only. Soft-deleted blocks are excluded. */
   listBlocks(journalId: EntityId): Promise<JournalBlock[]>;
   listBlocksByPage(journalId: EntityId, page: number): Promise<JournalBlock[]>;
   getBlockById(id: EntityId): Promise<JournalBlock | null>;
 
   createBlock(input: CreateBlockInput): Promise<JournalBlock>;
+
+  /** @param guard mandatory — see ADR-0003. */
   updateBlock(
     input: UpdateBlockInput,
-    expectedRevision?: ExpectedRevision,
+    guard: ConcurrencyGuard,
   ): Promise<JournalBlock>;
-  moveBlock(input: MoveBlockInput): Promise<void>;
+
+  /** Reordering rewrites the block and bumps its revision. */
+  moveBlock(input: MoveBlockInput, guard: ConcurrencyGuard): Promise<void>;
 
   /**
    * Marks the block deleted. The record is retained so it can be
    * restored — PDD §19.3 and NFR-008 require a recovery path for
    * every destructive action.
+   *
+   * Idempotent when the block is already absent; guarded whenever it
+   * is present.
    */
-  softDeleteBlock(blockId: EntityId): Promise<void>;
-  restoreBlock(blockId: EntityId): Promise<void>;
+  softDeleteBlock(blockId: EntityId, guard: ConcurrencyGuard): Promise<void>;
+  restoreBlock(blockId: EntityId, guard: ConcurrencyGuard): Promise<void>;
   listDeletedBlocks(journalId: EntityId): Promise<JournalBlock[]>;
 
   /** Live blocks only, matching listBlocks. */

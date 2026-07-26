@@ -46,7 +46,7 @@ import {
   referencesMatch,
 } from '@domain/index';
 import type {
-  ExpectedRevision,
+  ConcurrencyGuard,
   SourceRepository,
   JournalRepository,
   AssetRepository,
@@ -60,7 +60,7 @@ import type {
   UnitOfWork,
 } from '../../repositories';
 import { assertRevision } from '../../repositories/concurrency';
-import { RecordNotFoundError } from '../../errors';
+import { RecordAlreadyExistsError, RecordNotFoundError } from '../../errors';
 
 const now = () => new Date().toISOString();
 
@@ -107,11 +107,11 @@ export class MemorySourceRepository implements SourceRepository {
   async update(
     id: EntityId,
     updates: Partial<Source>,
-    expectedRevision?: ExpectedRevision,
+    guard: ConcurrencyGuard,
   ): Promise<Source> {
     const existing = this.sources.get(id);
     if (!existing) throw new RecordNotFoundError('Source', id);
-    assertRevision('Source', id, existing.revision, expectedRevision);
+    assertRevision('Source', id, existing.revision, guard);
     const updated: Source = {
       ...existing,
       ...updates,
@@ -123,9 +123,10 @@ export class MemorySourceRepository implements SourceRepository {
     this.sources.set(id, updated);
     return updated;
   }
-  async archive(id: EntityId): Promise<void> {
+  async archive(id: EntityId, guard: ConcurrencyGuard): Promise<void> {
     const existing = this.sources.get(id);
     if (!existing) return;
+    assertRevision('Source', id, existing.revision, guard);
     this.sources.set(id, {
       ...existing,
       archivedAt: now(),
@@ -133,9 +134,10 @@ export class MemorySourceRepository implements SourceRepository {
       revision: existing.revision + 1,
     });
   }
-  async unarchive(id: EntityId): Promise<void> {
+  async unarchive(id: EntityId, guard: ConcurrencyGuard): Promise<void> {
     const existing = this.sources.get(id);
     if (!existing) return;
+    assertRevision('Source', id, existing.revision, guard);
     const { archivedAt: _removed, ...rest } = existing;
     this.sources.set(id, {
       ...rest,
@@ -143,7 +145,11 @@ export class MemorySourceRepository implements SourceRepository {
       revision: existing.revision + 1,
     });
   }
-  async delete(id: EntityId): Promise<void> {
+  async delete(id: EntityId, guard: ConcurrencyGuard): Promise<void> {
+    const existing = this.sources.get(id);
+    // Absent is idempotent: there is no newer revision to destroy.
+    if (!existing) return;
+    assertRevision('Source', id, existing.revision, guard);
     this.sources.delete(id);
     this.bookDetails.delete(id);
     this.artworkDetails.delete(id);
@@ -246,14 +252,14 @@ export class MemoryJournalRepository implements JournalRepository {
   }
   async updateBlock(
     input: UpdateBlockInput,
-    expectedRevision?: ExpectedRevision,
+    guard: ConcurrencyGuard,
   ): Promise<JournalBlock> {
     // Parsed at the boundary so any supplied content has its
     // defaults applied before it is stored.
     const parsed = UpdateBlockInputSchema.parse(input);
     const existing = this.blocks.get(parsed.id);
     if (!existing) throw new RecordNotFoundError('JournalBlock', parsed.id);
-    assertRevision('JournalBlock', parsed.id, existing.revision, expectedRevision);
+    assertRevision('JournalBlock', parsed.id, existing.revision, guard);
     const { id: _id, parentBlockId, epistemicClaimId, ...changes } = parsed;
     const updated: JournalBlock = {
       ...existing,
@@ -270,9 +276,13 @@ export class MemoryJournalRepository implements JournalRepository {
     this.blocks.set(parsed.id, updated);
     return updated;
   }
-  async moveBlock(input: MoveBlockInput): Promise<void> {
+  async moveBlock(
+    input: MoveBlockInput,
+    guard: ConcurrencyGuard,
+  ): Promise<void> {
     const existing = this.blocks.get(input.blockId);
     if (!existing) throw new RecordNotFoundError('JournalBlock', input.blockId);
+    assertRevision('JournalBlock', input.blockId, existing.revision, guard);
     const updated: JournalBlock = {
       ...existing,
       rank: input.newRank,
@@ -287,9 +297,13 @@ export class MemoryJournalRepository implements JournalRepository {
     if (input.newSourceLocation) updated.sourceLocation = input.newSourceLocation;
     this.blocks.set(input.blockId, updated);
   }
-  async softDeleteBlock(blockId: EntityId): Promise<void> {
+  async softDeleteBlock(
+    blockId: EntityId,
+    guard: ConcurrencyGuard,
+  ): Promise<void> {
     const existing = this.blocks.get(blockId);
     if (!existing) return;
+    assertRevision('JournalBlock', blockId, existing.revision, guard);
     // Marked, not removed. The previous implementation called
     // Map.delete here, which made recovery impossible and
     // contradicted PDD §19.3 and NFR-008 (audit defect A-6).
@@ -300,9 +314,13 @@ export class MemoryJournalRepository implements JournalRepository {
       revision: existing.revision + 1,
     });
   }
-  async restoreBlock(blockId: EntityId): Promise<void> {
+  async restoreBlock(
+    blockId: EntityId,
+    guard: ConcurrencyGuard,
+  ): Promise<void> {
     const existing = this.blocks.get(blockId);
     if (!existing) return;
+    assertRevision('JournalBlock', blockId, existing.revision, guard);
     const { deletedAt: _removed, ...rest } = existing;
     this.blocks.set(blockId, {
       ...rest,
@@ -427,11 +445,11 @@ export class MemoryAnnotationRepository implements AnnotationRepository {
   async update(
     id: EntityId,
     updates: Partial<Annotation>,
-    expectedRevision?: ExpectedRevision,
+    guard: ConcurrencyGuard,
   ): Promise<Annotation> {
     const existing = this.annotations.get(id);
     if (!existing) throw new RecordNotFoundError('Annotation', id);
-    assertRevision('Annotation', id, existing.revision, expectedRevision);
+    assertRevision('Annotation', id, existing.revision, guard);
     const updated: Annotation = {
       ...existing,
       ...updates,
@@ -443,7 +461,10 @@ export class MemoryAnnotationRepository implements AnnotationRepository {
     this.annotations.set(id, updated);
     return updated;
   }
-  async delete(id: EntityId): Promise<void> {
+  async delete(id: EntityId, guard: ConcurrencyGuard): Promise<void> {
+    const existing = this.annotations.get(id);
+    if (!existing) return;
+    assertRevision('Annotation', id, existing.revision, guard);
     this.annotations.delete(id);
   }
 }
@@ -463,7 +484,10 @@ export class MemoryConnectionRepository implements ConnectionRepository {
     this.connections.set(connection.id, connection);
     return connection;
   }
-  async delete(id: EntityId): Promise<void> {
+  async delete(id: EntityId, guard: ConcurrencyGuard): Promise<void> {
+    const existing = this.connections.get(id);
+    if (!existing) return;
+    assertRevision('Connection', id, existing.revision, guard);
     this.connections.delete(id);
   }
   async getConnectionsFrom(ref: Reference): Promise<Connection[]> {
@@ -521,11 +545,11 @@ export class MemoryConceptRepository implements ConceptRepository {
   async update(
     id: EntityId,
     updates: Partial<Concept>,
-    expectedRevision?: ExpectedRevision,
+    guard: ConcurrencyGuard,
   ): Promise<Concept> {
     const existing = this.concepts.get(id);
     if (!existing) throw new RecordNotFoundError('Concept', id);
-    assertRevision('Concept', id, existing.revision, expectedRevision);
+    assertRevision('Concept', id, existing.revision, guard);
     const updated: Concept = {
       ...existing,
       ...updates,
@@ -537,7 +561,10 @@ export class MemoryConceptRepository implements ConceptRepository {
     this.concepts.set(id, updated);
     return updated;
   }
-  async delete(id: EntityId): Promise<void> {
+  async delete(id: EntityId, guard: ConcurrencyGuard): Promise<void> {
+    const existing = this.concepts.get(id);
+    if (!existing) return;
+    assertRevision('Concept', id, existing.revision, guard);
     this.concepts.delete(id);
   }
 }
@@ -578,11 +605,11 @@ export class MemoryGlossaryRepository implements GlossaryRepository {
   async update(
     id: EntityId,
     updates: Partial<GlossaryEntry>,
-    expectedRevision?: ExpectedRevision,
+    guard: ConcurrencyGuard,
   ): Promise<GlossaryEntry> {
     const existing = this.entries.get(id);
     if (!existing) throw new RecordNotFoundError('GlossaryEntry', id);
-    assertRevision('GlossaryEntry', id, existing.revision, expectedRevision);
+    assertRevision('GlossaryEntry', id, existing.revision, guard);
     const updated: GlossaryEntry = {
       ...existing,
       ...updates,
@@ -594,7 +621,10 @@ export class MemoryGlossaryRepository implements GlossaryRepository {
     this.entries.set(id, updated);
     return updated;
   }
-  async delete(id: EntityId): Promise<void> {
+  async delete(id: EntityId, guard: ConcurrencyGuard): Promise<void> {
+    const existing = this.entries.get(id);
+    if (!existing) return;
+    assertRevision('GlossaryEntry', id, existing.revision, guard);
     this.entries.delete(id);
   }
   async listPronunciations(): Promise<GlossaryEntry[]> {
@@ -642,11 +672,11 @@ export class MemoryEpistemicClaimRepository
   async update(
     id: EntityId,
     updates: Partial<EpistemicClaim>,
-    expectedRevision?: ExpectedRevision,
+    guard: ConcurrencyGuard,
   ): Promise<EpistemicClaim> {
     const existing = this.claims.get(id);
     if (!existing) throw new RecordNotFoundError('EpistemicClaim', id);
-    assertRevision('EpistemicClaim', id, existing.revision, expectedRevision);
+    assertRevision('EpistemicClaim', id, existing.revision, guard);
     const updated: EpistemicClaim = {
       ...existing,
       ...updates,
@@ -658,9 +688,10 @@ export class MemoryEpistemicClaimRepository
     this.claims.set(id, updated);
     return updated;
   }
-  async softDelete(id: EntityId): Promise<void> {
+  async softDelete(id: EntityId, guard: ConcurrencyGuard): Promise<void> {
     const existing = this.claims.get(id);
     if (!existing) return;
+    assertRevision('EpistemicClaim', id, existing.revision, guard);
     this.claims.set(id, {
       ...existing,
       deletedAt: now(),
@@ -668,9 +699,10 @@ export class MemoryEpistemicClaimRepository
       revision: existing.revision + 1,
     });
   }
-  async restore(id: EntityId): Promise<void> {
+  async restore(id: EntityId, guard: ConcurrencyGuard): Promise<void> {
     const existing = this.claims.get(id);
     if (!existing) return;
+    assertRevision('EpistemicClaim', id, existing.revision, guard);
     const { deletedAt: _removed, ...rest } = existing;
     this.claims.set(id, {
       ...rest,
@@ -723,11 +755,11 @@ export class MemorySessionRepository implements SessionRepository {
   async update(
     id: EntityId,
     updates: Partial<StudySession>,
-    expectedRevision?: ExpectedRevision,
+    guard: ConcurrencyGuard,
   ): Promise<StudySession> {
     const existing = this.sessions.get(id);
     if (!existing) throw new RecordNotFoundError('StudySession', id);
-    assertRevision('StudySession', id, existing.revision, expectedRevision);
+    assertRevision('StudySession', id, existing.revision, guard);
     const updated: StudySession = {
       ...existing,
       ...updates,
@@ -737,7 +769,10 @@ export class MemorySessionRepository implements SessionRepository {
     this.sessions.set(id, updated);
     return updated;
   }
-  async delete(id: EntityId): Promise<void> {
+  async delete(id: EntityId, guard: ConcurrencyGuard): Promise<void> {
+    const existing = this.sessions.get(id);
+    if (!existing) return;
+    assertRevision('StudySession', id, existing.revision, guard);
     this.sessions.delete(id);
   }
 }
@@ -753,30 +788,44 @@ export class MemoryWorkspaceStateRepository
   async getBySource(sourceId: EntityId): Promise<WorkspaceState | null> {
     return this.states.get(sourceId) ?? null;
   }
-  async upsert(
-    state: WorkspaceState,
-    expectedRevision?: ExpectedRevision,
-  ): Promise<WorkspaceState> {
+  async create(state: WorkspaceState): Promise<WorkspaceState> {
     const existing = this.states.get(state.sourceId);
     if (existing) {
-      assertRevision(
-        'WorkspaceState',
-        state.sourceId,
-        existing.revision,
-        expectedRevision,
-      );
+      throw new RecordAlreadyExistsError('WorkspaceState', state.sourceId);
     }
+    const created: WorkspaceState = {
+      ...state,
+      id: state.id ?? createEntityId(),
+      createdAt: state.createdAt ?? now(),
+      updatedAt: now(),
+      revision: 0,
+    };
+    this.states.set(state.sourceId, created);
+    return created;
+  }
+  async update(
+    state: WorkspaceState,
+    guard: ConcurrencyGuard,
+  ): Promise<WorkspaceState> {
+    const existing = this.states.get(state.sourceId);
+    if (!existing) {
+      throw new RecordNotFoundError('WorkspaceState', state.sourceId);
+    }
+    assertRevision('WorkspaceState', state.sourceId, existing.revision, guard);
     const updated: WorkspaceState = {
       ...state,
-      id: existing?.id ?? state.id ?? createEntityId(),
-      createdAt: existing?.createdAt ?? state.createdAt ?? now(),
+      id: existing.id,
+      createdAt: existing.createdAt,
       updatedAt: now(),
-      revision: existing ? existing.revision + 1 : 0,
+      revision: existing.revision + 1,
     };
     this.states.set(state.sourceId, updated);
     return updated;
   }
-  async delete(sourceId: EntityId): Promise<void> {
+  async delete(sourceId: EntityId, guard: ConcurrencyGuard): Promise<void> {
+    const existing = this.states.get(sourceId);
+    if (!existing) return;
+    assertRevision('WorkspaceState', sourceId, existing.revision, guard);
     this.states.delete(sourceId);
   }
 }

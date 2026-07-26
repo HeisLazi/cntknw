@@ -4,7 +4,7 @@ import type {
   CreateEpistemicClaimInput,
   KnowledgeStatus,
 } from '@domain/index';
-import type { ExpectedRevision } from './concurrency';
+import type { ConcurrencyGuard } from './concurrency';
 
 export interface EpistemicClaimRepository {
   getById(id: EntityId): Promise<EpistemicClaim | null>;
@@ -22,11 +22,15 @@ export interface EpistemicClaimRepository {
   getByInterpretationThread(thread: string): Promise<EpistemicClaim[]>;
 
   create(input: CreateEpistemicClaimInput): Promise<EpistemicClaim>;
+
+  /** @param guard mandatory — see ADR-0003. */
   update(
     id: EntityId,
     updates: Partial<EpistemicClaim>,
-    expectedRevision?: ExpectedRevision,
+    guard: ConcurrencyGuard,
   ): Promise<EpistemicClaim>;
-  softDelete(id: EntityId): Promise<void>;
-  restore(id: EntityId): Promise<void>;
+
+  /** Idempotent when already absent; guarded whenever present. */
+  softDelete(id: EntityId, guard: ConcurrencyGuard): Promise<void>;
+  restore(id: EntityId, guard: ConcurrencyGuard): Promise<void>;
 }

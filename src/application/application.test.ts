@@ -10,6 +10,7 @@ import { createEntityId } from '@lib/id';
 import { compareRank } from '@lib/rank';
 import { createMemoryRepositories } from '@data/adapters/memory';
 import type { MemoryRepositories } from '@data/adapters/memory';
+import { expectedRevision } from '@data/repositories/concurrency';
 import { importPdf, UnsupportedFileError } from './import-pdf';
 import { createPageLinkedBlock } from './create-block';
 import { resumeSource } from './resume-source';
@@ -220,10 +221,13 @@ describe('resumeSource', () => {
   it('restores the saved page rather than resetting to page 1', async () => {
     // WS-001 and AC-002. Handoff §26 prohibits a page-1 reset.
     const imported = await importPdf(repos, { file: pdfFile() });
-    await repos.workspaceStates.upsert({
-      ...imported.workspaceState,
-      activeLocation: locationAt(imported.source.id, 67),
-    });
+    await repos.workspaceStates.update(
+      {
+        ...imported.workspaceState,
+        activeLocation: locationAt(imported.source.id, 67),
+      },
+      expectedRevision(imported.workspaceState.revision),
+    );
 
     const resumed = await resumeSource(repos, imported.source.id);
     expect(resumed.workspaceState?.activeLocation.pdf?.page).toBe(67);
@@ -240,10 +244,13 @@ describe('resumeSource', () => {
       sourceId, sourceLocation: locationAt(sourceId, 12), kind: 'paragraph',
       content: { type: 'paragraph', text: 'elsewhere' },
     });
-    await repos.workspaceStates.upsert({
-      ...imported.workspaceState,
-      activeLocation: locationAt(sourceId, 67),
-    });
+    await repos.workspaceStates.update(
+      {
+        ...imported.workspaceState,
+        activeLocation: locationAt(sourceId, 67),
+      },
+      expectedRevision(imported.workspaceState.revision),
+    );
 
     const resumed = await resumeSource(repos, sourceId);
     expect(resumed.nearbyBlocks).toHaveLength(1);
@@ -252,11 +259,14 @@ describe('resumeSource', () => {
   it('offers a resume choice when the positions differ (RA-023)', async () => {
     const imported = await importPdf(repos, { file: pdfFile() });
     const sourceId = imported.source.id;
-    await repos.workspaceStates.upsert({
-      ...imported.workspaceState,
-      activeLocation: locationAt(sourceId, 67),
-      listenLocation: locationAt(sourceId, 82),
-    });
+    await repos.workspaceStates.update(
+      {
+        ...imported.workspaceState,
+        activeLocation: locationAt(sourceId, 67),
+        listenLocation: locationAt(sourceId, 82),
+      },
+      expectedRevision(imported.workspaceState.revision),
+    );
 
     const resumed = await resumeSource(repos, sourceId);
     expect(resumed.offerResumeChoice).toBe(true);
@@ -268,11 +278,14 @@ describe('resumeSource', () => {
   it('offers no choice when the positions agree (RA-024)', async () => {
     const imported = await importPdf(repos, { file: pdfFile() });
     const sourceId = imported.source.id;
-    await repos.workspaceStates.upsert({
-      ...imported.workspaceState,
-      activeLocation: locationAt(sourceId, 67),
-      listenLocation: locationAt(sourceId, 67),
-    });
+    await repos.workspaceStates.update(
+      {
+        ...imported.workspaceState,
+        activeLocation: locationAt(sourceId, 67),
+        listenLocation: locationAt(sourceId, 67),
+      },
+      expectedRevision(imported.workspaceState.revision),
+    );
     const resumed = await resumeSource(repos, sourceId);
     expect(resumed.offerResumeChoice).toBe(false);
   });
@@ -374,7 +387,7 @@ describe('promoteBlockToClaim', () => {
 
   it('refuses a deleted block', async () => {
     const block = await makeBlock('x');
-    await repos.journals.softDeleteBlock(block.id);
+    await repos.journals.softDeleteBlock(block.id, expectedRevision(block.revision));
     await expect(
       promoteBlockToClaim(repos, { blockId: block.id }),
     ).rejects.toBeInstanceOf(BlockNotPromotableError);

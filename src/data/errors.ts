@@ -12,6 +12,7 @@ export type StorageErrorKind =
   | 'unavailable'
   | 'quota-exceeded'
   | 'not-found'
+  | 'already-exists'
   | 'malformed-record'
   | 'revision-conflict'
   | 'transaction-failed'
@@ -52,6 +53,26 @@ export class RecordNotFoundError extends CntknwStorageError {
     readonly id: string,
   ) {
     super(`${entity} ${id} not found`);
+  }
+}
+
+/**
+ * A create was rejected because the record is already stored.
+ *
+ * Repositories that separate `create` from `update` throw this
+ * rather than quietly turning the create into an update: an insert
+ * that silently becomes an overwrite is last-write-wins wearing a
+ * different name (ADR-0003).
+ */
+export class RecordAlreadyExistsError extends CntknwStorageError {
+  readonly kind = 'already-exists' as const;
+  readonly userMessage = 'That item already exists.';
+
+  constructor(
+    readonly entity: string,
+    readonly id: string,
+  ) {
+    super(`${entity} ${id} already exists`);
   }
 }
 

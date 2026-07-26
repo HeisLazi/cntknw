@@ -1,6 +1,7 @@
 import type { JournalRepository } from '@data/repositories/JournalRepository';
 import type { EpistemicClaimRepository } from '@data/repositories/EpistemicClaimRepository';
 import type { UnitOfWork } from '@data/repositories/UnitOfWork';
+import { expectedRevision } from '@data/repositories/concurrency';
 import type {
   EntityId,
   EpistemicClaim,
@@ -104,10 +105,17 @@ export async function promoteBlockToClaim(
       primaryLocation: block.sourceLocation,
     });
 
-    const updated = await deps.journals.updateBlock({
-      id: block.id,
-      epistemicClaimId: claim.id,
-    });
+    // The block was read before the transaction opened, so its read
+    // and its write are genuinely separated. Guarding on the revision
+    // we actually saw is the point of ADR-0003: if the user edited
+    // the block in between, promotion fails rather than overwriting.
+    const updated = await deps.journals.updateBlock(
+      {
+        id: block.id,
+        epistemicClaimId: claim.id,
+      },
+      expectedRevision(block.revision),
+    );
 
     return { claim, block: updated, alreadyPromoted: false };
   });
@@ -136,11 +144,18 @@ export async function linkBlockToExistingClaim(
       ? claim.originBlockIds
       : [...claim.originBlockIds, blockId];
 
-    const updatedClaim = await deps.claims.update(claimId, { originBlockIds });
-    const updatedBlock = await deps.journals.updateBlock({
-      id: blockId,
-      epistemicClaimId: claimId,
-    });
+    const updatedClaim = await deps.claims.update(
+      claimId,
+      { originBlockIds },
+      expectedRevision(claim.revision),
+    );
+    const updatedBlock = await deps.journals.updateBlock(
+      {
+        id: blockId,
+        epistemicClaimId: claimId,
+      },
+      expectedRevision(block.revision),
+    );
 
     return {
       claim: updatedClaim,

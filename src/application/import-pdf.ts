@@ -109,7 +109,10 @@ export async function importPdf(
       pdf: { page: 1 },
     };
 
-    const workspaceState = await deps.workspaceStates.upsert({
+    // `create`, not an upsert: the source was minted a few lines up,
+    // so this is unambiguously the first state for it. An upsert here
+    // would silently overwrite if the id ever collided (ADR-0003).
+    const workspaceState = await deps.workspaceStates.create({
       id: createEntityId(),
       sourceId: source.id,
       activeLocation: initialLocation,

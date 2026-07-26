@@ -3,19 +3,23 @@ import type {
   GlossaryEntry,
   CreateGlossaryEntryInput,
 } from '@domain/index';
-import type { ExpectedRevision } from './concurrency';
+import type { ConcurrencyGuard } from './concurrency';
 
 export interface GlossaryRepository {
   getById(id: EntityId): Promise<GlossaryEntry | null>;
   getAll(): Promise<GlossaryEntry[]>;
   findByTerm(term: string, language?: string): Promise<GlossaryEntry | null>;
   create(input: CreateGlossaryEntryInput): Promise<GlossaryEntry>;
+
+  /** @param guard mandatory — see ADR-0003. */
   update(
     id: EntityId,
     updates: Partial<GlossaryEntry>,
-    expectedRevision?: ExpectedRevision,
+    guard: ConcurrencyGuard,
   ): Promise<GlossaryEntry>;
-  delete(id: EntityId): Promise<void>;
+
+  /** Idempotent when already absent; guarded whenever present. */
+  delete(id: EntityId, guard: ConcurrencyGuard): Promise<void>;
 
   /**
    * Every term with a stored pronunciation, for the future Read

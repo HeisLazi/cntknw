@@ -52,10 +52,14 @@ import type {
   SourceRepository, JournalRepository, AssetRepository,
   AnnotationRepository, ConnectionRepository, SessionRepository,
   WorkspaceStateRepository, ConceptRepository, GlossaryRepository,
-  EpistemicClaimRepository, UnitOfWork, ExpectedRevision,
+  EpistemicClaimRepository, UnitOfWork, ConcurrencyGuard,
 } from '../../repositories';
 import { assertRevision } from '../../repositories/concurrency';
-import { RecordNotFoundError, classifyStorageFailure } from '../../errors';
+import {
+  RecordAlreadyExistsError,
+  RecordNotFoundError,
+  classifyStorageFailure,
+} from '../../errors';
 import type { CntknwDatabase } from '../../db/database';
 import { getDatabase } from '../../db/database';
 import { ALL_STORES } from '../../db/schemaVersions';
@@ -143,13 +147,13 @@ export class DexieSourceRepository implements SourceRepository {
   async update(
     id: EntityId,
     updates: Partial<Source>,
-    expectedRevision?: ExpectedRevision,
+    guard: ConcurrencyGuard,
   ): Promise<Source> {
     return guarded('Updating a source', async () => {
       const existingRecord = await this.db.sources.get(id);
       if (!existingRecord) throw new RecordNotFoundError('Source', id);
       const existing = sourceFromStorage(existingRecord);
-      assertRevision('Source', id, existing.revision, expectedRevision);
+      assertRevision('Source', id, existing.revision, guard);
 
       const updated: Source = {
         ...existing,
@@ -163,16 +167,17 @@ export class DexieSourceRepository implements SourceRepository {
       return updated;
     });
   }
-  async archive(id: EntityId): Promise<void> {
+  async archive(id: EntityId, guard: ConcurrencyGuard): Promise<void> {
     const existing = await this.getById(id);
     if (!existing) return;
-    await this.update(id, { archivedAt: now() });
+    await this.update(id, { archivedAt: now() }, guard);
   }
-  async unarchive(id: EntityId): Promise<void> {
+  async unarchive(id: EntityId, guard: ConcurrencyGuard): Promise<void> {
     return guarded('Unarchiving a source', async () => {
       const record = await this.db.sources.get(id);
       if (!record) return;
       const existing = sourceFromStorage(record);
+      assertRevision('Source', id, existing.revision, guard);
       const { archivedAt: _removed, ...rest } = existing;
       await this.db.sources.put(
         sourceToStorage({
@@ -183,8 +188,12 @@ export class DexieSourceRepository implements SourceRepository {
       );
     });
   }
-  async delete(id: EntityId): Promise<void> {
+  async delete(id: EntityId, guard: ConcurrencyGuard): Promise<void> {
     await guarded('Deleting a source', async () => {
+      const record = await this.db.sources.get(id);
+      // Absent is idempotent: there is no newer revision to destroy.
+      if (!record) return;
+      assertRevision('Source', id, sourceFromStorage(record).revision, guard);
       await this.db.sources.delete(id);
       await this.db.bookDetails.delete(id);
       await this.db.artworkDetails.delete(id);
@@ -314,14 +323,14 @@ export class DexieJournalRepository implements JournalRepository {
   }
   async updateBlock(
     input: UpdateBlockInput,
-    expectedRevision?: ExpectedRevision,
+    guard: ConcurrencyGuard,
   ): Promise<JournalBlock> {
     const parsed = UpdateBlockInputSchema.parse(input);
     return guarded('Updating a block', async () => {
       const record = await this.db.journalBlocks.get(parsed.id);
       if (!record) throw new RecordNotFoundError('JournalBlock', parsed.id);
       const existing = journalBlockFromStorage(record);
-      assertRevision('JournalBlock', parsed.id, existing.revision, expectedRevision);
+      assertRevision('JournalBlock', parsed.id, existing.revision, guard);
 
       const { id: _id, parentBlockId, epistemicClaimId, ...changes } = parsed;
       const updated: JournalBlock = {
@@ -340,11 +349,15 @@ export class DexieJournalRepository implements JournalRepository {
       return updated;
     });
   }
-  async moveBlock(input: MoveBlockInput): Promise<void> {
+  async moveBlock(
+    input: MoveBlockInput,
+    guard: ConcurrencyGuard,
+  ): Promise<void> {
     await guarded('Moving a block', async () => {
       const record = await this.db.journalBlocks.get(input.blockId);
       if (!record) throw new RecordNotFoundError('JournalBlock', input.blockId);
       const existing = journalBlockFromStorage(record);
+      assertRevision('JournalBlock', input.blockId, existing.revision, guard);
       const updated: JournalBlock = {
         ...existing,
         rank: input.newRank,
@@ -360,11 +373,15 @@ export class DexieJournalRepository implements JournalRepository {
       await this.db.journalBlocks.put(journalBlockToStorage(updated));
     });
   }
-  async softDeleteBlock(blockId: EntityId): Promise<void> {
+  async softDeleteBlock(
+    blockId: EntityId,
+    guard: ConcurrencyGuard,
+  ): Promise<void> {
     await guarded('Deleting a block', async () => {
       const record = await this.db.journalBlocks.get(blockId);
       if (!record) return;
       const existing = journalBlockFromStorage(record);
+      assertRevision('JournalBlock', blockId, existing.revision, guard);
       await this.db.journalBlocks.put(
         journalBlockToStorage({
           ...existing,
@@ -375,11 +392,15 @@ export class DexieJournalRepository implements JournalRepository {
       );
     });
   }
-  async restoreBlock(blockId: EntityId): Promise<void> {
+  async restoreBlock(
+    blockId: EntityId,
+    guard: ConcurrencyGuard,
+  ): Promise<void> {
     await guarded('Restoring a block', async () => {
       const record = await this.db.journalBlocks.get(blockId);
       if (!record) return;
       const existing = journalBlockFromStorage(record);
+      assertRevision('JournalBlock', blockId, existing.revision, guard);
       const { deletedAt: _removed, ...rest } = existing;
       await this.db.journalBlocks.put(
         journalBlockToStorage({
@@ -517,13 +538,13 @@ export class DexieAnnotationRepository implements AnnotationRepository {
   async update(
     id: EntityId,
     updates: Partial<Annotation>,
-    expectedRevision?: ExpectedRevision,
+    guard: ConcurrencyGuard,
   ): Promise<Annotation> {
     return guarded('Updating an annotation', async () => {
       const record = await this.db.annotations.get(id);
       if (!record) throw new RecordNotFoundError('Annotation', id);
       const existing = annotationFromStorage(record);
-      assertRevision('Annotation', id, existing.revision, expectedRevision);
+      assertRevision('Annotation', id, existing.revision, guard);
       const updated: Annotation = {
         ...existing,
         ...updates,
@@ -536,8 +557,13 @@ export class DexieAnnotationRepository implements AnnotationRepository {
       return updated;
     });
   }
-  async delete(id: EntityId): Promise<void> {
-    await guarded('Deleting an annotation', () => this.db.annotations.delete(id));
+  async delete(id: EntityId, guard: ConcurrencyGuard): Promise<void> {
+    await guarded('Deleting an annotation', async () => {
+      const record = await this.db.annotations.get(id);
+      if (!record) return;
+      assertRevision('Annotation', id, annotationFromStorage(record).revision, guard);
+      await this.db.annotations.delete(id);
+    });
   }
 }
 
@@ -560,8 +586,13 @@ export class DexieConnectionRepository implements ConnectionRepository {
     );
     return connection;
   }
-  async delete(id: EntityId): Promise<void> {
-    await guarded('Deleting a connection', () => this.db.connections.delete(id));
+  async delete(id: EntityId, guard: ConcurrencyGuard): Promise<void> {
+    await guarded('Deleting a connection', async () => {
+      const record = await this.db.connections.get(id);
+      if (!record) return;
+      assertRevision('Connection', id, connectionFromStorage(record).revision, guard);
+      await this.db.connections.delete(id);
+    });
   }
   async getConnectionsFrom(ref: Reference): Promise<Connection[]> {
     const records = await guarded('Listing connections', () =>
@@ -633,13 +664,13 @@ export class DexieConceptRepository implements ConceptRepository {
   async update(
     id: EntityId,
     updates: Partial<Concept>,
-    expectedRevision?: ExpectedRevision,
+    guard: ConcurrencyGuard,
   ): Promise<Concept> {
     return guarded('Updating a concept', async () => {
       const record = await this.db.concepts.get(id);
       if (!record) throw new RecordNotFoundError('Concept', id);
       const existing = conceptFromStorage(record);
-      assertRevision('Concept', id, existing.revision, expectedRevision);
+      assertRevision('Concept', id, existing.revision, guard);
       const updated: Concept = {
         ...existing,
         ...updates,
@@ -652,8 +683,13 @@ export class DexieConceptRepository implements ConceptRepository {
       return updated;
     });
   }
-  async delete(id: EntityId): Promise<void> {
-    await guarded('Deleting a concept', () => this.db.concepts.delete(id));
+  async delete(id: EntityId, guard: ConcurrencyGuard): Promise<void> {
+    await guarded('Deleting a concept', async () => {
+      const record = await this.db.concepts.get(id);
+      if (!record) return;
+      assertRevision('Concept', id, conceptFromStorage(record).revision, guard);
+      await this.db.concepts.delete(id);
+    });
   }
 }
 
@@ -698,13 +734,13 @@ export class DexieGlossaryRepository implements GlossaryRepository {
   async update(
     id: EntityId,
     updates: Partial<GlossaryEntry>,
-    expectedRevision?: ExpectedRevision,
+    guard: ConcurrencyGuard,
   ): Promise<GlossaryEntry> {
     return guarded('Updating a glossary entry', async () => {
       const record = await this.db.glossaryEntries.get(id);
       if (!record) throw new RecordNotFoundError('GlossaryEntry', id);
       const existing = glossaryEntryFromStorage(record);
-      assertRevision('GlossaryEntry', id, existing.revision, expectedRevision);
+      assertRevision('GlossaryEntry', id, existing.revision, guard);
       const updated: GlossaryEntry = {
         ...existing,
         ...updates,
@@ -717,10 +753,18 @@ export class DexieGlossaryRepository implements GlossaryRepository {
       return updated;
     });
   }
-  async delete(id: EntityId): Promise<void> {
-    await guarded('Deleting a glossary entry', () =>
-      this.db.glossaryEntries.delete(id),
-    );
+  async delete(id: EntityId, guard: ConcurrencyGuard): Promise<void> {
+    await guarded('Deleting a glossary entry', async () => {
+      const record = await this.db.glossaryEntries.get(id);
+      if (!record) return;
+      assertRevision(
+        'GlossaryEntry',
+        id,
+        glossaryEntryFromStorage(record).revision,
+        guard,
+      );
+      await this.db.glossaryEntries.delete(id);
+    });
   }
   async listPronunciations(): Promise<GlossaryEntry[]> {
     const records = await guarded('Listing pronunciations', () =>
@@ -779,13 +823,13 @@ export class DexieEpistemicClaimRepository implements EpistemicClaimRepository {
   async update(
     id: EntityId,
     updates: Partial<EpistemicClaim>,
-    expectedRevision?: ExpectedRevision,
+    guard: ConcurrencyGuard,
   ): Promise<EpistemicClaim> {
     return guarded('Updating a claim', async () => {
       const record = await this.db.epistemicClaims.get(id);
       if (!record) throw new RecordNotFoundError('EpistemicClaim', id);
       const existing = epistemicClaimFromStorage(record);
-      assertRevision('EpistemicClaim', id, existing.revision, expectedRevision);
+      assertRevision('EpistemicClaim', id, existing.revision, guard);
       const updated: EpistemicClaim = {
         ...existing,
         ...updates,
@@ -798,11 +842,12 @@ export class DexieEpistemicClaimRepository implements EpistemicClaimRepository {
       return updated;
     });
   }
-  async softDelete(id: EntityId): Promise<void> {
+  async softDelete(id: EntityId, guard: ConcurrencyGuard): Promise<void> {
     await guarded('Deleting a claim', async () => {
       const record = await this.db.epistemicClaims.get(id);
       if (!record) return;
       const existing = epistemicClaimFromStorage(record);
+      assertRevision('EpistemicClaim', id, existing.revision, guard);
       await this.db.epistemicClaims.put(
         epistemicClaimToStorage({
           ...existing,
@@ -813,11 +858,12 @@ export class DexieEpistemicClaimRepository implements EpistemicClaimRepository {
       );
     });
   }
-  async restore(id: EntityId): Promise<void> {
+  async restore(id: EntityId, guard: ConcurrencyGuard): Promise<void> {
     await guarded('Restoring a claim', async () => {
       const record = await this.db.epistemicClaims.get(id);
       if (!record) return;
       const existing = epistemicClaimFromStorage(record);
+      assertRevision('EpistemicClaim', id, existing.revision, guard);
       const { deletedAt: _removed, ...rest } = existing;
       await this.db.epistemicClaims.put(
         epistemicClaimToStorage({
@@ -879,13 +925,13 @@ export class DexieSessionRepository implements SessionRepository {
   async update(
     id: EntityId,
     updates: Partial<StudySession>,
-    expectedRevision?: ExpectedRevision,
+    guard: ConcurrencyGuard,
   ): Promise<StudySession> {
     return guarded('Updating a session', async () => {
       const record = await this.db.studySessions.get(id);
       if (!record) throw new RecordNotFoundError('StudySession', id);
       const existing = studySessionFromStorage(record);
-      assertRevision('StudySession', id, existing.revision, expectedRevision);
+      assertRevision('StudySession', id, existing.revision, guard);
       const updated: StudySession = {
         ...existing,
         ...updates,
@@ -896,8 +942,18 @@ export class DexieSessionRepository implements SessionRepository {
       return updated;
     });
   }
-  async delete(id: EntityId): Promise<void> {
-    await guarded('Deleting a session', () => this.db.studySessions.delete(id));
+  async delete(id: EntityId, guard: ConcurrencyGuard): Promise<void> {
+    await guarded('Deleting a session', async () => {
+      const record = await this.db.studySessions.get(id);
+      if (!record) return;
+      assertRevision(
+        'StudySession',
+        id,
+        studySessionFromStorage(record).revision,
+        guard,
+      );
+      await this.db.studySessions.delete(id);
+    });
   }
 }
 
@@ -912,36 +968,57 @@ export class DexieWorkspaceStateRepository implements WorkspaceStateRepository {
     );
     return record ? workspaceStateFromStorage(record) : null;
   }
-  async upsert(
+  async create(state: WorkspaceState): Promise<WorkspaceState> {
+    return guarded('Saving workspace state', async () => {
+      const record = await this.db.workspaceStates.get(state.sourceId);
+      if (record) {
+        throw new RecordAlreadyExistsError('WorkspaceState', state.sourceId);
+      }
+      const created: WorkspaceState = {
+        ...state,
+        id: state.id ?? createEntityId(),
+        createdAt: state.createdAt ?? now(),
+        updatedAt: now(),
+        revision: 0,
+      };
+      await this.db.workspaceStates.put(workspaceStateToStorage(created));
+      return created;
+    });
+  }
+  async update(
     state: WorkspaceState,
-    expectedRevision?: ExpectedRevision,
+    guard: ConcurrencyGuard,
   ): Promise<WorkspaceState> {
     return guarded('Saving workspace state', async () => {
       const record = await this.db.workspaceStates.get(state.sourceId);
-      const existing = record ? workspaceStateFromStorage(record) : null;
-      if (existing) {
-        assertRevision(
-          'WorkspaceState',
-          state.sourceId,
-          existing.revision,
-          expectedRevision,
-        );
+      if (!record) {
+        throw new RecordNotFoundError('WorkspaceState', state.sourceId);
       }
+      const existing = workspaceStateFromStorage(record);
+      assertRevision('WorkspaceState', state.sourceId, existing.revision, guard);
       const updated: WorkspaceState = {
         ...state,
-        id: existing?.id ?? state.id ?? createEntityId(),
-        createdAt: existing?.createdAt ?? state.createdAt ?? now(),
+        id: existing.id,
+        createdAt: existing.createdAt,
         updatedAt: now(),
-        revision: existing ? existing.revision + 1 : 0,
+        revision: existing.revision + 1,
       };
       await this.db.workspaceStates.put(workspaceStateToStorage(updated));
       return updated;
     });
   }
-  async delete(sourceId: EntityId): Promise<void> {
-    await guarded('Deleting workspace state', () =>
-      this.db.workspaceStates.delete(sourceId),
-    );
+  async delete(sourceId: EntityId, guard: ConcurrencyGuard): Promise<void> {
+    await guarded('Deleting workspace state', async () => {
+      const record = await this.db.workspaceStates.get(sourceId);
+      if (!record) return;
+      assertRevision(
+        'WorkspaceState',
+        sourceId,
+        workspaceStateFromStorage(record).revision,
+        guard,
+      );
+      await this.db.workspaceStates.delete(sourceId);
+    });
   }
 }
 

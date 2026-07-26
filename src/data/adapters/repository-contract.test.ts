@@ -16,7 +16,13 @@ import type { MemoryRepositories } from './memory';
 import { createIndexedDbRepositories } from './indexeddb';
 import { createTestDatabase } from '../db/database';
 import type { CntknwDatabase } from '../db/database';
-import { RevisionConflictError, RecordNotFoundError } from '../errors';
+import {
+  RevisionConflictError,
+  RecordNotFoundError,
+  RecordAlreadyExistsError,
+} from '../errors';
+import { expectedRevision, unconditionally } from '../repositories/concurrency';
+import type { ConcurrencyGuard } from '../repositories/concurrency';
 
 /**
  * The memory adapter defines the contract shape; the Dexie adapter
@@ -96,7 +102,11 @@ for (const adapter of adapters) {
 
       it('increments revision on update and preserves identity', async () => {
         const source = await repos.sources.create({ type: 'book', title: 'A' });
-        const updated = await repos.sources.update(source.id, { title: 'B' });
+        const updated = await repos.sources.update(
+          source.id,
+          { title: 'B' },
+          expectedRevision(source.revision),
+        );
         expect(updated.id).toBe(source.id);
         expect(updated.createdAt).toBe(source.createdAt);
         expect(updated.title).toBe('B');
@@ -105,11 +115,11 @@ for (const adapter of adapters) {
 
       it('archives and unarchives without deleting', async () => {
         const source = await repos.sources.create({ type: 'book', title: 'A' });
-        await repos.sources.archive(source.id);
+        await repos.sources.archive(source.id, expectedRevision(0));
         expect(await repos.sources.getActive()).toHaveLength(0);
         expect(await repos.sources.getById(source.id)).not.toBeNull();
 
-        await repos.sources.unarchive(source.id);
+        await repos.sources.unarchive(source.id, expectedRevision(1));
         expect(await repos.sources.getActive()).toHaveLength(1);
         const restored = await repos.sources.getById(source.id);
         expect(restored?.archivedAt).toBeUndefined();
@@ -198,7 +208,7 @@ for (const adapter of adapters) {
           content: { type: 'paragraph', text: 'keep me' },
         });
 
-        await repos.journals.softDeleteBlock(block.id);
+        await repos.journals.softDeleteBlock(block.id, expectedRevision(0));
 
         expect(await repos.journals.listBlocks(journal.id)).toHaveLength(0);
         expect(await repos.journals.getBlockCount(journal.id)).toBe(0);
@@ -218,8 +228,8 @@ for (const adapter of adapters) {
           rank: 'a',
           content: { type: 'paragraph', text: 'x' },
         });
-        await repos.journals.softDeleteBlock(block.id);
-        await repos.journals.restoreBlock(block.id);
+        await repos.journals.softDeleteBlock(block.id, expectedRevision(0));
+        await repos.journals.restoreBlock(block.id, expectedRevision(1));
 
         expect(await repos.journals.listBlocks(journal.id)).toHaveLength(1);
         const restored = await repos.journals.getBlockById(block.id);
@@ -241,10 +251,13 @@ for (const adapter of adapters) {
           parentBlockId: parent.id,
           content: { type: 'paragraph', text: 'child' },
         });
-        const detached = await repos.journals.updateBlock({
-          id: child.id,
-          parentBlockId: null,
-        });
+        const detached = await repos.journals.updateBlock(
+          {
+            id: child.id,
+            parentBlockId: null,
+          },
+          expectedRevision(child.revision),
+        );
         expect(detached.parentBlockId).toBeUndefined();
       });
 
@@ -258,11 +271,14 @@ for (const adapter of adapters) {
           sourceLocation: locationAt(sourceId, 5),
           content: { type: 'paragraph', text: 'x' },
         });
-        await repos.journals.moveBlock({
-          blockId: block.id,
-          newRank: 'b',
-          newSourceLocation: locationAt(sourceId, 6),
-        });
+        await repos.journals.moveBlock(
+          {
+            blockId: block.id,
+            newRank: 'b',
+            newSourceLocation: locationAt(sourceId, 6),
+          },
+          expectedRevision(block.revision),
+        );
         const moved = await repos.journals.getBlockById(block.id);
         expect(moved?.sourceLocation?.pdf?.page).toBe(6);
         expect(moved?.rank).toBe('b');
@@ -504,11 +520,11 @@ for (const adapter of adapters) {
 
       it('soft-deletes and restores', async () => {
         const claim = await repos.claims.create({ statement: 'x' });
-        await repos.claims.softDelete(claim.id);
+        await repos.claims.softDelete(claim.id, expectedRevision(0));
         expect(await repos.claims.getAll()).toHaveLength(0);
         expect(await repos.claims.getById(claim.id)).not.toBeNull();
 
-        await repos.claims.restore(claim.id);
+        await repos.claims.restore(claim.id, expectedRevision(1));
         expect(await repos.claims.getAll()).toHaveLength(1);
       });
 
@@ -546,10 +562,14 @@ for (const adapter of adapters) {
           startLocation: locationAt(sourceId, 1),
           activityMode: 'mixed',
         });
-        const updated = await repos.sessions.update(session.id, {
-          focusedSeconds: 3600,
-          listenedSeconds: 1200,
-        });
+        const updated = await repos.sessions.update(
+          session.id,
+          {
+            focusedSeconds: 3600,
+            listenedSeconds: 1200,
+          },
+          expectedRevision(session.revision),
+        );
         expect(updated.focusedSeconds).toBe(3600);
         expect(updated.listenedSeconds).toBe(1200);
         expect(updated.revision).toBe(1);
@@ -578,24 +598,45 @@ for (const adapter of adapters) {
         revision: 0,
       });
 
-      it('upserts and increments revision on subsequent writes', async () => {
+      it('creates at revision 0 and increments on subsequent writes', async () => {
         const sourceId = id();
-        const first = await repos.workspaceStates.upsert(makeState(sourceId));
+        const first = await repos.workspaceStates.create(makeState(sourceId));
         expect(first.revision).toBe(0);
 
-        const second = await repos.workspaceStates.upsert({
-          ...first,
-          activeLocation: locationAt(sourceId, 42),
-        });
+        const second = await repos.workspaceStates.update(
+          { ...first, activeLocation: locationAt(sourceId, 42) },
+          expectedRevision(first.revision),
+        );
         expect(second.revision).toBe(1);
         expect(second.id).toBe(first.id);
         expect(second.createdAt).toBe(first.createdAt);
         expect(second.activeLocation.pdf?.page).toBe(42);
       });
 
+      it('refuses a second create rather than silently overwriting', async () => {
+        // The upsert this replaced would have turned an accidental
+        // re-create into an overwrite of an existing workspace —
+        // last-write-wins under a different name (ADR-0003).
+        const sourceId = id();
+        await repos.workspaceStates.create(makeState(sourceId));
+        await expect(
+          repos.workspaceStates.create(makeState(sourceId)),
+        ).rejects.toBeInstanceOf(RecordAlreadyExistsError);
+      });
+
+      it('refuses an update before any state exists', async () => {
+        const sourceId = id();
+        await expect(
+          repos.workspaceStates.update(
+            makeState(sourceId),
+            expectedRevision(0),
+          ),
+        ).rejects.toBeInstanceOf(RecordNotFoundError);
+      });
+
       it('keeps reading and listening positions independent', async () => {
         const sourceId = id();
-        const saved = await repos.workspaceStates.upsert({
+        const saved = await repos.workspaceStates.create({
           ...makeState(sourceId),
           activeLocation: locationAt(sourceId, 67),
           listenLocation: locationAt(sourceId, 82),
@@ -729,32 +770,44 @@ for (const adapter of adapters) {
 
       it('increments by exactly one per successful update', async () => {
         const source = await repos.sources.create({ type: 'book', title: 'A' });
-        const first = await repos.sources.update(source.id, { title: 'B' }, 0);
-        const second = await repos.sources.update(first.id, { title: 'C' }, 1);
+        const first = await repos.sources.update(
+          source.id,
+          { title: 'B' },
+          expectedRevision(0),
+        );
+        const second = await repos.sources.update(
+          first.id,
+          { title: 'C' },
+          expectedRevision(1),
+        );
         expect(first.revision).toBe(1);
         expect(second.revision).toBe(2);
       });
 
       it('accepts a matching expected revision', async () => {
         const source = await repos.sources.create({ type: 'book', title: 'A' });
-        const updated = await repos.sources.update(source.id, { title: 'B' }, 0);
+        const updated = await repos.sources.update(
+          source.id,
+          { title: 'B' },
+          expectedRevision(0),
+        );
         expect(updated.title).toBe('B');
       });
 
       it('rejects a stale expected revision', async () => {
         const source = await repos.sources.create({ type: 'book', title: 'A' });
-        await repos.sources.update(source.id, { title: 'B' }, 0);
+        await repos.sources.update(source.id, { title: 'B' }, expectedRevision(0));
 
         await expect(
-          repos.sources.update(source.id, { title: 'C' }, 0),
+          repos.sources.update(source.id, { title: 'C' }, expectedRevision(0)),
         ).rejects.toBeInstanceOf(RevisionConflictError);
       });
 
       it('leaves stored data untouched after a conflict', async () => {
         const source = await repos.sources.create({ type: 'book', title: 'A' });
-        await repos.sources.update(source.id, { title: 'B' }, 0);
+        await repos.sources.update(source.id, { title: 'B' }, expectedRevision(0));
         await expect(
-          repos.sources.update(source.id, { title: 'C' }, 0),
+          repos.sources.update(source.id, { title: 'C' }, expectedRevision(0)),
         ).rejects.toBeInstanceOf(RevisionConflictError);
 
         const stored = await repos.sources.getById(source.id);
@@ -764,9 +817,9 @@ for (const adapter of adapters) {
 
       it('reports both revisions on conflict', async () => {
         const source = await repos.sources.create({ type: 'book', title: 'A' });
-        await repos.sources.update(source.id, { title: 'B' }, 0);
+        await repos.sources.update(source.id, { title: 'B' }, expectedRevision(0));
         try {
-          await repos.sources.update(source.id, { title: 'C' }, 0);
+          await repos.sources.update(source.id, { title: 'C' }, expectedRevision(0));
           expect.unreachable('should have thrown');
         } catch (error) {
           expect(error).toBeInstanceOf(RevisionConflictError);
@@ -776,11 +829,46 @@ for (const adapter of adapters) {
         }
       });
 
-      it('accepts last-write-wins when no revision is supplied', async () => {
+      // ─── ADR-0003: omission is not last-write-wins ─────────────
+
+      it('rejects a write with no guard rather than overwriting', async () => {
+        // TypeScript already makes the argument required. This
+        // asserts the runtime half of the same rule: an untyped
+        // caller — JavaScript, a bad cast, a value off the wire —
+        // must not be quietly granted last-write-wins, which is what
+        // ADR-0002 §4 permitted and ADR-0003 removes.
         const source = await repos.sources.create({ type: 'book', title: 'A' });
-        await repos.sources.update(source.id, { title: 'B' }, 0);
-        const overwritten = await repos.sources.update(source.id, { title: 'C' });
-        expect(overwritten.title).toBe('C');
+        await repos.sources.update(source.id, { title: 'B' }, expectedRevision(0));
+
+        // Called through the repository so `this` is still bound —
+        // the point is a missing argument, not a detached method.
+        const untyped = repos.sources as unknown as {
+          update(id: string, updates: { title: string }): Promise<unknown>;
+        };
+
+        await expect(untyped.update(source.id, { title: 'C' })).rejects.toThrow(
+          /ConcurrencyGuard is required/,
+        );
+
+        const stored = await repos.sources.getById(source.id);
+        expect(stored?.title).toBe('B');
+        expect(stored?.revision).toBe(1);
+      });
+
+      it('honours an explicit unconditional override', async () => {
+        // Migration and repair rewrite records they never read, so
+        // they have no revision to claim honestly. The override is
+        // available — but it has to be said out loud and named.
+        const source = await repos.sources.create({ type: 'book', title: 'A' });
+        await repos.sources.update(source.id, { title: 'B' }, expectedRevision(0));
+
+        const forced = await repos.sources.update(
+          source.id,
+          { title: 'C' },
+          unconditionally('migration'),
+        );
+        expect(forced.title).toBe('C');
+        expect(forced.revision).toBe(2);
       });
 
       it('detects a conflict on a journal block', async () => {
@@ -793,13 +881,13 @@ for (const adapter of adapters) {
         });
         await repos.journals.updateBlock(
           { id: block.id, content: { type: 'paragraph', text: 'second' } },
-          0,
+          expectedRevision(0),
         );
 
         await expect(
           repos.journals.updateBlock(
             { id: block.id, content: { type: 'paragraph', text: 'third' } },
-            0,
+            expectedRevision(0),
           ),
         ).rejects.toBeInstanceOf(RevisionConflictError);
 
@@ -827,24 +915,212 @@ for (const adapter of adapters) {
           updatedAt: new Date().toISOString(),
           revision: 0,
         };
-        const first = await repos.workspaceStates.upsert(base);
-        await repos.workspaceStates.upsert(
+        const first = await repos.workspaceStates.create(base);
+        await repos.workspaceStates.update(
           { ...first, activeLocation: locationAt(sourceId, 5) },
-          0,
+          expectedRevision(0),
         );
 
         await expect(
-          repos.workspaceStates.upsert(
+          repos.workspaceStates.update(
             { ...first, activeLocation: locationAt(sourceId, 9) },
-            0,
+            expectedRevision(0),
           ),
         ).rejects.toBeInstanceOf(RevisionConflictError);
+
+        // The newer write survives the rejected one.
+        const stored = await repos.workspaceStates.getBySource(sourceId);
+        expect(stored?.activeLocation.pdf?.page).toBe(5);
+      });
+
+      // ─── Stale destructive operations ──────────────────────────
+
+      it('rejects a stale hard delete and keeps the record', async () => {
+        const source = await repos.sources.create({ type: 'book', title: 'A' });
+        await repos.sources.update(source.id, { title: 'B' }, expectedRevision(0));
+
+        await expect(
+          repos.sources.delete(source.id, expectedRevision(0)),
+        ).rejects.toBeInstanceOf(RevisionConflictError);
+
+        const stored = await repos.sources.getById(source.id);
+        expect(stored?.title).toBe('B');
+        expect(stored?.revision).toBe(1);
+      });
+
+      it('rejects a stale soft delete and leaves the block live', async () => {
+        const journal = await repos.journals.getOrCreateJournalForSource(id(), 'J');
+        const block = await repos.journals.createBlock({
+          journalId: journal.id,
+          kind: 'paragraph',
+          rank: 'a',
+          content: { type: 'paragraph', text: 'first' },
+        });
+        await repos.journals.updateBlock(
+          { id: block.id, content: { type: 'paragraph', text: 'second' } },
+          expectedRevision(0),
+        );
+
+        await expect(
+          repos.journals.softDeleteBlock(block.id, expectedRevision(0)),
+        ).rejects.toBeInstanceOf(RevisionConflictError);
+
+        const stored = await repos.journals.getBlockById(block.id);
+        expect(stored?.deletedAt).toBeUndefined();
+        expect(stored?.content).toMatchObject({ text: 'second' });
+        expect(await repos.journals.listBlocks(journal.id)).toHaveLength(1);
+      });
+
+      it('rejects a stale restore and leaves the claim deleted', async () => {
+        const claim = await repos.claims.create({ statement: 'x' });
+        await repos.claims.softDelete(claim.id, expectedRevision(0));
+        // Someone else touches the deleted claim before we restore.
+        await repos.claims.update(
+          claim.id,
+          { statement: 'y' },
+          expectedRevision(1),
+        );
+
+        await expect(
+          repos.claims.restore(claim.id, expectedRevision(1)),
+        ).rejects.toBeInstanceOf(RevisionConflictError);
+
+        const stored = await repos.claims.getById(claim.id);
+        expect(stored?.deletedAt).toBeTruthy();
+        expect(stored?.statement).toBe('y');
+        expect(await repos.claims.getAll()).toHaveLength(0);
+      });
+
+      it('treats a delete of an absent record as a no-op', async () => {
+        // Nothing stored means no newer revision to destroy, so the
+        // guard has nothing to protect and the call stays idempotent.
+        await expect(
+          repos.sources.delete(id(), expectedRevision(7)),
+        ).resolves.toBeUndefined();
+      });
+
+      it('guards every revisioned entity, not merely sources', async () => {
+        // Parity check: each of these has its own adapter code path,
+        // and a guard missed on any one of them reopens the overwrite.
+        const staleWrites: Array<[string, () => Promise<unknown>]> = [];
+
+        const annotation = await repos.annotations.create({
+          sourceId: id(),
+          assetId: id(),
+          page: 1,
+          kind: 'highlight',
+          geometry: { normalized: true, data: {} },
+        });
+        await repos.annotations.update(
+          annotation.id,
+          { page: 2 },
+          expectedRevision(0),
+        );
+        staleWrites.push([
+          'annotation.update',
+          () => repos.annotations.update(annotation.id, { page: 3 }, expectedRevision(0)),
+        ]);
+        staleWrites.push([
+          'annotation.delete',
+          () => repos.annotations.delete(annotation.id, expectedRevision(0)),
+        ]);
+
+        const concept = await repos.concepts.create({ title: 'Alienation' });
+        await repos.concepts.update(
+          concept.id,
+          { title: 'Entfremdung' },
+          expectedRevision(0),
+        );
+        staleWrites.push([
+          'concept.update',
+          () => repos.concepts.update(concept.id, { title: 'X' }, expectedRevision(0)),
+        ]);
+        staleWrites.push([
+          'concept.delete',
+          () => repos.concepts.delete(concept.id, expectedRevision(0)),
+        ]);
+
+        const entry = await repos.glossary.create({ term: 'phronesis' });
+        await repos.glossary.update(
+          entry.id,
+          { term: 'phronēsis' },
+          expectedRevision(0),
+        );
+        staleWrites.push([
+          'glossary.update',
+          () => repos.glossary.update(entry.id, { term: 'X' }, expectedRevision(0)),
+        ]);
+        staleWrites.push([
+          'glossary.delete',
+          () => repos.glossary.delete(entry.id, expectedRevision(0)),
+        ]);
+
+        const sourceId = id();
+        const session = await repos.sessions.create({
+          sourceId,
+          startedAt: new Date().toISOString(),
+          startLocation: locationAt(sourceId, 1),
+        });
+        await repos.sessions.update(
+          session.id,
+          { focusedSeconds: 10 },
+          expectedRevision(0),
+        );
+        staleWrites.push([
+          'session.update',
+          () =>
+            repos.sessions.update(
+              session.id,
+              { focusedSeconds: 20 },
+              expectedRevision(0),
+            ),
+        ]);
+        staleWrites.push([
+          'session.delete',
+          () => repos.sessions.delete(session.id, expectedRevision(0)),
+        ]);
+
+        const connection = await repos.connections.create({
+          from: { type: 'block', id: id() },
+          to: { type: 'block', id: id() },
+          relationship: 'supports',
+        });
+        staleWrites.push([
+          'connection.delete',
+          () => repos.connections.delete(connection.id, expectedRevision(9)),
+        ]);
+
+        for (const [label, write] of staleWrites) {
+          await expect(write(), label).rejects.toBeInstanceOf(
+            RevisionConflictError,
+          );
+        }
+
+        // Everything above survived its stale write.
+        expect(await repos.annotations.getById(annotation.id)).not.toBeNull();
+        expect(await repos.concepts.getById(concept.id)).not.toBeNull();
+        expect(await repos.glossary.getById(entry.id)).not.toBeNull();
+        expect(await repos.sessions.getById(session.id)).not.toBeNull();
+        expect(await repos.connections.getById(connection.id)).not.toBeNull();
       });
 
       it('throws a typed not-found error rather than a bare Error', async () => {
         await expect(
-          repos.sources.update(id(), { title: 'x' }),
+          repos.sources.update(id(), { title: 'x' }, expectedRevision(0)),
         ).rejects.toBeInstanceOf(RecordNotFoundError);
+      });
+
+      it('exposes the guard as a discriminated union', async () => {
+        const guards: ConcurrencyGuard[] = [
+          expectedRevision(3),
+          unconditionally('migration'),
+          unconditionally('repair'),
+        ];
+        expect(guards.map((g) => g.mode)).toEqual([
+          'expected',
+          'unconditional',
+          'unconditional',
+        ]);
       });
     });
   });
