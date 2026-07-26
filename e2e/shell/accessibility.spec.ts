@@ -6,17 +6,36 @@
  * neither a layout engine nor `prefers-reduced-motion`, so these
  * cannot be asserted anywhere but here.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+
+/**
+ * Put keyboard focus in a known place before tabbing.
+ *
+ * Two separate things have to be true, and each was a real failure:
+ *
+ * `locator('body').press(...)` rather than `keyboard.press(...)`,
+ * because a freshly navigated page has no focused element and a raw
+ * key event then has nowhere to start from. Blurring first is *not*
+ * equivalent — it was tried, and it fails every time, because the
+ * key event still needs a focus context to move from.
+ *
+ * `bringToFront()` because the whole suite shares a browser: when
+ * another page had the window, the Tab occasionally went nowhere and
+ * the test failed roughly one full run in four while the application
+ * was correct. That is the worst kind of failure — it teaches people
+ * to re-run rather than to read.
+ */
+async function startTabbingFromTop(page: Page): Promise<void> {
+  await page.bringToFront();
+  await page.locator('body').press('Tab');
+}
 
 test.describe('keyboard access', () => {
   test('the first tab stop is a skip link that moves focus to main', async ({
     page,
   }) => {
     await page.goto('/library');
-    // Pressing through the body rather than the keyboard directly:
-    // a freshly navigated page has no focused element, and a bare
-    // keyboard event then has nowhere to start from.
-    await page.locator('body').press('Tab');
+    await startTabbingFromTop(page);
 
     const skip = page.getByRole('link', { name: 'Skip to content' });
     await expect(skip).toBeFocused();
@@ -30,7 +49,7 @@ test.describe('keyboard access', () => {
 
   test('focus is visible, not merely present', async ({ page }) => {
     await page.goto('/library');
-    await page.locator('body').press('Tab');
+    await startTabbingFromTop(page);
     await page.keyboard.press('Tab');
 
     const outline = await page.evaluate(() => {
@@ -53,7 +72,7 @@ test.describe('keyboard access', () => {
     await page.goto('/library');
 
     // Tab past the skip link to the first nav link, then walk.
-    await page.locator('body').press('Tab');
+    await startTabbingFromTop(page);
     await page.keyboard.press('Tab');
     await expect(page.getByRole('link', { name: 'Library' })).toBeFocused();
 

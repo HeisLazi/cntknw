@@ -441,6 +441,11 @@ indexeddb 62, identical cases. +186 since Phase 0C's original 331.
 One browser project, workers 1 — IndexedDB is origin-global, and concurrent
 tests would make any failure order-dependent and therefore useless as evidence.
 
+**Stability was measured, not assumed.** After a keyboard test was seen to fail
+intermittently (§10.4, defect 4), the fix was confirmed with four consecutive
+full-suite runs at 34/34. A gate that passes on the third attempt has not
+passed.
+
 ### 10.3 Bundle
 
 489.87 kB, 149.06 kB gzipped, up from 190.89 kB at Phase 0C. The increase is
@@ -455,7 +460,7 @@ is the obvious next lever and is recorded in §11.
 
 ### 10.4 Defects found by running
 
-**Five.** Two carried from Phase 0C (§12.4 of that report), three new.
+**Six.** Two carried from Phase 0C (§12.4 of that report), four new.
 
 1. **The component lab shipped in the production bundle.** It was statically
    imported by the route table, so the bundler included it even though nothing
@@ -474,6 +479,18 @@ is the obvious next lever and is recorded in §11.
    new URL; the second let `aria-activedescendant` name an id that was no
    longer in the DOM. Fixed at source — moved into render-time derivation —
    rather than suppressed.
+4. **A flaky keyboard test.** The three tab-order tests failed roughly one
+   full-suite run in four while the application was correct: the whole suite
+   shares a browser, and when another page held the window, the first Tab went
+   nowhere. Fixed by bringing the page to front before tabbing. The first
+   attempt at a fix — blurring the active element and pressing Tab on the page
+   — was *worse*, failing every time, because the key event still needs a focus
+   context to move from; it was reverted rather than kept. Confirmed by four
+   consecutive full runs at 34/34.
+
+   Recorded because a flaky gate is not a passing gate. A suite that fails
+   intermittently teaches people to re-run rather than to read, and the next
+   real failure gets re-run too.
 
 ---
 
