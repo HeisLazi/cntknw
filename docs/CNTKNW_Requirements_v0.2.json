@@ -1,0 +1,205 @@
+{
+  "documentVersion": "0.2",
+  "updatedAt": "2026-07-24",
+  "sourceOfTruth": [
+    "Latest explicit user decision",
+    "CNTKNW_Product_Design_Document_v0.2.md",
+    "CNTKNW_AI_Implementation_Handoff_v0.2.md",
+    "Approved later ADRs",
+    "Existing code"
+  ],
+  "invariants": [
+    {
+      "id": "INV-001",
+      "text": "Exactly three primary destinations: Library, Gallery, Notes."
+    },
+    {
+      "id": "INV-002",
+      "text": "Books and artworks use one shared Study Workspace."
+    },
+    {
+      "id": "INV-003",
+      "text": "Each source has one continuous journal."
+    },
+    {
+      "id": "INV-004",
+      "text": "New blocks inherit active source location automatically."
+    },
+    {
+      "id": "INV-005",
+      "text": "Empty pages do not create visible journal sections."
+    },
+    {
+      "id": "INV-006",
+      "text": "Journal, outline, cards, and maps use the same canonical blocks."
+    },
+    {
+      "id": "INV-007",
+      "text": "Explicit connections provide backlinks."
+    },
+    {
+      "id": "INV-008",
+      "text": "Drawings and annotations retain editable data."
+    },
+    {
+      "id": "INV-009",
+      "text": "Core study capability works offline."
+    },
+    {
+      "id": "INV-010",
+      "text": "Manual focus timing is the default."
+    },
+    {
+      "id": "INV-011",
+      "text": "3D is optional and never gates content."
+    },
+    {
+      "id": "INV-012",
+      "text": "Chess is future Library content, not a main tab."
+    },
+    {
+      "id": "INV-013",
+      "text": "All schema changes include migrations."
+    },
+    {
+      "id": "INV-014",
+      "text": "UI components do not directly write arbitrary database records."
+    },
+    {
+      "id": "INV-015",
+      "text": "User data supports local backup and restore."
+    }
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-001",
+      "phase": 1,
+      "text": "PDF import and open work offline."
+    },
+    {
+      "id": "AC-002",
+      "phase": 1,
+      "text": "Exact workspace state resumes."
+    },
+    {
+      "id": "AC-003",
+      "phase": 2,
+      "text": "Page 5-created content automatically belongs to page 5."
+    },
+    {
+      "id": "AC-004",
+      "phase": 2,
+      "text": "Empty pages create no visible journal section."
+    },
+    {
+      "id": "AC-005",
+      "phase": 4,
+      "text": "Typed page-to-page connection shows backlinks at both endpoints."
+    },
+    {
+      "id": "AC-006",
+      "phase": 5,
+      "text": "Offline dictionary lookup can be saved and reopened at original passage."
+    },
+    {
+      "id": "AC-007",
+      "phase": 3,
+      "text": "Annotations stay aligned after zoom, resize, mode change, and reopen."
+    },
+    {
+      "id": "AC-008",
+      "phase": 3,
+      "text": "Drawings remain editable after reopen."
+    },
+    {
+      "id": "AC-009",
+      "phase": 6,
+      "text": "Editing a map node edits the canonical journal block."
+    },
+    {
+      "id": "AC-010",
+      "phase": 6,
+      "text": "Switching views creates no duplicate content."
+    },
+    {
+      "id": "AC-011",
+      "phase": 8,
+      "text": "Manual timer continues during quiet reading."
+    },
+    {
+      "id": "AC-012",
+      "phase": 8,
+      "text": "Assisted auto-pause is transparent and configurable."
+    },
+    {
+      "id": "AC-013",
+      "phase": 9,
+      "text": "Notes-only and portable-library backups restore successfully."
+    },
+    {
+      "id": "AC-014",
+      "phase": 10,
+      "text": "Library and Gallery work without 3D."
+    },
+    {
+      "id": "AC-015",
+      "phase": 9,
+      "text": "Core actions are keyboard accessible; maps have outlines."
+    },
+    {
+      "id": "AC-016",
+      "phase": 11,
+      "text": "Chess is optional and its stats remain separate."
+    }
+  ],
+  "phases": [
+    {
+      "number": 0,
+      "name": "Foundation reset"
+    },
+    {
+      "number": 1,
+      "name": "Reliable PDF core"
+    },
+    {
+      "number": 2,
+      "name": "Infinite journal"
+    },
+    {
+      "number": 3,
+      "name": "Annotation and drawing"
+    },
+    {
+      "number": 4,
+      "name": "Connections and concepts"
+    },
+    {
+      "number": 5,
+      "name": "Dictionary and glossary"
+    },
+    {
+      "number": 6,
+      "name": "Notes, search, and maps"
+    },
+    {
+      "number": 7,
+      "name": "Artwork study"
+    },
+    {
+      "number": 8,
+      "name": "Sessions and statistics"
+    },
+    {
+      "number": 9,
+      "name": "Production hardening"
+    },
+    {
+      "number": 10,
+      "name": "Immersive worlds"
+    },
+    {
+      "number": 11,
+      "name": "Chess Room"
+    }
+  ]
+}

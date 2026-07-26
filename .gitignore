@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# Declaration emitted by `tsc -b` for the Vite config project
+vite.config.d.ts
+
+# Test and tooling output
+coverage/
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+
+# Editor and OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local environment
+.env
+.env.local
+.env.*.local

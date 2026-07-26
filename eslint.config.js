@@ -1,0 +1,44 @@
+import js from '@eslint/js';
+import tseslint from 'typescript-eslint';
+import globals from 'globals';
+
+export default tseslint.config(
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
+  {
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.es2022,
+      },
+    },
+    rules: {
+      // `_`-prefixed bindings are deliberate omissions, and
+      // `ignoreRestSiblings` covers the standard idiom for dropping
+      // a key: `const { deletedAt: _removed, ...rest } = record`.
+      // Without it, the only way to remove a field immutably gets
+      // flagged, which trains people to ignore the rule.
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+          destructuredArrayIgnorePattern: '^_',
+          ignoreRestSiblings: true,
+        },
+      ],
+      // `any` is prohibited by the implementation handoff §26, not
+      // merely discouraged.
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-empty-object-type': 'off',
+    },
+  },
+  {
+    ignores: [
+      'dist/',
+      'node_modules/',
+      'src/legacy-v1/',
+    ],
+  },
+);
