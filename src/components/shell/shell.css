@@ -1,0 +1,384 @@
+/*
+ * Application shell.
+ *
+ * Desktop is the complete shell. Phone is not a shrunken desktop —
+ * it prioritises navigation and light route content, because a
+ * two-pane study workspace on a 375px screen is a worse experience
+ * than an honest single-column one.
+ */
+
+.cn-shell {
+  display: grid;
+  grid-template-columns: var(--cn-nav-width) 1fr;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* ── Skip link ──────────────────────────────────────────────────── */
+
+.cn-skip-link {
+  position: absolute;
+  top: var(--cn-space-sm);
+  left: var(--cn-space-sm);
+  z-index: var(--cn-z-skip-link);
+  padding: var(--cn-space-sm) var(--cn-space-lg);
+  background-color: var(--cn-surface-raised);
+  border: var(--cn-border-width) solid var(--cn-accent);
+  border-radius: var(--cn-radius-md);
+  color: var(--cn-ink-strong);
+  font-size: var(--cn-text-sm);
+  text-decoration: none;
+  /* Off-screen until focused, rather than display:none — a hidden
+   * element cannot be focused, which would defeat the point. */
+  transform: translateY(calc(-100% - var(--cn-space-xl)));
+  transition: transform var(--cn-duration-fast) var(--cn-ease-out);
+}
+
+.cn-skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+/* ── Primary navigation ─────────────────────────────────────────── */
+
+.cn-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cn-space-xl);
+  padding: var(--cn-space-xl) var(--cn-space-lg);
+  background-color: var(--cn-surface);
+  border-right: var(--cn-border-width) solid var(--cn-border-subtle);
+}
+
+.cn-nav__brand {
+  font-family: var(--cn-font-serif);
+  font-size: var(--cn-text-lg);
+  font-weight: var(--cn-weight-semibold);
+  letter-spacing: var(--cn-tracking-wide);
+  color: var(--cn-ink-strong);
+}
+
+.cn-nav__primary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cn-space-3xs);
+}
+
+.cn-nav__link {
+  display: flex;
+  align-items: center;
+  gap: var(--cn-space-md);
+  min-height: var(--cn-target-min);
+  padding-inline: var(--cn-space-md);
+  border-radius: var(--cn-radius-md);
+  color: var(--cn-ink-muted);
+  font-size: var(--cn-text-sm);
+  text-decoration: none;
+  transition:
+    background-color var(--cn-duration-fast) var(--cn-ease-standard),
+    color var(--cn-duration-fast) var(--cn-ease-standard);
+}
+
+.cn-nav__link:hover {
+  background-color: var(--cn-surface-hover);
+  color: var(--cn-ink);
+}
+
+/*
+ * Current destination.
+ *
+ * Selected by [aria-current], not by a class: the styling and the
+ * announcement then cannot disagree. Weight and an inset marker
+ * carry it alongside colour.
+ */
+.cn-nav__link[aria-current='page'] {
+  background-color: var(--cn-accent-quiet);
+  color: var(--cn-ink-strong);
+  font-weight: var(--cn-weight-semibold);
+  box-shadow: inset var(--cn-border-width-thick) 0 0 var(--cn-accent);
+}
+
+.cn-nav__secondary {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--cn-space-3xs);
+  padding-top: var(--cn-space-lg);
+  border-top: var(--cn-border-width) solid var(--cn-border-subtle);
+}
+
+/* ── Main region ────────────────────────────────────────────────── */
+
+.cn-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.cn-main__inner {
+  flex: 1;
+  width: 100%;
+  max-width: var(--cn-content-max);
+  padding: var(--cn-space-2xl);
+}
+
+.cn-route-header {
+  margin-bottom: var(--cn-space-xl);
+}
+
+.cn-route-header__title {
+  font-size: var(--cn-text-3xl);
+  margin-bottom: var(--cn-space-2xs);
+}
+
+.cn-route-header__lede {
+  max-width: var(--cn-measure);
+  color: var(--cn-ink-muted);
+}
+
+/* ── Route-level states ─────────────────────────────────────────── */
+
+.cn-route-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cn-space-md);
+  align-items: flex-start;
+  max-width: var(--cn-measure-narrow);
+  padding: var(--cn-space-2xl);
+}
+
+.cn-route-state__title {
+  font-size: var(--cn-text-xl);
+}
+
+.cn-route-state__message {
+  color: var(--cn-ink-muted);
+}
+
+.cn-route-state__actions {
+  display: flex;
+  gap: var(--cn-space-sm);
+  flex-wrap: wrap;
+}
+
+/* A loading state that is text as well as a shape, so it is
+ * announced rather than merely animated. */
+.cn-route-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--cn-space-md);
+  padding: var(--cn-space-2xl);
+  color: var(--cn-ink-muted);
+}
+
+/* ── Study workspace ────────────────────────────────────────────── */
+
+.cn-study {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.cn-study__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cn-space-lg);
+  min-height: var(--cn-topbar-height);
+  padding-inline: var(--cn-space-xl);
+  border-bottom: var(--cn-border-width) solid var(--cn-border-subtle);
+}
+
+.cn-study__title {
+  font-size: var(--cn-text-base);
+  font-weight: var(--cn-weight-medium);
+}
+
+.cn-study__panes {
+  flex: 1;
+  min-height: 0;
+}
+
+.cn-study__pane {
+  height: 100%;
+  padding: var(--cn-space-xl);
+}
+
+.cn-study__pane--source {
+  background-color: var(--cn-surface-sunken);
+}
+
+.cn-study__pane--journal {
+  background-color: var(--cn-paper);
+}
+
+.cn-study__reading {
+  max-width: var(--cn-measure);
+  line-height: var(--cn-leading-relaxed);
+  color: var(--cn-ink-muted);
+}
+
+/* ── Component lab ──────────────────────────────────────────────── */
+
+.cn-lab__section {
+  padding-block: var(--cn-space-xl);
+  border-top: var(--cn-border-width) solid var(--cn-border-subtle);
+}
+
+.cn-lab__section:first-of-type {
+  border-top: none;
+}
+
+.cn-lab__heading {
+  font-size: var(--cn-text-xl);
+  margin-bottom: var(--cn-space-2xs);
+}
+
+.cn-lab__note {
+  max-width: var(--cn-measure);
+  margin-bottom: var(--cn-space-lg);
+  color: var(--cn-ink-muted);
+  font-size: var(--cn-text-sm);
+}
+
+.cn-lab__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--cn-space-md);
+}
+
+.cn-lab__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: var(--cn-space-lg);
+}
+
+.cn-lab__swatch {
+  display: flex;
+  align-items: center;
+  gap: var(--cn-space-md);
+  padding: var(--cn-space-md);
+  border: var(--cn-border-width) solid var(--cn-border-subtle);
+  border-radius: var(--cn-radius-md);
+  font-size: var(--cn-text-xs);
+  font-family: var(--cn-font-mono);
+}
+
+.cn-lab__chip {
+  width: var(--cn-space-2xl);
+  height: var(--cn-space-2xl);
+  border: var(--cn-border-width) solid var(--cn-border);
+  border-radius: var(--cn-radius-sm);
+  flex-shrink: 0;
+}
+
+.cn-lab__panes {
+  height: 14rem;
+  border: var(--cn-border-width) solid var(--cn-border);
+  border-radius: var(--cn-radius-md);
+  overflow: hidden;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────
+ *
+ * Tablet: the rail narrows to icons-with-labels-below and the shell
+ * stays two-column. Phone: navigation moves to a bottom bar, because
+ * a 15rem sidebar on a 375px screen leaves no room for content.
+ */
+
+@media (max-width: 60rem) {
+  .cn-shell {
+    grid-template-columns: var(--cn-nav-width-collapsed) 1fr;
+  }
+
+  .cn-nav {
+    padding-inline: var(--cn-space-2xs);
+    align-items: center;
+  }
+
+  .cn-nav__brand {
+    font-size: var(--cn-text-sm);
+  }
+
+  .cn-nav__link {
+    flex-direction: column;
+    gap: 0;
+    justify-content: center;
+    padding-inline: var(--cn-space-2xs);
+    font-size: var(--cn-text-2xs);
+    text-align: center;
+  }
+
+  .cn-main__inner {
+    padding: var(--cn-space-xl);
+  }
+}
+
+@media (max-width: 40rem) {
+  .cn-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+  }
+
+  .cn-nav {
+    grid-row: 2;
+    flex-direction: row;
+    align-items: stretch;
+    gap: var(--cn-space-2xs);
+    min-height: var(--cn-nav-height-compact);
+    padding: var(--cn-space-2xs);
+    border-right: none;
+    border-top: var(--cn-border-width) solid var(--cn-border-subtle);
+    /* Above content, below any overlay. */
+    position: sticky;
+    bottom: 0;
+    z-index: var(--cn-z-nav);
+  }
+
+  /* The wordmark and the secondary links leave the phone bar. They
+   * are still reachable — Settings has its own route — but they do
+   * not compete with the three primary destinations for the only
+   * horizontal space there is. */
+  .cn-nav__brand,
+  .cn-nav__secondary {
+    display: none;
+  }
+
+  .cn-nav__primary {
+    flex: 1;
+    flex-direction: row;
+  }
+
+  .cn-nav__link {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .cn-nav__link[aria-current='page'] {
+    box-shadow: inset 0 var(--cn-border-width-thick) 0 var(--cn-accent);
+  }
+
+  .cn-main__inner {
+    padding: var(--cn-space-lg);
+  }
+
+  .cn-route-header__title {
+    font-size: var(--cn-text-2xl);
+  }
+
+  /* Below this width the split workspace stacks. Two panes of ~180px
+   * each would make both unusable. */
+  .cn-study__panes .cn-split {
+    flex-direction: column;
+  }
+
+  .cn-study__panes .cn-split__handle {
+    display: none;
+  }
+
+  .cn-study__panes .cn-split__pane {
+    flex: 1 1 auto !important;
+  }
+}

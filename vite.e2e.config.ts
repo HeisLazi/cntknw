@@ -1,13 +1,23 @@
 /**
- * Vite config for the browser verification harness.
+ * Vite config for the end-to-end suite.
  *
- * Separate from `vite.config.ts` on purpose. Its root is
- * `e2e/harness`, so the harness page is reachable only when this
- * config is running — `npm run build` uses the default config and
- * cannot pick it up. A dev-only surface that ships in the production
- * bundle is not dev-only.
+ * Serves two things from **one origin**, on purpose:
+ *
+ *   /                          the application itself
+ *   /e2e/harness/index.html    the persistence verification harness
+ *
+ * One origin because IndexedDB is scoped to one. Running the harness
+ * on a second port would put its database somewhere the application
+ * could never read, so no test could seed a source and then open it
+ * through the real UI.
+ *
+ * Separate from `vite.config.ts` because the harness must never be
+ * reachable in production. `npm run build` uses the default config,
+ * which has no `e2e/` in its graph — `bundle`-shape assertions in
+ * `navigation.test.ts` and a grep of `dist/` both check that.
  */
 import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 import { fileURLToPath, URL } from 'url';
 
 const alias = {
@@ -21,15 +31,14 @@ const alias = {
   '@lib': fileURLToPath(new URL('./src/lib', import.meta.url)),
   '@app': fileURLToPath(new URL('./src/app', import.meta.url)),
   '@application': fileURLToPath(new URL('./src/application', import.meta.url)),
+  '@tests': fileURLToPath(new URL('./src/tests', import.meta.url)),
 };
 
 export default defineConfig({
-  root: fileURLToPath(new URL('./e2e/harness', import.meta.url)),
+  plugins: [react()],
   resolve: { alias },
   server: {
     port: 5174,
     strictPort: true,
-    // The harness imports from ../../src, which is outside its root.
-    fs: { allow: [fileURLToPath(new URL('.', import.meta.url))] },
   },
 });

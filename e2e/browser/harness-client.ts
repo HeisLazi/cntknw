@@ -52,8 +52,10 @@ export function harness(page: Page) {
  * installed. Called again after every reload, which is the point:
  * BV-001 requires the composition to be rebuilt from nothing.
  */
+export const HARNESS_URL = '/e2e/harness/index.html';
+
 export async function loadHarness(page: Page): Promise<void> {
-  await page.goto('/');
+  await page.goto(HARNESS_URL);
   await expect(page.locator('body')).toHaveAttribute('data-harness', 'ready');
 }
 
@@ -65,4 +67,28 @@ export async function reloadAndReopen(
   await page.reload();
   await expect(page.locator('body')).toHaveAttribute('data-harness', 'ready');
   await harness(page).call('open', databaseName);
+}
+
+/**
+ * Seed the application's own database through the harness.
+ *
+ * The harness and the application are served from one origin, so a
+ * source created here is a source the real UI can open. That is what
+ * lets the routing suite exercise `/study/:sourceId` against a
+ * source that actually exists, rather than only against a missing
+ * one.
+ */
+export async function seedApplicationSource(
+  page: Page,
+  title: string,
+): Promise<string> {
+  await loadHarness(page);
+  const api = harness(page);
+  // 'cntknw' is the production database name the app's composition
+  // root opens. Playwright isolates storage per test, so this does
+  // not leak into any other spec.
+  await api.call('open', 'cntknw');
+  const imported = await api.call('importSource', title);
+  await api.call('close');
+  return imported.sourceId;
 }

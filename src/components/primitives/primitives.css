@@ -1,0 +1,674 @@
+/*
+ * UI primitives.
+ *
+ * Every value here resolves to a token. No hex, no raw pixel sizes
+ * beyond hairlines, no bespoke easing — `design-tokens.test.ts`
+ * enforces it.
+ *
+ * States covered throughout: default, hover, focus-visible, active,
+ * disabled, loading, invalid. Meaning is never carried by colour
+ * alone (PDD §21) — an invalid field is also marked `aria-invalid`
+ * and given a message; a loading button is also `aria-busy` and
+ * says so; the active nav item also carries `aria-current`.
+ */
+
+/* ── Button ─────────────────────────────────────────────────────── */
+
+.cn-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--cn-space-sm);
+  min-height: var(--cn-target-min);
+  padding-inline: var(--cn-space-lg);
+  border: var(--cn-border-width) solid transparent;
+  border-radius: var(--cn-radius-md);
+  font-family: var(--cn-font-sans);
+  font-size: var(--cn-text-sm);
+  font-weight: var(--cn-weight-medium);
+  line-height: var(--cn-leading-snug);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color var(--cn-duration-fast) var(--cn-ease-standard),
+    border-color var(--cn-duration-fast) var(--cn-ease-standard),
+    color var(--cn-duration-fast) var(--cn-ease-standard);
+}
+
+.cn-button--sm {
+  min-height: 2rem;
+  padding-inline: var(--cn-space-md);
+  font-size: var(--cn-text-xs);
+}
+
+.cn-button--lg {
+  min-height: 3rem;
+  padding-inline: var(--cn-space-xl);
+  font-size: var(--cn-text-base);
+}
+
+.cn-button--primary {
+  background-color: var(--cn-accent);
+  color: var(--cn-accent-contrast);
+}
+.cn-button--primary:hover:not(:disabled) {
+  background-color: var(--cn-accent-hover);
+}
+.cn-button--primary:active:not(:disabled) {
+  background-color: var(--cn-accent-active);
+}
+
+.cn-button--secondary {
+  background-color: var(--cn-surface-raised);
+  border-color: var(--cn-border);
+  color: var(--cn-ink);
+}
+.cn-button--secondary:hover:not(:disabled) {
+  background-color: var(--cn-surface-hover);
+  border-color: var(--cn-border-strong);
+}
+.cn-button--secondary:active:not(:disabled) {
+  background-color: var(--cn-surface-active);
+}
+
+.cn-button--quiet {
+  background-color: transparent;
+  color: var(--cn-ink-muted);
+}
+.cn-button--quiet:hover:not(:disabled) {
+  background-color: var(--cn-surface-hover);
+  color: var(--cn-ink);
+}
+
+.cn-button--danger {
+  background-color: transparent;
+  border-color: var(--cn-danger);
+  color: var(--cn-danger);
+}
+.cn-button--danger:hover:not(:disabled) {
+  background-color: var(--cn-danger-quiet);
+}
+
+.cn-button:disabled {
+  background-color: var(--cn-disabled-surface);
+  border-color: transparent;
+  color: var(--cn-disabled-ink);
+  cursor: not-allowed;
+}
+
+.cn-button[aria-busy='true'] {
+  cursor: progress;
+}
+
+.cn-spinner {
+  width: 1em;
+  height: 1em;
+  border: var(--cn-border-width-thick) solid currentColor;
+  border-top-color: transparent;
+  border-radius: var(--cn-radius-full);
+  animation: cn-spin var(--cn-duration-slow) linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes cn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Reduced motion: a spinner that cannot spin still has to read as
+ * "busy", so it pulses opacity instead of vanishing silently. */
+@media (prefers-reduced-motion: reduce) {
+  .cn-spinner {
+    animation: cn-pulse 1.4s ease-in-out infinite;
+    border-top-color: currentColor;
+    opacity: 0.5;
+  }
+  @keyframes cn-pulse {
+    50% {
+      opacity: 1;
+    }
+  }
+}
+
+/* ── IconButton ─────────────────────────────────────────────────── */
+
+.cn-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--cn-target-min);
+  height: var(--cn-target-min);
+  padding: 0;
+  background-color: transparent;
+  border: var(--cn-border-width) solid transparent;
+  border-radius: var(--cn-radius-md);
+  color: var(--cn-ink-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--cn-duration-fast) var(--cn-ease-standard),
+    color var(--cn-duration-fast) var(--cn-ease-standard);
+}
+.cn-icon-button:hover:not(:disabled) {
+  background-color: var(--cn-surface-hover);
+  color: var(--cn-ink);
+}
+.cn-icon-button:active:not(:disabled) {
+  background-color: var(--cn-surface-active);
+}
+.cn-icon-button:disabled {
+  color: var(--cn-disabled-ink);
+  cursor: not-allowed;
+}
+.cn-icon-button--sm {
+  width: 2rem;
+  height: 2rem;
+}
+
+/* ── Field: Input, Textarea, Select ─────────────────────────────── */
+
+.cn-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cn-space-2xs);
+}
+
+.cn-field__label {
+  font-size: var(--cn-text-sm);
+  font-weight: var(--cn-weight-medium);
+  color: var(--cn-ink);
+}
+
+.cn-field__hint {
+  font-size: var(--cn-text-xs);
+  color: var(--cn-ink-muted);
+}
+
+/* Invalid state carries an icon glyph and text, not only colour. */
+.cn-field__error {
+  display: flex;
+  align-items: center;
+  gap: var(--cn-space-2xs);
+  font-size: var(--cn-text-xs);
+  color: var(--cn-danger);
+}
+
+.cn-field__error::before {
+  content: '!';
+  display: inline-grid;
+  place-items: center;
+  width: 1.1em;
+  height: 1.1em;
+  border: var(--cn-border-width) solid currentColor;
+  border-radius: var(--cn-radius-full);
+  font-weight: var(--cn-weight-semibold);
+  flex-shrink: 0;
+}
+
+.cn-input,
+.cn-textarea,
+.cn-select {
+  width: 100%;
+  min-height: var(--cn-target-min);
+  padding: var(--cn-space-sm) var(--cn-space-md);
+  background-color: var(--cn-surface-sunken);
+  border: var(--cn-border-width) solid var(--cn-border);
+  border-radius: var(--cn-radius-md);
+  color: var(--cn-ink);
+  font-size: var(--cn-text-sm);
+  transition: border-color var(--cn-duration-fast) var(--cn-ease-standard);
+}
+
+.cn-input::placeholder,
+.cn-textarea::placeholder {
+  color: var(--cn-ink-subtle);
+}
+
+.cn-input:hover:not(:disabled),
+.cn-textarea:hover:not(:disabled),
+.cn-select:hover:not(:disabled) {
+  border-color: var(--cn-border-strong);
+}
+
+.cn-input[aria-invalid='true'],
+.cn-textarea[aria-invalid='true'],
+.cn-select[aria-invalid='true'] {
+  border-color: var(--cn-danger);
+  border-width: var(--cn-border-width-thick);
+}
+
+.cn-input:disabled,
+.cn-textarea:disabled,
+.cn-select:disabled {
+  background-color: var(--cn-disabled-surface);
+  color: var(--cn-disabled-ink);
+  cursor: not-allowed;
+}
+
+.cn-textarea {
+  min-height: 6rem;
+  resize: vertical;
+  line-height: var(--cn-leading-normal);
+}
+
+.cn-select {
+  cursor: pointer;
+}
+
+/* ── Surface / Card ─────────────────────────────────────────────── */
+
+.cn-surface {
+  background-color: var(--cn-surface);
+  border-radius: var(--cn-radius-lg);
+}
+.cn-surface--bordered {
+  border: var(--cn-border-width) solid var(--cn-border);
+}
+.cn-surface--raised {
+  background-color: var(--cn-surface-raised);
+  box-shadow: var(--cn-shadow-sm);
+}
+.cn-surface--sunken {
+  background-color: var(--cn-surface-sunken);
+}
+.cn-surface--paper {
+  background-color: var(--cn-paper);
+}
+.cn-surface--pad-sm {
+  padding: var(--cn-space-md);
+}
+.cn-surface--pad-md {
+  padding: var(--cn-space-lg);
+}
+.cn-surface--pad-lg {
+  padding: var(--cn-space-2xl);
+}
+
+/* ── EmptyState ─────────────────────────────────────────────────── */
+
+.cn-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--cn-space-md);
+  max-width: var(--cn-measure-narrow);
+  padding: var(--cn-space-2xl);
+  border: var(--cn-border-width) dashed var(--cn-border);
+  border-radius: var(--cn-radius-lg);
+}
+
+.cn-empty-state__title {
+  font-size: var(--cn-text-lg);
+}
+
+.cn-empty-state__description {
+  color: var(--cn-ink-muted);
+  font-size: var(--cn-text-sm);
+}
+
+/* ── Dialog ─────────────────────────────────────────────────────── */
+
+/* Native <dialog>: focus trapping, Escape and inertness come from
+ * the platform rather than from a hand-rolled implementation that
+ * would get one of the three subtly wrong. */
+.cn-dialog {
+  width: min(32rem, calc(100vw - var(--cn-space-2xl)));
+  padding: 0;
+  background-color: var(--cn-surface-raised);
+  border: var(--cn-border-width) solid var(--cn-border);
+  border-radius: var(--cn-radius-lg);
+  color: var(--cn-ink);
+  box-shadow: var(--cn-shadow-lg);
+}
+
+.cn-dialog::backdrop {
+  background-color: var(--cn-scrim);
+}
+
+.cn-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--cn-space-lg);
+  padding: var(--cn-space-xl) var(--cn-space-xl) var(--cn-space-md);
+}
+
+.cn-dialog__title {
+  font-size: var(--cn-text-lg);
+}
+
+.cn-dialog__body {
+  padding-inline: var(--cn-space-xl);
+  color: var(--cn-ink-muted);
+  font-size: var(--cn-text-sm);
+}
+
+.cn-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--cn-space-sm);
+  padding: var(--cn-space-xl);
+}
+
+/* ── Popover / Menu ─────────────────────────────────────────────── */
+
+.cn-popover-root {
+  position: relative;
+  display: inline-flex;
+}
+
+.cn-popover {
+  position: absolute;
+  top: calc(100% + var(--cn-space-2xs));
+  left: 0;
+  z-index: var(--cn-z-popover);
+  min-width: 12rem;
+  padding: var(--cn-space-xs);
+  background-color: var(--cn-surface-raised);
+  border: var(--cn-border-width) solid var(--cn-border);
+  border-radius: var(--cn-radius-md);
+  box-shadow: var(--cn-shadow-md);
+}
+
+.cn-popover--end {
+  left: auto;
+  right: 0;
+}
+
+.cn-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--cn-space-sm);
+  width: 100%;
+  min-height: var(--cn-target-min);
+  padding-inline: var(--cn-space-md);
+  background-color: transparent;
+  border: none;
+  border-radius: var(--cn-radius-sm);
+  color: var(--cn-ink);
+  font-size: var(--cn-text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.cn-menu__item:hover:not(:disabled),
+.cn-menu__item[data-active='true'] {
+  background-color: var(--cn-surface-hover);
+}
+.cn-menu__item:disabled {
+  color: var(--cn-disabled-ink);
+  cursor: not-allowed;
+}
+
+.cn-menu__separator {
+  height: var(--cn-border-width);
+  margin: var(--cn-space-2xs) var(--cn-space-sm);
+  background-color: var(--cn-border-subtle);
+}
+
+/* ── Tooltip ────────────────────────────────────────────────────── */
+
+.cn-tooltip-root {
+  position: relative;
+  display: inline-flex;
+}
+
+.cn-tooltip {
+  position: absolute;
+  bottom: calc(100% + var(--cn-space-2xs));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--cn-z-tooltip);
+  padding: var(--cn-space-2xs) var(--cn-space-sm);
+  background-color: var(--cn-surface-raised);
+  border: var(--cn-border-width) solid var(--cn-border);
+  border-radius: var(--cn-radius-sm);
+  color: var(--cn-ink);
+  font-size: var(--cn-text-xs);
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--cn-shadow-sm);
+}
+
+/* ── Tabs ───────────────────────────────────────────────────────── */
+
+/* Local view switching only. Tabs never replace the three primary
+ * destinations — INV-001 and IA-001. */
+.cn-tabs__list {
+  display: flex;
+  gap: var(--cn-space-2xs);
+  border-bottom: var(--cn-border-width) solid var(--cn-border-subtle);
+}
+
+.cn-tabs__tab {
+  min-height: var(--cn-target-min);
+  padding-inline: var(--cn-space-md);
+  background: none;
+  border: none;
+  border-bottom: var(--cn-border-width-thick) solid transparent;
+  color: var(--cn-ink-muted);
+  font-size: var(--cn-text-sm);
+  cursor: pointer;
+  transition: color var(--cn-duration-fast) var(--cn-ease-standard);
+}
+.cn-tabs__tab:hover {
+  color: var(--cn-ink);
+}
+/* Selected state: weight and underline, not colour alone. */
+.cn-tabs__tab[aria-selected='true'] {
+  color: var(--cn-ink-strong);
+  font-weight: var(--cn-weight-semibold);
+  border-bottom-color: var(--cn-accent);
+}
+
+.cn-tabs__panel {
+  padding-top: var(--cn-space-lg);
+}
+
+/* ── SplitPane / ResizablePanel ─────────────────────────────────── */
+
+.cn-split {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.cn-split--vertical {
+  flex-direction: column;
+}
+
+.cn-split__pane {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.cn-split__handle {
+  flex: 0 0 auto;
+  border: none;
+  padding: 0;
+  background-color: var(--cn-border-subtle);
+  cursor: col-resize;
+  transition: background-color var(--cn-duration-fast) var(--cn-ease-standard);
+}
+.cn-split__handle:hover,
+.cn-split__handle:focus-visible {
+  background-color: var(--cn-accent);
+}
+
+.cn-split--horizontal > .cn-split__handle {
+  width: var(--cn-space-2xs);
+  cursor: col-resize;
+}
+.cn-split--vertical > .cn-split__handle {
+  height: var(--cn-space-2xs);
+  cursor: row-resize;
+}
+
+/* ── ScrollArea ─────────────────────────────────────────────────── */
+
+.cn-scroll-area {
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cn-border-strong) transparent;
+  overscroll-behavior: contain;
+}
+
+.cn-scroll-area::-webkit-scrollbar {
+  width: var(--cn-space-sm);
+  height: var(--cn-space-sm);
+}
+.cn-scroll-area::-webkit-scrollbar-thumb {
+  background-color: var(--cn-border-strong);
+  border-radius: var(--cn-radius-full);
+}
+.cn-scroll-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ── Toast / Status ─────────────────────────────────────────────── */
+
+.cn-toast-region {
+  position: fixed;
+  bottom: var(--cn-space-xl);
+  right: var(--cn-space-xl);
+  z-index: var(--cn-z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--cn-space-sm);
+  max-width: min(24rem, calc(100vw - var(--cn-space-2xl)));
+}
+
+.cn-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--cn-space-sm);
+  padding: var(--cn-space-md) var(--cn-space-lg);
+  background-color: var(--cn-surface-raised);
+  border: var(--cn-border-width) solid var(--cn-border);
+  border-left-width: var(--cn-border-width-thick);
+  border-radius: var(--cn-radius-md);
+  box-shadow: var(--cn-shadow-md);
+  font-size: var(--cn-text-sm);
+  /* Autosave-style indicators fade rather than flash (PDD §9.6). */
+  animation: cn-toast-in var(--cn-duration-normal) var(--cn-ease-out);
+}
+
+@keyframes cn-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--cn-space-sm));
+  }
+}
+
+/* Tone is carried by the leading glyph as well as the border colour,
+ * so the distinction survives greyscale and colour blindness. */
+.cn-toast--info {
+  border-left-color: var(--cn-accent);
+}
+.cn-toast--success {
+  border-left-color: var(--cn-success);
+}
+.cn-toast--warning {
+  border-left-color: var(--cn-warning);
+}
+.cn-toast--danger {
+  border-left-color: var(--cn-danger);
+}
+
+.cn-toast__glyph {
+  flex-shrink: 0;
+  font-weight: var(--cn-weight-semibold);
+}
+.cn-toast--info .cn-toast__glyph {
+  color: var(--cn-accent);
+}
+.cn-toast--success .cn-toast__glyph {
+  color: var(--cn-success);
+}
+.cn-toast--warning .cn-toast__glyph {
+  color: var(--cn-warning);
+}
+.cn-toast--danger .cn-toast__glyph {
+  color: var(--cn-danger);
+}
+
+.cn-toast__body {
+  flex: 1;
+}
+
+/* ── CommandPalette ─────────────────────────────────────────────── */
+
+.cn-palette {
+  width: min(36rem, calc(100vw - var(--cn-space-2xl)));
+  max-height: 60vh;
+  padding: 0;
+  background-color: var(--cn-surface-raised);
+  border: var(--cn-border-width) solid var(--cn-border);
+  border-radius: var(--cn-radius-lg);
+  color: var(--cn-ink);
+  box-shadow: var(--cn-shadow-lg);
+  overflow: hidden;
+}
+
+.cn-palette::backdrop {
+  background-color: var(--cn-scrim);
+}
+
+.cn-palette__input {
+  width: 100%;
+  min-height: 3.25rem;
+  padding-inline: var(--cn-space-lg);
+  background: transparent;
+  border: none;
+  border-bottom: var(--cn-border-width) solid var(--cn-border-subtle);
+  border-radius: 0;
+  color: var(--cn-ink);
+  font-size: var(--cn-text-base);
+}
+
+.cn-palette__list {
+  max-height: 20rem;
+  overflow-y: auto;
+  padding: var(--cn-space-xs);
+}
+
+.cn-palette__empty {
+  padding: var(--cn-space-lg);
+  color: var(--cn-ink-muted);
+  font-size: var(--cn-text-sm);
+}
+
+.cn-palette__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cn-space-md);
+  width: 100%;
+  min-height: var(--cn-target-min);
+  padding-inline: var(--cn-space-md);
+  background: transparent;
+  border: none;
+  border-radius: var(--cn-radius-sm);
+  color: var(--cn-ink);
+  font-size: var(--cn-text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+/* Active option: background AND a leading marker, so keyboard
+ * position is not signalled by colour alone. */
+.cn-palette__item[data-active='true'] {
+  background-color: var(--cn-surface-hover);
+}
+.cn-palette__item[data-active='true']::before {
+  content: '›';
+  color: var(--cn-accent);
+  font-weight: var(--cn-weight-semibold);
+}
+
+.cn-palette__hint {
+  color: var(--cn-ink-subtle);
+  font-size: var(--cn-text-xs);
+  font-family: var(--cn-font-mono);
+}

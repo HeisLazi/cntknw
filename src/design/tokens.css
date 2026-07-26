@@ -1,0 +1,296 @@
+/*
+ * CNTKNW design tokens — the styling source of truth.
+ *
+ * Every colour, size, duration and layer used anywhere in the
+ * application resolves to a custom property declared here. A
+ * component that writes a raw hex value or a magic pixel number has
+ * left the system, and `design-tokens.test.ts` fails the build for it.
+ *
+ * PDD §9: a quiet private museum, an archival reading room, a
+ * researcher's notebook. Not a project dashboard.
+ *
+ * Two layers, and the distinction matters:
+ *
+ *   --cn-palette-*  raw values. Never used by a component.
+ *   --cn-*          semantic roles. What components consume.
+ *
+ * Only the semantic layer is redefined for light mode, which is why
+ * a future light theme is a change to this file and nothing else
+ * (PDD §9.4 names the roles; they are implemented verbatim).
+ */
+
+:root {
+  /* ── Raw palette ────────────────────────────────────────────────
+   * Warm-neutral rather than blue-grey. A cool grey reads as
+   * software; the reading planes need to feel like paper under a
+   * lamp. Hues stay between 30° and 45°, chroma stays low.
+   */
+  --cn-palette-ink-950: #0e0d0b;
+  --cn-palette-ink-900: #141310;
+  --cn-palette-ink-850: #1a1815;
+  --cn-palette-ink-800: #211e1a;
+  --cn-palette-ink-750: #2a2621;
+  --cn-palette-ink-700: #35302a;
+  --cn-palette-ink-600: #4a443c;
+  --cn-palette-ink-500: #6b6459;
+  --cn-palette-ink-400: #8f887b;
+  --cn-palette-ink-300: #b3ac9e;
+  --cn-palette-ink-200: #d2ccbf;
+  --cn-palette-ink-100: #e8e3d8;
+  --cn-palette-ink-050: #f5f1e8;
+
+  /* Reading planes. Warm, low-contrast against the canvas. */
+  --cn-palette-paper-dark: #1c1a16;
+  --cn-palette-paper-light: #f7f3ea;
+
+  /* One accent. PDD §9.4: "one primary accent … blocks should not
+   * become a rainbow." A muted verdigris — library-binding green,
+   * legible on both planes, and not a hyperlink blue. */
+  --cn-palette-accent-600: #2f6b5e;
+  --cn-palette-accent-500: #3d8574;
+  --cn-palette-accent-400: #52a08c;
+  --cn-palette-accent-300: #7cbcab;
+  --cn-palette-accent-200: #a8d4c8;
+
+  /* Status. Desaturated to sit beside the accent without shouting. */
+  --cn-palette-success-500: #4f8b5c;
+  --cn-palette-success-300: #8fbe98;
+  --cn-palette-warning-500: #a8792f;
+  --cn-palette-warning-300: #d9ad66;
+  --cn-palette-danger-500: #a8443c;
+  --cn-palette-danger-300: #d68b84;
+
+  /* ── Typography ───────────────────────────────────────────────
+   * NFR-006: no cloud-hosted fonts. These are system stacks. When
+   * self-hosted files land in public/fonts/, only the first family
+   * of each stack changes — every consumer reads the token.
+   */
+  --cn-font-sans:
+    'Inter var', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    system-ui, 'Helvetica Neue', Arial, sans-serif;
+  --cn-font-serif:
+    'Source Serif 4', 'Literata', 'Iowan Old Style', 'Palatino Linotype',
+    'Book Antiqua', Georgia, 'Times New Roman', serif;
+  --cn-font-mono:
+    'JetBrains Mono', 'SFMono-Regular', 'Cascadia Mono', Menlo, Consolas,
+    'Liberation Mono', monospace;
+
+  /* A 1.2 minor-third scale from a 16px base. Headings earn
+   * hierarchy through scale and spacing, not colour (PDD §9.3). */
+  --cn-text-2xs: 0.6875rem; /* 11px — dense metadata only */
+  --cn-text-xs: 0.75rem; /*    12px */
+  --cn-text-sm: 0.875rem; /*   14px */
+  --cn-text-base: 1rem; /*     16px — minimum comfortable body */
+  --cn-text-lg: 1.125rem; /*   18px */
+  --cn-text-xl: 1.375rem; /*   22px */
+  --cn-text-2xl: 1.75rem; /*   28px */
+  --cn-text-3xl: 2.25rem; /*   36px */
+  --cn-text-4xl: 3rem; /*      48px */
+
+  --cn-leading-tight: 1.2;
+  --cn-leading-snug: 1.35;
+  --cn-leading-normal: 1.55;
+  --cn-leading-relaxed: 1.7; /* reading planes */
+
+  --cn-tracking-tight: -0.015em;
+  --cn-tracking-normal: 0;
+  --cn-tracking-wide: 0.02em;
+  --cn-tracking-caps: 0.08em;
+
+  --cn-weight-regular: 400;
+  --cn-weight-medium: 500;
+  --cn-weight-semibold: 600;
+
+  /* ── Spacing ────────────────────────────────────────────────── */
+  --cn-space-3xs: 0.125rem; /* 2px */
+  --cn-space-2xs: 0.25rem; /*  4px */
+  --cn-space-xs: 0.375rem; /*  6px */
+  --cn-space-sm: 0.5rem; /*    8px */
+  --cn-space-md: 0.75rem; /*  12px */
+  --cn-space-lg: 1rem; /*     16px */
+  --cn-space-xl: 1.5rem; /*   24px */
+  --cn-space-2xl: 2rem; /*    32px */
+  --cn-space-3xl: 3rem; /*    48px */
+  --cn-space-4xl: 4rem; /*    64px */
+
+  /* ── Radius ─────────────────────────────────────────────────── */
+  --cn-radius-xs: 2px;
+  --cn-radius-sm: 4px;
+  --cn-radius-md: 6px;
+  --cn-radius-lg: 10px;
+  --cn-radius-xl: 16px;
+  --cn-radius-full: 9999px;
+
+  /* ── Borders ────────────────────────────────────────────────── */
+  --cn-border-width: 1px;
+  --cn-border-width-thick: 2px;
+
+  /* ── Shadow ─────────────────────────────────────────────────────
+   * Restrained. Depth comes from surface and border contrast; these
+   * are for things that genuinely float.
+   */
+  --cn-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.28);
+  --cn-shadow-md: 0 4px 12px rgb(0 0 0 / 0.32);
+  --cn-shadow-lg: 0 12px 32px rgb(0 0 0 / 0.4);
+
+  /* ── Motion ─────────────────────────────────────────────────────
+   * PDD §9.6: motion explains state. Quick and non-bouncy; nothing
+   * here overshoots.
+   */
+  --cn-duration-instant: 80ms;
+  --cn-duration-fast: 140ms;
+  --cn-duration-normal: 220ms;
+  --cn-duration-slow: 380ms;
+
+  --cn-ease-standard: cubic-bezier(0.2, 0, 0.15, 1);
+  --cn-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --cn-ease-in: cubic-bezier(0.5, 0, 0.9, 0.4);
+
+  /* ── Z-index layers ─────────────────────────────────────────────
+   * Named, ordered, and the only permitted stacking values.
+   */
+  --cn-z-base: 0;
+  --cn-z-sticky: 100;
+  --cn-z-nav: 200;
+  --cn-z-overlay: 300;
+  --cn-z-dialog: 400;
+  --cn-z-popover: 500;
+  --cn-z-toast: 600;
+  --cn-z-tooltip: 700;
+  --cn-z-skip-link: 800;
+
+  /* ── Layout ─────────────────────────────────────────────────────
+   * `--cn-measure` is the one PDD §9.3 is explicit about: journal
+   * body targets roughly 60–75 characters per line.
+   */
+  --cn-measure: 68ch;
+  --cn-measure-narrow: 52ch;
+  --cn-measure-wide: 84ch;
+
+  --cn-panel-min: 18rem;
+  --cn-panel-default: 22rem;
+  --cn-panel-max: 34rem;
+  --cn-nav-width: 15rem;
+  --cn-nav-width-collapsed: 3.5rem;
+  --cn-nav-height-compact: 3.5rem;
+  --cn-topbar-height: 3rem;
+  --cn-reading-width: 46rem;
+  --cn-content-max: 78rem;
+
+  /* Touch targets. 44px is the smallest that is reliably usable. */
+  --cn-target-min: 2.75rem;
+
+  /* ── Focus ──────────────────────────────────────────────────────
+   * One ring, everywhere. A focus style that varies by component is
+   * a focus style users have to relearn.
+   */
+  --cn-focus-ring-width: 2px;
+  --cn-focus-ring-offset: 2px;
+
+  /* ── Semantic roles — dark first (PDD §9.4) ─────────────────── */
+  --cn-canvas: var(--cn-palette-ink-950);
+  --cn-surface: var(--cn-palette-ink-900);
+  --cn-surface-raised: var(--cn-palette-ink-850);
+  --cn-surface-sunken: var(--cn-palette-ink-950);
+  --cn-surface-hover: var(--cn-palette-ink-800);
+  --cn-surface-active: var(--cn-palette-ink-750);
+  --cn-paper: var(--cn-palette-paper-dark);
+
+  --cn-ink: var(--cn-palette-ink-100);
+  --cn-ink-strong: var(--cn-palette-ink-050);
+  --cn-ink-muted: var(--cn-palette-ink-400);
+  --cn-ink-subtle: var(--cn-palette-ink-500);
+  --cn-ink-inverse: var(--cn-palette-ink-950);
+
+  --cn-border: var(--cn-palette-ink-750);
+  --cn-border-strong: var(--cn-palette-ink-600);
+  --cn-border-subtle: var(--cn-palette-ink-800);
+
+  --cn-accent: var(--cn-palette-accent-400);
+  --cn-accent-hover: var(--cn-palette-accent-300);
+  --cn-accent-active: var(--cn-palette-accent-500);
+  --cn-accent-contrast: var(--cn-palette-ink-950);
+  --cn-accent-quiet: color-mix(in srgb, var(--cn-palette-accent-400) 16%, transparent);
+
+  --cn-success: var(--cn-palette-success-300);
+  --cn-success-quiet: color-mix(in srgb, var(--cn-palette-success-500) 20%, transparent);
+  --cn-warning: var(--cn-palette-warning-300);
+  --cn-warning-quiet: color-mix(in srgb, var(--cn-palette-warning-500) 20%, transparent);
+  --cn-danger: var(--cn-palette-danger-300);
+  --cn-danger-quiet: color-mix(in srgb, var(--cn-palette-danger-500) 20%, transparent);
+
+  --cn-focus-ring: var(--cn-palette-accent-300);
+  --cn-selection: color-mix(in srgb, var(--cn-palette-accent-400) 30%, transparent);
+  --cn-scrim: rgb(0 0 0 / 0.6);
+
+  --cn-disabled-ink: var(--cn-palette-ink-500);
+  --cn-disabled-surface: var(--cn-palette-ink-850);
+}
+
+/*
+ * Light mode.
+ *
+ * Only the semantic layer is redeclared — no component changes, no
+ * duplicated rules. This exists now, unfinished as a *design*, so
+ * that the token structure is proven capable of carrying it. PDD §9
+ * is dark-first; light is a supported future, not a shipped theme.
+ */
+:root[data-theme='light'] {
+  --cn-canvas: var(--cn-palette-ink-050);
+  --cn-surface: #fffdf8;
+  --cn-surface-raised: #ffffff;
+  --cn-surface-sunken: var(--cn-palette-ink-100);
+  --cn-surface-hover: var(--cn-palette-ink-100);
+  --cn-surface-active: var(--cn-palette-ink-200);
+  --cn-paper: var(--cn-palette-paper-light);
+
+  --cn-ink: var(--cn-palette-ink-900);
+  --cn-ink-strong: var(--cn-palette-ink-950);
+  --cn-ink-muted: var(--cn-palette-ink-600);
+  --cn-ink-subtle: var(--cn-palette-ink-500);
+  --cn-ink-inverse: var(--cn-palette-ink-050);
+
+  --cn-border: var(--cn-palette-ink-200);
+  --cn-border-strong: var(--cn-palette-ink-300);
+  --cn-border-subtle: var(--cn-palette-ink-100);
+
+  --cn-accent: var(--cn-palette-accent-600);
+  --cn-accent-hover: var(--cn-palette-accent-500);
+  --cn-accent-active: var(--cn-palette-accent-600);
+  --cn-accent-contrast: #ffffff;
+
+  --cn-success: var(--cn-palette-success-500);
+  --cn-warning: var(--cn-palette-warning-500);
+  --cn-danger: var(--cn-palette-danger-500);
+
+  --cn-focus-ring: var(--cn-palette-accent-600);
+  --cn-scrim: rgb(20 19 16 / 0.4);
+
+  --cn-shadow-sm: 0 1px 2px rgb(20 19 16 / 0.08);
+  --cn-shadow-md: 0 4px 12px rgb(20 19 16 / 0.1);
+  --cn-shadow-lg: 0 12px 32px rgb(20 19 16 / 0.14);
+
+  --cn-disabled-ink: var(--cn-palette-ink-400);
+  --cn-disabled-surface: var(--cn-palette-ink-100);
+}
+
+/*
+ * Reduced motion.
+ *
+ * The durations are collapsed at the token level rather than by
+ * writing a `prefers-reduced-motion` block into every component.
+ * A component that animates using these tokens is compliant by
+ * construction; one that hard-codes a duration is not, which is
+ * another reason the token test exists.
+ *
+ * Not zero: 1ms keeps `transitionend` firing, so state machines that
+ * wait for it do not hang.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --cn-duration-instant: 1ms;
+    --cn-duration-fast: 1ms;
+    --cn-duration-normal: 1ms;
+    --cn-duration-slow: 1ms;
+  }
+}

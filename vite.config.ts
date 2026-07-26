@@ -13,6 +13,7 @@ const alias = {
   '@lib': fileURLToPath(new URL('./src/lib', import.meta.url)),
   '@app': fileURLToPath(new URL('./src/app', import.meta.url)),
   '@application': fileURLToPath(new URL('./src/application', import.meta.url)),
+  '@tests': fileURLToPath(new URL('./src/tests', import.meta.url)),
 };
 
 export default defineConfig({
