@@ -159,6 +159,24 @@ Two amendments below (A-001, A-002) are reconstructions of the *effect* of the o
 - **Also recorded:** the repository was placed under version control on 26 July 2026. Commit `4494f24`, tag `phase-0c-impl`, captures the tree as Phase 0C left it. The absence of a repository was itself an audit obstacle, since a Git-derived inventory had been requested and was impossible.
 - **Status:** In force.
 
+### A-018 — `react-router`, not `react-router-dom`
+
+- **Amends:** Phase 0C checkpoint §11 and the status document, both of which said to "reinstall `react-router-dom` at a version outside the advisory range"
+- **Evidence:** Checked against the registry on 26 July 2026. `react-router-dom@latest` is **7.18.1**, still inside the advisory range `7.12.0 – 8.2.0`, and is a wrapper whose only dependency is `react-router` at the same version — so installing it would pull the vulnerable version in. `react-router@8.3.0` is above the range's ceiling. Peer requirement `react >= 19.2.7` is met by the project's `^19.2.7`.
+- **Amendment:** Phase 0D depends on **`react-router@8.3.0`**. This is not a change of router library: from v7 onward `react-router` is the package and `react-router-dom` is a compatibility shim for v6 import paths. `npm audit --omit=dev` remains at 0.
+- **Rule retained:** the version must be re-checked against the registry whenever it is changed, not trusted from a note in a document. This entry records what was true on 26 July 2026 and nothing more.
+- **Status:** In force.
+
+### A-019 — Phase 0D complete
+
+- **Amends:** nothing in v0.2; records a phase boundary
+- **Evidence:** `CNTKNW_Phase_0D_Checkpoint_Report.md`; gate results in its §10.
+- **Amendment:** Phase 0D is complete and verified. Composition root, providers, router, three primary destinations, shared Study Workspace, route-level states, design tokens, 19 UI primitives, development-only component lab, responsive shell, and accessibility, component, routing and browser tests. **The PDD §24 Phase 0 exit condition is met** — the app shell builds, no component writes to the database directly, and legacy data can be read.
+- **Two invariants moved from convention to enforcement:**
+  - **INV-001 / IA-001** — `PRIMARY_DESTINATIONS` is asserted to have exactly three entries, and a twelve-item deny list fails if Sessions, Whiteboard, PDF Reader, Dictionary, Export, Settings, Chess, Atlas, Components, Home, Dashboard or Search is ever promoted.
+  - **INV-014** — `architecture.test.ts` fails if any UI module imports a storage adapter, or if a second module besides the composition root names the production one.
+- **Status:** In force. Next phase: 0E, the editor spike.
+
 ---
 
 ## Open items, not yet amendments

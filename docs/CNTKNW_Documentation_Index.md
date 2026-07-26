@@ -30,17 +30,18 @@
 ### Current state
 
 9. `CNTKNW_Current_Implementation_Status.md` — what exists, what is next, which phase applies.
-10. `CNTKNW_Phase_0C_Checkpoint_Report.md` — most recent completed phase. Revised 26 July; read §0 first, which lists what the first revision got wrong.
-11. `CNTKNW_Phase_0B_Checkpoint_Report.md` — the phase before it.
+10. `CNTKNW_Phase_0D_Checkpoint_Report.md` — most recent completed phase. Covers the Phase 0C closure as well as Phase 0D.
+11. `CNTKNW_Phase_0C_Checkpoint_Report.md` — revised 26 July; read §0 first, which lists what the first revision got wrong.
+12. `CNTKNW_Phase_0B_Checkpoint_Report.md` — the phase before those.
 
 ### Supplemental feature specifications
 
-12. `CNTKNW_Atlas_System_Design_Document_v0.1.md` — **approved.** Owner-authored. Governs Atlas work. Primitives reconciled against it in ADR-0001 §13.
-13. `CNTKNW_Read_Aloud_System_Design_Document_v0.1.md` — **approved** 25 July 2026. See §3.
+13. `CNTKNW_Atlas_System_Design_Document_v0.1.md` — **approved.** Owner-authored. Governs Atlas work. Primitives reconciled against it in ADR-0001 §13.
+14. `CNTKNW_Read_Aloud_System_Design_Document_v0.1.md` — **approved** 25 July 2026. See §3.
 
 ### Working history
 
-14. `prompts/` — prompts and briefs issued to agents, in date order. Archival, never normative.
+15. `prompts/` — prompts and briefs issued to agents, in date order. Archival, never normative.
 
 ---
 
@@ -53,7 +54,7 @@ Handoff §19 places shell and routing at Phase 0B and persistence at 0C. **That 
 | 0A | Clean reproducible build, TypeScript strict, lint and test scripts | Complete — the Playwright gap closed 26 July |
 | 0B | **Domain and application contracts.** No user-facing surface. | Complete and verified |
 | 0C | **Persistence.** Dexie adapter, schema versions, migrations, v1 readers. | Complete and verified, contract and real browser |
-| 0D | **Shell, routing, providers, design tokens, UI primitives.** | Not started |
+| 0D | **Shell, routing, providers, design tokens, UI primitives.** | Complete and verified |
 | 0E | Editor spike, then the journal vertical slice | Not started |
 
 Shell, routing, design tokens and UI primitives moved from 0B to **0D**. Domain and persistence, previously both at 0C, split into **0B** (contracts) and **0C** (storage).

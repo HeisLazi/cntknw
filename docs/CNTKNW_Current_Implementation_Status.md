@@ -1,6 +1,6 @@
 # CNTKNW Current Implementation Status
 
-**Updated:** 26 July 2026 (Phase 0C closed; Phase 0D next)
+**Updated:** 26 July 2026 (Phase 0D complete; Phase 0E next)
 **Repository:** `philosophy-journal-complete`
 **Git baseline:** `4494f24`, tag `phase-0c-impl` — the tree as Phase 0C left it
 **Status:** Living document. Update at every phase boundary.
@@ -18,8 +18,14 @@ Playwright tests in Chromium cover persistence across reload, transaction
 rollback, nested transactions, revision conflicts and separation from the v1
 database.
 
-**Phase 0C complete and verified in both contract and real-browser
-environments.**
+On top of that, the application shell now exists: a router with stable URLs,
+exactly three primary destinations, the shared Study Workspace, a design-token
+system that is the styling source of truth, and nineteen accessible UI
+primitives.
+
+**Phases 0C and 0D are complete and verified.** The PDD §24 Phase 0 exit
+condition — *app shell builds; no direct component DB writes; legacy data can
+be read* — is met.
 
 ---
 
@@ -30,7 +36,7 @@ environments.**
 | 0A | Clean build, TypeScript strict, lint and test scripts | **Complete** — the Playwright gap is closed |
 | 0B | Domain and application contracts | **Complete and verified** |
 | 0C | Persistence — Dexie, schema versions, migrations, v1 readers | **Complete and verified**, contract and real browser |
-| 0D | Shell, routing, providers, design tokens, UI primitives | **Not started** |
+| 0D | Shell, routing, providers, design tokens, UI primitives | **Complete and verified** |
 | 0E | Editor spike, then journal vertical slice | **Not started** |
 
 Phase order per ADR-0001 §1, which supersedes Handoff §19.
@@ -79,6 +85,37 @@ Database: `cntknw`, schema version 1, 16 stores. Deliberately separate from v1 (
 
 `id.ts` (single generation point), `rank.ts` (base-62 fractional indexing).
 
+### Composition and routing — `src/app/`
+
+`composition/production.ts` is the **only** module naming a concrete storage
+adapter; everything above it depends on the `Repositories` interface, which is
+what makes INV-014 structural rather than a convention. `providers/` holds the
+error boundary and the repository provider (injection channel, not a second
+database). `routes/` holds the route table and seven routes:
+
+```
+/ → /library    /library    /gallery    /notes
+/study/:sourceId (books AND artworks)    /settings    /components (dev only)    *
+```
+
+Exactly three primary destinations (INV-001, IA-001), enforced by test.
+
+### Design — `src/design/`
+
+`tokens.css` is the styling source of truth: raw palette plus semantic roles,
+typography, spacing, radius, borders, shadows, motion, z-index layers, panel
+and reading widths, focus ring. Dark-mode first; light mode redefines only the
+semantic layer. Reduced motion collapses every duration at the token level.
+`design-tokens.test.ts` fails the build on a colour literal, a hard-coded
+duration or an unnamed z-index anywhere else.
+
+### Components — `src/components/`
+
+`primitives/` — 19 primitives on native semantics (`<button>`, `<dialog>`,
+`<select>`, `<label>`), no meaning carried by colour alone.
+`shell/` — `AppShell` with skip link, named landmarks and focus management,
+plus the route-level loading, error, missing-source and not-found states.
+
 ### Documented decisions
 
 ADR-0001 (Phase 0B foundations, 13 decisions), ADR-0002 (Phase 0C persistence,
@@ -109,7 +146,6 @@ That is checked in five tests, not asserted in prose — the earlier phrase
 - **`applyMigration`.** Dry run only — deliberately no destructive path exists.
 - **Soft deletion beyond blocks and claims.** Every other entity hard-deletes; NFR-008 partial.
 - **`appState` migration.** Needs a settings store.
-- **Any UI.** No routes, no shell, no design tokens, no CSS. `src/main.tsx` is a placeholder.
 - **PDF rendering, annotation UI, editor, dictionary, search, maps.**
 - **Atlas entities.** Primitives only.
 - **Read Aloud playback, TTS, OCR.**
@@ -125,9 +161,9 @@ Node v22.16.0, npm 10.9.2, Windows 11 (10.0.26200) x64, clean `npm ci`.
 npm ci                PASS
 npm run typecheck     PASS   0 errors      (src/ and e2e/)
 npm run lint          PASS   0 errors, 0 warnings
-npm run test          PASS   354 tests, 10 test files, 0 skipped
-npm run test:e2e      PASS   8 tests, chromium, 0 skipped
-npm run build         PASS   190.89 kB, 60.22 kB gzipped
+npm run test          PASS   417 tests, 15 test files, 0 skipped
+npm run test:e2e      PASS   34 tests, chromium, 0 skipped
+npm run build         PASS   489.87 kB, 149.06 kB gzipped
 npm audit --omit=dev  PASS   0 vulnerabilities
 npm audit             exit 1, 5 high, all dev-only (ESLint transitive)
 ```
@@ -135,16 +171,25 @@ npm audit             exit 1, 5 high, all dev-only (ESLint transitive)
 Contract suite: 62 tests defined, run against both adapters — memory 62,
 indexeddb 62, identical cases.
 
-Browser suite: `@playwright/test` 1.62.0, Chromium 151.0.7922.34, one project.
-BV-001 persistence across reload, BV-002 transaction rollback, BV-003 revision
-conflict, BV-004 nested transaction, BV-005 database separation. Validated by a
-negative control — neutering `DexieUnitOfWork.run` fails BV-002 and BV-004.
+Browser suite: `@playwright/test` 1.62.0, Chromium 151.0.7922.34, one project,
+34 tests. Persistence — BV-001 reload, BV-002 transaction rollback, BV-003
+revision conflict, BV-004 nested transaction, BV-005 database separation;
+validated by a negative control, since neutering `DexieUnitOfWork.run` fails
+BV-002 and BV-004. Shell — routing and refresh on five routes, exactly three
+primary links, keyboard focus, reduced motion, responsive navigation at 1280px
+and 375px, resizable text.
+
+Bundle: 489.87 kB, up from 190.89 kB at Phase 0C. Phase 0C's entry point was a
+placeholder importing nothing; this is the first build that includes the domain
+schemas, the persistence layer and the router. `dist/` is searched to confirm
+no development-only surface ships.
 
 Phase 0C was originally verified on Linux with Node v22.22.3 and now on Windows
 with v22.16.0, which closes the Windows-reproduction gap the previous revision
 listed.
 
-**Not run:** WebKit and Firefox browser projects.
+**Not run:** WebKit and Firefox browser projects; axe or any automated
+accessibility rule engine; WCAG contrast measurement; visual regression.
 
 ---
 
@@ -165,15 +210,12 @@ listed.
 
 ## 7. Next step
 
-**Phase 0D** — shell, routing, providers, design tokens, UI primitives. The
-persistence layer underneath it has now been exercised in a real browser, which
-is what Phase 0D was waiting on.
+**Phase 0E — the editor spike**, then the journal vertical slice.
 
-`react-router-dom` was removed in Phase 0C and must be reinstalled only at a
-version outside the advisory range `7.12.0 – 8.2.0` — checked against the
-registry at implementation time, not trusted from this note.
+Open decision 7 (`BlockContent.doc` versus `.text`) must be resolved there. It
+is the reason the spike exists, and choosing an editor before resolving it
+would decide it by accident.
 
-Design work becomes relevant at 0D.
-
-See `CNTKNW_Phase_0C_Checkpoint_Report.md` and
+See `CNTKNW_Phase_0D_Checkpoint_Report.md`,
+`CNTKNW_Phase_0C_Checkpoint_Report.md` and
 `CNTKNW_ADR_0003_Mandatory_Concurrency_Guards.md`.
