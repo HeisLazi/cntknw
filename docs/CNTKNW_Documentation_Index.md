@@ -1,6 +1,6 @@
 # CNTKNW Documentation Index
 
-**Updated:** 25 July 2026
+**Updated:** 26 July 2026
 **Status:** Supplemental, unversioned. Maintained continuously.
 
 `CNTKNW_READ_ME_FIRST_v0.2.md` remains the canonical entry point and is unchanged — it is covered by `CNTKNW_CHECKSUMS_v0.2.sha256` and still verifies. This index supplements it with everything approved *since* v0.2 was sealed.
@@ -23,21 +23,24 @@
 ### Approved amendments — read immediately after the canonical set
 
 5. `CNTKNW_ADR_0001_Phase_0B_Foundations.md` — thirteen decisions. **Supersedes Handoff §19, §8, §9.1, §9.2.**
-6. `CNTKNW_Amendments_Register_v0.2.md` — every change to the v0.2 line, with evidence.
+6. `CNTKNW_ADR_0002_Phase_0C_Persistence.md` — ten decisions. **§4 is superseded by ADR-0003; the rest stands.**
+7. `CNTKNW_ADR_0003_Mandatory_Concurrency_Guards.md` — **supersedes ADR-0002 §4.** Read it before writing any repository call.
+8. `CNTKNW_Amendments_Register_v0.2.md` — every change to the v0.2 line, with evidence.
 
 ### Current state
 
-7. `CNTKNW_Current_Implementation_Status.md` — what exists, what is next, which phase applies.
-8. `CNTKNW_Phase_0B_Checkpoint_Report.md` — most recent completed phase.
+9. `CNTKNW_Current_Implementation_Status.md` — what exists, what is next, which phase applies.
+10. `CNTKNW_Phase_0C_Checkpoint_Report.md` — most recent completed phase. Revised 26 July; read §0 first, which lists what the first revision got wrong.
+11. `CNTKNW_Phase_0B_Checkpoint_Report.md` — the phase before it.
 
 ### Supplemental feature specifications
 
-9. `CNTKNW_Atlas_System_Design_Document_v0.1.md` — **approved.** Owner-authored. Governs Atlas work. Primitives reconciled against it in ADR-0001 §13.
-10. `CNTKNW_Read_Aloud_System_Design_Document_v0.1.md` — **NOT APPROVED.** See §3.
+12. `CNTKNW_Atlas_System_Design_Document_v0.1.md` — **approved.** Owner-authored. Governs Atlas work. Primitives reconciled against it in ADR-0001 §13.
+13. `CNTKNW_Read_Aloud_System_Design_Document_v0.1.md` — **approved** 25 July 2026. See §3.
 
 ### Working history
 
-11. `prompts/` — prompts and briefs issued to agents, in date order. Archival, never normative.
+14. `prompts/` — prompts and briefs issued to agents, in date order. Archival, never normative.
 
 ---
 
@@ -47,9 +50,9 @@ Handoff §19 places shell and routing at Phase 0B and persistence at 0C. **That 
 
 | Phase | Scope | State |
 |---|---|---|
-| 0A | Clean reproducible build, TypeScript strict, lint and test scripts | Complete except Playwright |
+| 0A | Clean reproducible build, TypeScript strict, lint and test scripts | Complete — the Playwright gap closed 26 July |
 | 0B | **Domain and application contracts.** No user-facing surface. | Complete and verified |
-| 0C | **Persistence.** Dexie adapter, schema versions, migrations, v1 readers. | Not started |
+| 0C | **Persistence.** Dexie adapter, schema versions, migrations, v1 readers. | Complete and verified, contract and real browser |
 | 0D | **Shell, routing, providers, design tokens, UI primitives.** | Not started |
 | 0E | Editor spike, then the journal vertical slice | Not started |
 
@@ -59,20 +62,22 @@ Phases 1–11 in PDD §24 are unchanged, and the Phase 0 exit condition in PDD �
 
 ---
 
-## 3. Read Aloud — approval outstanding
+## 3. Read Aloud — approved, but not yet buildable
 
-`CNTKNW_Read_Aloud_System_Design_Document_v0.1.md` declares itself a canonical feature specification. **It is not approved.**
+`CNTKNW_Read_Aloud_System_Design_Document_v0.1.md` was **approved by the owner
+on 25 July 2026** (register entry A-015, superseding A-013). Its RA
+identifiers, invariants and acceptance criteria are normative, subordinate to
+the Product Design Document v0.2.
 
-The owner supplied its substance as prose in conversation on 25 July 2026. The document — its structure, its RA-nnn numbering, its invariants, and its ten recorded conflict resolutions against v0.2 — was drafted by an agent, which then labelled its own output canonical. That is not how canonical status is conferred.
+Approval is not permission to build. Implementation stays sequenced by the
+SDD's own §20: RA-0 schema work belonged to Phase 0B and is done; **RA-1 may
+not begin before v0.2 Phase 2 exits.** So, still:
 
-Domain fields supporting it are implemented and tested, and are additive and harmless. But until the owner approves or downgrades the document:
-
-- treat RA identifiers as **unverified**;
 - do not implement playback, text-to-speech or OCR;
-- do not cite RA requirements as satisfied;
-- do not delete the existing fields — removing them costs a migration later for no benefit.
+- do not delete the existing domain fields.
 
-See register entry A-013.
+The rule that produced the original challenge stands, and is worth keeping in
+view: an agent may draft a specification; only the owner may approve one.
 
 ---
 
@@ -97,3 +102,18 @@ Prompts in `prompts/` sit outside this order entirely. They record what was aske
 To change any of them: bump the version, update the authoritative Markdown and JSON first, regenerate DOCX and PDF, regenerate the checksum manifest, and record the change in the register. Never leave a stale DOCX or PDF looking current.
 
 To change anything else — an amendment, an ADR, a status document, this index — edit directly and record it in the register.
+
+---
+
+## 6. Version control
+
+The repository was placed under Git on **26 July 2026**. Commit `4494f24`, tag
+`phase-0c-impl`, captures the tree exactly as Phase 0C left it, before any
+closure work.
+
+There is **no commit before that tag**. Phase 0A, 0B and 0C were built without
+version control, so no Git command can reconstruct which files those phases
+added versus modified — a limitation the Phase 0C checkpoint §10 states rather
+than papers over. Any file inventory covering work before the tag is
+hand-derived and must say so; anything after it is Git-derived and should cite
+a commit range.

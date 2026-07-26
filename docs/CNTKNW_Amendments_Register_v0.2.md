@@ -1,7 +1,7 @@
 # CNTKNW Amendments Register — v0.2 line
 
-**Version:** 0.1 (register itself)
-**Date:** 25 July 2026
+**Version:** 0.2 (register itself)
+**Date:** 26 July 2026
 **Owner:** Lazarus Petrus
 **Purpose:** Record every change to the v0.2 canonical documents, so a future reader knows which parts of v0.2 are still binding.
 
@@ -137,6 +137,28 @@ Two amendments below (A-001, A-002) are reconstructions of the *effect* of the o
   `CNTKNW_READ_ME_FIRST_v0.2.md` was deliberately **not** edited: it is covered by `CNTKNW_CHECKSUMS_v0.2.sha256`, all nine entries of which still verify. Editing it would break the manifest or force a full v0.2 reissue with regenerated DOCX and PDF.
 - **Status:** In force.
 
+### A-016 — Concurrency guards are mandatory, not opt-in
+
+- **Supersedes:** ADR-0002 §4 (optimistic concurrency by expected revision)
+- **Amends:** nothing in v0.2; **enforces** Handoff §13.3
+- **Evidence:** External audit, 25 July 2026, finding C-02. ADR-0002 §4 made `expectedRevision` optional and stated that omission retained last-write-wins; its own Cost paragraph conceded that *"a guarantee that must be opted into can be forgotten."* Two Phase 0B use cases — `promoteBlockToClaim` and `linkBlockToExistingClaim` — read a record before opening their transaction and wrote it inside, which is the stale-read window ADR-0002 §4 argued did not exist.
+- **Amendment:** Every mutating repository method that touches a revisioned record takes a mandatory `ConcurrencyGuard`, either `{ mode: 'expected'; revision }` or `{ mode: 'unconditional'; reason: 'migration' | 'repair' }`. `create` takes none. Omission is a compile error and is also rejected at runtime, so it can never mean last-write-wins. `WorkspaceState.upsert` splits into `create` and `update`, because an upsert cannot honour a mandatory guard on its insert branch.
+- **Recorded in:** `CNTKNW_ADR_0003_Mandatory_Concurrency_Guards.md`.
+- **Status:** In force. Contract-tested against both adapters (17 concurrency tests each) and browser-tested (BV-003).
+
+### A-017 — Phase 0C closure: four corrections to the record
+
+- **Amends:** `CNTKNW_Phase_0C_Checkpoint_Report.md` §1, §2.1, §5, §7, §10, §12–15; `CNTKNW_Current_Implementation_Status.md`
+- **Evidence:** External audit, 25 July 2026, findings C-01 and C-03 through C-06. Each is a claim the documents made that the repository did not support.
+- **Amendment:** Four wording and accuracy corrections, made in place rather than by reissue:
+  - **C-01 — phase status.** The documents called Phase 0C "complete and verified" while also recording that Playwright was absent and browser persistence unproven. Playwright is now installed and eight browser tests pass in Chromium, so the status is true as written. Had the gate still been open, the required wording was *"Phase 0C implementation complete; browser and concurrency closure pending."*
+  - **C-03 — v1 read-only claim.** *"Structurally write-incapable"* was an overclaim: `readV1Snapshot` holds a live Dexie handle while it runs. Replaced with *"v1 access is read-only by module boundary and public API; no schema upgrade is declared and no raw database or table handle escapes the reader module"* — and that narrower claim is now checked by `src/legacy/v1/read-only-boundary.test.ts` rather than asserted.
+  - **C-04 — annotation loss.** *"Every annotation a v1 user drew was discarded"* was not supported by the evidence, which was one broken write path in one build. Replaced with *"the inspected v1 annotation save path failed"*, plus the statement that migration scans both stores separately and preserves unexpected data. **No code changed; the scanning was already correct.**
+  - **C-05 — file inventory.** The checkpoint's §10 stated "New (11)" above a list of twelve and "Modified (10)" above a list of eleven, and miscounted eight repository interfaces as seven. Corrected, with the limit stated: there is no pre-0C commit, so Git cannot derive the new-versus-modified split for that phase. Everything from the `phase-0c-impl` tag onward is Git-derived.
+  - **C-06 — test terminology.** "106 assertions" was the runner's *test* count for one file, not an assertion count, and no assertion count was ever measured. All figures now use Vitest's and Playwright's own terms: test files, tests, skipped, browser projects.
+- **Also recorded:** the repository was placed under version control on 26 July 2026. Commit `4494f24`, tag `phase-0c-impl`, captures the tree as Phase 0C left it. The absence of a repository was itself an audit obstacle, since a Git-derived inventory had been requested and was impossible.
+- **Status:** In force.
+
 ---
 
 ## Open items, not yet amendments
@@ -153,8 +175,9 @@ These are known gaps, recorded so they are not lost. None is a decision yet.
 | Filters versus Layers as a saved-view record | Atlas Phase 1 |
 | `BlockContent.doc` versus `.text` duplication | Editor spike, Phase 0E |
 | `AnnotationGeometry` discrimination by kind | Phase 3 |
-| Optimistic-concurrency revision checking | Phase 0C |
-| Playwright and end-to-end suite | Outstanding Phase 0A gap |
+| ~~Optimistic-concurrency revision checking~~ | **Closed** — mandatory guards, A-016 |
+| ~~Playwright and end-to-end suite~~ | **Closed** — installed 26 Jul; BV-001…BV-005 pass in Chromium (A-017) |
+| Browser projects beyond Chromium (WebKit, Firefox) | Nothing external. Not required by any gate yet. |
 | The original amendment register | May not exist; reconcile if found |
 
 ---
