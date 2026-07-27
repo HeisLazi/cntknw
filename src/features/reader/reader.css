@@ -65,6 +65,74 @@
   display: block;
 }
 
+/*
+ * The text layer.
+ *
+ * Transparent spans positioned exactly over the painted glyphs. This
+ * is the contract pdf.js's TextLayer expects — the geometry it emits
+ * assumes `position: absolute` spans inside a `transform-origin: 0 0`
+ * container scaled by `--scale-factor`, which the renderer sets.
+ *
+ * `color: transparent` rather than `opacity: 0` or `visibility:
+ * hidden`: the text has to remain selectable, hit-testable and
+ * findable by the browser's own find-in-page, and the other two
+ * remove it from all three.
+ */
+.cn-pdf-page__text {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  line-height: 1;
+  text-align: initial;
+  transform-origin: 0 0;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  /* Above the canvas so it receives the pointer, below the page
+   * number badge so that stays legible. */
+  z-index: var(--cn-z-base);
+  caret-color: CanvasText;
+  /* Isolated, so the span stacking below is local to this layer and
+   * never competes with dialogs, popovers or the nav. */
+  isolation: isolate;
+}
+
+.cn-pdf-page__text :is(span, br) {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.cn-pdf-page__text > :not(.markedContent),
+.cn-pdf-page__text .markedContent span:not(.markedContent) {
+  z-index: var(--cn-z-local);
+}
+
+.cn-pdf-page__text span.markedContent {
+  top: 0;
+  height: 0;
+}
+
+/* Figures and other non-text marked content must not be selectable
+ * as if they were words. */
+.cn-pdf-page__text span[role='img'] {
+  user-select: none;
+  cursor: default;
+}
+
+/*
+ * Selection on the page.
+ *
+ * The accent at low alpha, so a highlighted passage reads as marked
+ * without obscuring the glyphs underneath it. The global ::selection
+ * in base.css is tuned for UI text on dark surfaces; the page is a
+ * light plane and needs its own.
+ */
+.cn-pdf-page__text ::selection {
+  background-color: color-mix(in srgb, var(--cn-palette-accent-400) 38%, transparent);
+}
+
 .cn-pdf-page__number {
   position: absolute;
   right: var(--cn-space-sm);

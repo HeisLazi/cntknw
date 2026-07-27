@@ -83,7 +83,7 @@ test.describe('AC-001 — PDF import works offline', () => {
 
     await importPdf(page);
     await page.getByRole('link', { name: 'The Wretched of the Earth' }).click();
-    await expect(page.getByRole('img', { name: 'Page 1' })).toBeVisible({
+    await expect(page.locator('.cn-pdf-page[data-page="1"]')).toBeVisible({
       timeout: 15_000,
     });
 
@@ -97,7 +97,7 @@ test.describe('AC-002 — exact workspace state resumes', () => {
     await page.getByRole('link', { name: 'The Wretched of the Earth' }).click();
 
     // The document renders.
-    await expect(page.getByRole('img', { name: 'Page 1' })).toBeVisible({
+    await expect(page.locator('.cn-pdf-page[data-page="1"]')).toBeVisible({
       timeout: 15_000,
     });
     await expect(page.getByText(`Page 1 of ${PDF.pageCount}`)).toBeVisible();
@@ -106,7 +106,7 @@ test.describe('AC-002 — exact workspace state resumes', () => {
     await page.getByRole('button', { name: 'Next page' }).click();
     await page.getByRole('button', { name: 'Next page' }).click();
     await expect(page.getByText(`Page 3 of ${PDF.pageCount}`)).toBeVisible();
-    await expect(page.getByRole('img', { name: 'Page 3' })).toBeVisible();
+    await expect(page.locator('.cn-pdf-page[data-page="3"]')).toBeVisible();
 
     // Wait for the debounced save to report itself.
     await expect(page.getByText('Saved')).toBeVisible({ timeout: 15_000 });
@@ -116,7 +116,7 @@ test.describe('AC-002 — exact workspace state resumes', () => {
     await expect(page.getByText(`Page 3 of ${PDF.pageCount}`)).toBeVisible({
       timeout: 15_000,
     });
-    await expect(page.getByRole('img', { name: 'Page 3' })).toBeVisible();
+    await expect(page.locator('.cn-pdf-page[data-page="3"]')).toBeVisible();
   });
 
   test('zoom is part of the state that resumes', async ({ page }) => {
@@ -137,7 +137,7 @@ test.describe('AC-002 — exact workspace state resumes', () => {
   }) => {
     await importPdf(page);
     await page.getByRole('link', { name: 'The Wretched of the Earth' }).click();
-    await expect(page.getByRole('img', { name: 'Page 1' })).toBeVisible({
+    await expect(page.locator('.cn-pdf-page[data-page="1"]')).toBeVisible({
       timeout: 15_000,
     });
 
@@ -153,7 +153,7 @@ test.describe('AC-002 — exact workspace state resumes', () => {
   test('the reader is navigable by keyboard alone', async ({ page }) => {
     await importPdf(page);
     await page.getByRole('link', { name: 'The Wretched of the Earth' }).click();
-    await expect(page.getByRole('img', { name: 'Page 1' })).toBeVisible({
+    await expect(page.locator('.cn-pdf-page[data-page="1"]')).toBeVisible({
       timeout: 15_000,
     });
 
@@ -173,7 +173,7 @@ test.describe('AC-002 — exact workspace state resumes', () => {
   test('page changes are announced, not only painted', async ({ page }) => {
     await importPdf(page);
     await page.getByRole('link', { name: 'The Wretched of the Earth' }).click();
-    await expect(page.getByRole('img', { name: 'Page 1' })).toBeVisible({
+    await expect(page.locator('.cn-pdf-page[data-page="1"]')).toBeVisible({
       timeout: 15_000,
     });
 

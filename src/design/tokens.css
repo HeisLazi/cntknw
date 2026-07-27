@@ -150,6 +150,14 @@
    * Named, ordered, and the only permitted stacking values.
    */
   --cn-z-base: 0;
+  /*
+   * One step above a sibling, INSIDE a component's own isolated
+   * stacking context. Not an application layer — it never competes
+   * with the ones below it, because `isolation: isolate` keeps it
+   * local. The PDF text layer needs it to sit its spans above their
+   * own container without entering the global order at all.
+   */
+  --cn-z-local: 1;
   --cn-z-sticky: 100;
   --cn-z-nav: 200;
   --cn-z-overlay: 300;

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { LoadedDocument } from './pdfjs';
+import { renderTextLayer } from './pdfjs';
 import './reader.css';
 
 export interface PdfPageProps {
@@ -12,28 +13,43 @@ export interface PdfPageProps {
 }
 
 /**
- * One rendered PDF page.
+ * One rendered PDF page: a canvas for the pixels, a text layer for
+ * the words.
  *
- * Two things here are not incidental:
+ * **The canvas alone is a picture of a page, not a page.** Without a
+ * text layer nothing can be selected or copied, the browser's own
+ * find-in-page finds nothing, and a screen reader gets an image with
+ * a label. The transparent spans pdf.js positions over the canvas are
+ * what make the document actually readable — and they are what
+ * Phase 3 will anchor annotations to, since a quote anchor needs real
+ * text nodes to attach to.
  *
- * **Cancellation.** `page.render()` returns a task that must be
- * cancelled if the component re-renders or unmounts before it
- * finishes. Without it, a fast scroll or a zoom change leaves several
- * render tasks writing to the same canvas, and pages tear or paint
- * the wrong content.
+ * Three details that are not incidental:
  *
- * **Device pixel ratio.** The canvas backing store is scaled by DPR
- * and then constrained back with CSS. Skipping that renders text
- * blurry on every retina display, which for a reading application is
- * not a cosmetic problem.
+ * **Cancellation, twice.** Both the canvas render and the text layer
+ * return cancel handles. A zoom change mid-render otherwise leaves
+ * two render tasks writing to one canvas, and text spans landing in a
+ * container that has already been re-laid-out at a different scale.
+ *
+ * **Device pixel ratio** on the canvas backing store, constrained
+ * back with CSS. Skipping it renders text blurry on every retina
+ * display, which for a reading application is not cosmetic.
+ *
+ * **The canvas is `aria-hidden`.** Once the text layer exists, a
+ * labelled canvas would make a screen reader announce "Page 3, image"
+ * and then read the page — the label becomes noise in front of the
+ * real content.
  */
 export function PdfPage({ document, pageNumber, zoom, onRendered }: PdfPageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const textRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [textFailed, setTextFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     let renderTask: { cancel: () => void } | null = null;
+    let cancelText: (() => void) | null = null;
 
     void (async () => {
       try {
@@ -60,9 +76,23 @@ export function PdfPage({ document, pageNumber, zoom, onRendered }: PdfPageProps
         });
         renderTask = task;
         await task.promise;
+        if (cancelled) return;
 
-        if (!cancelled) {
-          onRendered?.({ width: viewport.width, height: viewport.height });
+        onRendered?.({ width: viewport.width, height: viewport.height });
+
+        // Text after pixels: the page is readable the moment the
+        // canvas lands, and the text layer arrives without holding it.
+        const container = textRef.current;
+        if (container) {
+          try {
+            cancelText = await renderTextLayer(page, container, viewport);
+            if (!cancelled) setTextFailed(false);
+          } catch {
+            // A page whose text cannot be extracted — a pure scan, a
+            // broken font map — still renders. Losing selection is a
+            // degradation; losing the page would be a failure.
+            if (!cancelled) setTextFailed(true);
+          }
         }
       } catch (cause) {
         // A cancelled render is the expected outcome of scrolling
@@ -76,6 +106,7 @@ export function PdfPage({ document, pageNumber, zoom, onRendered }: PdfPageProps
     return () => {
       cancelled = true;
       renderTask?.cancel();
+      cancelText?.();
     };
     // `onRendered` is excluded: callers pass an inline closure, and
     // including it would re-render the page on every parent render.
@@ -93,18 +124,15 @@ export function PdfPage({ document, pageNumber, zoom, onRendered }: PdfPageProps
 
   return (
     <div className="cn-pdf-page" data-page={pageNumber}>
-      {/*
-        The canvas carries the page number as its accessible label.
-        A text layer is Phase 3 work — until it exists, saying "page
-        N of a PDF" is honest, where an unlabelled canvas would be
-        an unexplained blank to a screen reader.
-      */}
-      <canvas
-        ref={canvasRef}
-        className="cn-pdf-page__canvas"
-        role="img"
-        aria-label={`Page ${pageNumber}`}
-      />
+      {/* Announces where the reader is, before the page's own text. */}
+      <span className="cn-visually-hidden">Page {pageNumber}</span>
+      <canvas ref={canvasRef} className="cn-pdf-page__canvas" aria-hidden="true" />
+      <div ref={textRef} className="cn-pdf-page__text" data-testid="text-layer" />
+      {textFailed ? (
+        <span className="cn-visually-hidden">
+          The text of page {pageNumber} could not be extracted. It may be a scan.
+        </span>
+      ) : null}
       <span className="cn-pdf-page__number" aria-hidden="true">
         {pageNumber}
       </span>

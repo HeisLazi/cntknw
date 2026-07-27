@@ -28,6 +28,44 @@ export interface LoadedDocument {
 }
 
 /**
+ * Render a page's text into a container, positioned over its canvas.
+ *
+ * pdf.js emits absolutely-positioned transparent spans whose geometry
+ * matches the painted glyphs. That is what makes the page selectable,
+ * searchable by the browser's own find, and readable by a screen
+ * reader — a canvas alone is a picture of a page, not a page.
+ *
+ * It is also the foundation Phase 3 needs: an annotation anchored to
+ * a quote requires real text nodes to anchor to.
+ *
+ * @returns a cancel function. Text rendering is asynchronous, so a
+ *   zoom change or a scroll away mid-render must be able to abandon
+ *   it; otherwise spans land in a container that has already been
+ *   re-laid-out at a different scale.
+ */
+export type PageViewport = ReturnType<PDFPageProxy['getViewport']>;
+
+export async function renderTextLayer(
+  page: PDFPageProxy,
+  container: HTMLElement,
+  viewport: PageViewport,
+): Promise<() => void> {
+  const textContentSource = await page.getTextContent();
+
+  container.replaceChildren();
+  // The spans pdf.js emits are sized in CSS pixels multiplied by this
+  // variable. Without it every glyph box is wrong by the zoom factor,
+  // and a selection lands nowhere near the visible text.
+  container.style.setProperty('--scale-factor', String(viewport.scale));
+  container.style.width = `${Math.floor(viewport.width)}px`;
+  container.style.height = `${Math.floor(viewport.height)}px`;
+
+  const layer = new pdfjs.TextLayer({ textContentSource, container, viewport });
+  await layer.render();
+  return () => layer.cancel();
+}
+
+/**
  * Open a PDF from bytes already in memory.
  *
  * The buffer is copied before being handed to pdf.js, which
