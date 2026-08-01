@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
 import { useRepositories } from '@app/providers/RepositoryProvider';
 import { useAsyncResource } from '@app/hooks/useAsyncResource';
-import { SplitPane, Surface } from '@components/primitives';
+import { SplitPane } from '@components/primitives';
 import {
   MissingSource,
   RouteError,
@@ -14,6 +14,7 @@ import { PdfReader } from '@features/reader/PdfReader';
 import { loadPdfDocument } from '@features/reader/pdfjs';
 import type { LoadedDocument } from '@features/reader/pdfjs';
 import { useWorkspacePersistence } from '@features/workspace/useWorkspacePersistence';
+import { JournalPane } from '@features/journal/JournalPane';
 import type { WorkspaceState, SourceLocation } from '@domain/index';
 import '@features/reader/reader.css';
 
@@ -197,16 +198,19 @@ function StudyWorkspace({ context }: { context: ResumedSourceContext }) {
             )
           }
           end={
-            <Surface tone="paper" as="section" aria-label="Journal">
-              <div className="cn-study__pane cn-study__pane--journal">
-                <h2 className="cn-lab__heading">Journal</h2>
-                <p className="cn-study__reading">
-                  {context.nearbyBlocks.length === 0
-                    ? 'Nothing written on this page yet. In Phase 2 this becomes one continuous journal, and a block created on page 5 belongs to page 5 without being asked.'
-                    : `${context.nearbyBlocks.length} block(s) at this location.`}
-                </p>
-              </div>
-            </Surface>
+            <section aria-label="Journal" style={{ height: '100%' }}>
+              {/*
+                Keyed on the page, so moving to another page mounts a
+                journal for that page rather than re-labelling the one
+                already on screen with somebody else's blocks.
+              */}
+              <JournalPane
+                key={page}
+                sourceId={context.source.id}
+                journalId={context.journal.id}
+                location={state.activeLocation}
+              />
+            </section>
           }
         />
       </div>

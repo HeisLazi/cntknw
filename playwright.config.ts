@@ -37,7 +37,12 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npx vite --config vite.e2e.config.ts',
+    // Invoked through node directly rather than `npx`. This project
+    // has been built on both Node 22 and Node 24, and on Node 24 the
+    // bundled npm 11 crashes on start-up with a class-extends error
+    // in its own minizlib — a Node/npm incompatibility, not a project
+    // one. Bypassing npm sidesteps it.
+    command: 'node ./node_modules/vite/bin/vite.js --config vite.e2e.config.ts',
     url: `http://localhost:${PORT}`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

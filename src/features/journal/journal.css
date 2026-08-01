@@ -1,0 +1,179 @@
+.cn-journal {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background-color: var(--cn-paper);
+}
+
+.cn-journal__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--cn-space-md);
+  padding: var(--cn-space-md) var(--cn-space-xl);
+  border-bottom: var(--cn-border-width) solid var(--cn-border-subtle);
+  position: sticky;
+  top: 0;
+  background-color: var(--cn-paper);
+  z-index: var(--cn-z-sticky);
+}
+
+.cn-journal__title {
+  font-size: var(--cn-text-base);
+  font-weight: var(--cn-weight-medium);
+}
+
+/*
+ * The inherited location.
+ *
+ * Stated, never asked for — INV-004. It is deliberately quiet: the
+ * reader should be able to confirm where a note will land without
+ * being nagged about it.
+ */
+.cn-journal__location {
+  color: var(--cn-ink-muted);
+  font-size: var(--cn-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.cn-journal__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--cn-space-xl);
+}
+
+.cn-journal__hint {
+  max-width: var(--cn-measure);
+  color: var(--cn-ink-muted);
+  font-size: var(--cn-text-sm);
+  line-height: var(--cn-leading-relaxed);
+}
+
+.cn-journal__blocks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cn-space-md);
+}
+
+.cn-journal__block {
+  max-width: var(--cn-measure);
+}
+
+/* ── The editor ─────────────────────────────────────────────────── */
+
+.cn-block-editor {
+  position: relative;
+}
+
+/*
+ * Paragraphs are mostly unboxed — PDD §9.5.
+ *
+ * No card, no border, no background. What marks a block as editable
+ * is the caret and the focus ring, not a container drawn around every
+ * sentence. A journal of boxes reads as a form.
+ */
+.cn-block-editor__content {
+  /* Editorial serif and a relaxed measure: this is reading-and-
+   * writing text, not UI text. */
+  font-family: var(--cn-font-serif);
+  font-size: var(--cn-text-lg);
+  line-height: var(--cn-leading-relaxed);
+  color: var(--cn-ink);
+  padding: var(--cn-space-2xs) var(--cn-space-sm);
+  margin-inline: calc(var(--cn-space-sm) * -1);
+  border-radius: var(--cn-radius-sm);
+  outline: none;
+  transition: background-color var(--cn-duration-fast) var(--cn-ease-standard);
+}
+
+.cn-block-editor__content:hover {
+  background-color: color-mix(in srgb, var(--cn-ink) 4%, transparent);
+}
+
+.cn-block-editor__content:focus-visible,
+.cn-block-editor__content:focus {
+  background-color: color-mix(in srgb, var(--cn-ink) 6%, transparent);
+  outline: var(--cn-focus-ring-width) solid var(--cn-focus-ring);
+  outline-offset: var(--cn-focus-ring-offset);
+}
+
+.cn-block-editor__content p {
+  margin: 0;
+}
+
+.cn-block-editor__content em {
+  font-style: italic;
+}
+
+.cn-block-editor__content strong {
+  font-weight: var(--cn-weight-semibold);
+}
+
+.cn-block-editor__content code {
+  font-family: var(--cn-font-mono);
+  font-size: 0.9em;
+  padding: 0 var(--cn-space-3xs);
+  border-radius: var(--cn-radius-xs);
+  background-color: color-mix(in srgb, var(--cn-ink) 8%, transparent);
+}
+
+/* An empty block shows its prompt rather than sitting invisible. */
+.cn-block-editor__content p.is-empty:first-child::before,
+.cn-block-editor__content:empty::before {
+  content: attr(data-placeholder);
+  color: var(--cn-ink-subtle);
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
+
+/* ── Adding and conflicts ───────────────────────────────────────── */
+
+.cn-journal__add {
+  display: block;
+  width: 100%;
+  max-width: var(--cn-measure);
+  min-height: var(--cn-target-min);
+  margin-top: var(--cn-space-lg);
+  padding: var(--cn-space-sm) var(--cn-space-md);
+  background: transparent;
+  border: var(--cn-border-width) dashed var(--cn-border);
+  border-radius: var(--cn-radius-md);
+  color: var(--cn-ink-muted);
+  font-size: var(--cn-text-sm);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--cn-duration-fast) var(--cn-ease-standard),
+    color var(--cn-duration-fast) var(--cn-ease-standard);
+}
+
+.cn-journal__add:hover {
+  border-color: var(--cn-accent);
+  color: var(--cn-ink);
+}
+
+.cn-journal__add-hint {
+  color: var(--cn-ink-subtle);
+}
+
+.cn-journal__conflict {
+  margin-top: var(--cn-space-2xs);
+  padding: var(--cn-space-sm) var(--cn-space-md);
+  border-left: var(--cn-border-width-thick) solid var(--cn-warning);
+  background-color: var(--cn-warning-quiet);
+  color: var(--cn-ink);
+  font-size: var(--cn-text-sm);
+}
+
+.cn-journal__reload {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--cn-accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

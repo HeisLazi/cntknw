@@ -7,6 +7,7 @@
  * a single optional-field object for every block type.
  */
 import { z } from 'zod';
+import { plainTextOf } from './blockText';
 import {
   BaseEntityFieldsSchema,
   EntityIdSchema,
@@ -50,14 +51,34 @@ export type BlockKind = z.infer<typeof BlockKindSchema>;
 
 // ─── Block Content (Discriminated Union) ─────────────────────────
 // Each block type has its own validated content shape.
-// ProseMirrorJSON is left as z.record for now — the exact schema
-// will be refined after the editor spike (Phase 0E).
 
-const ProseMirrorJSONSchema = z.record(z.unknown());
+/**
+ * A rich document, as JSON.
+ *
+ * Left as an open record deliberately. The domain must not depend on
+ * the editor's own types — if ProseMirror is replaced, this stays a
+ * tree of nodes with text leaves, and `plainTextOf` keeps working.
+ * Tightening it to ProseMirror's exact node schema would couple the
+ * stored shape to a library version (ADR-0004 §5).
+ */
+const RichDocSchema = z.record(z.unknown());
 
+/**
+ * `doc` is authoritative; `text` is derived. **ADR-0004.**
+ *
+ * They are not two places to write the same thing. `doc` carries the
+ * emphasis, the links and the inline citations; `text` is a flat
+ * projection of it, materialised at the write boundary because
+ * IndexedDB cannot index through a JSON tree and search, Read Aloud
+ * and every list view need plain text without parsing one.
+ *
+ * **Nothing may author `text` directly.** `deriveBlockText` below
+ * overwrites it from `doc` on every create and update, so a caller
+ * that sets both cannot make them disagree — it can only be ignored.
+ */
 export const ParagraphContentSchema = z.object({
   type: z.literal('paragraph'),
-  doc: ProseMirrorJSONSchema.optional(),
+  doc: RichDocSchema.optional(),
   text: z.string().default(''),
 });
 export type ParagraphContent = z.infer<typeof ParagraphContentSchema>;
@@ -217,13 +238,43 @@ export type JournalBlock = z.infer<typeof JournalBlockSchema>;
 
 // ─── Create Inputs ───────────────────────────────────────────────
 
+/**
+ * Re-derive `text` from `doc` wherever both can occur.
+ *
+ * Applied as a transform on the *input* schemas rather than on the
+ * content union, because Zod's `discriminatedUnion` requires plain
+ * object options and a transform would turn one into an effect,
+ * breaking discrimination for every other block type.
+ *
+ * Both adapters parse through these schemas at the repository
+ * boundary, so this covers every write path there is — including a
+ * migration or an import, which is where a "the caller will remember"
+ * rule would have failed first.
+ */
+function deriveBlockText<T extends { content?: unknown }>(value: T): T {
+  const content = value.content;
+  if (
+    typeof content !== 'object' ||
+    content === null ||
+    (content as { type?: unknown }).type !== 'paragraph'
+  ) {
+    return value;
+  }
+  const paragraph = content as { doc?: unknown; text?: string };
+  if (paragraph.doc === undefined) return value;
+  return {
+    ...value,
+    content: { ...paragraph, text: plainTextOf(paragraph.doc) },
+  };
+}
+
 export const CreateBlockInputSchema = JournalBlockSchema.omit({
   id: true,
   createdAt: true,
   updatedAt: true,
   revision: true,
   deletedAt: true,
-});
+}).transform(deriveBlockText);
 export type CreateBlockInput = z.input<typeof CreateBlockInputSchema>;
 
 export const CreateJournalInputSchema = JournalSchema.omit({
@@ -242,7 +293,7 @@ export const UpdateBlockInputSchema = z.object({
   parentBlockId: EntityIdSchema.nullable().optional(),
   rank: z.string().optional(),
   epistemicClaimId: EntityIdSchema.nullable().optional(),
-});
+}).transform(deriveBlockText);
 export type UpdateBlockInput = z.input<typeof UpdateBlockInputSchema>;
 
 export const MoveBlockInputSchema = z.object({
