@@ -188,6 +188,57 @@
   /* Touch targets. 44px is the smallest that is reliably usable. */
   --cn-target-min: 2.75rem;
 
+  /* ── The journal margin ─────────────────────────────────────────
+   * The margin is not decoration; it is where provenance lives. A
+   * block belongs to page 41 because it is set beneath the numeral
+   * 41, for the same reason a footnote belongs to the page it is
+   * printed on. There is no field to state it, so the lanes that
+   * carry it are load-bearing layout.
+   */
+  --cn-gutter-folio: 2.75rem; /* the sticky page numeral. Equals the touch target by design. */
+  --cn-gutter-mark: 2.75rem; /*  per-block marginal marks: CLAIM, ?, quote rule */
+  --cn-gutter: calc(var(--cn-gutter-folio) + var(--cn-gutter-mark));
+  --cn-journal-min: 35rem; /*    narrowest pane at which 60ch is still reachable */
+
+  /* The writing plane's body size, held in a variable because the
+   * journal has its own zoom independent of the source (PDD §9.3). */
+  --cn-journal-body-size: var(--cn-text-lg);
+  --cn-journal-zoom: 1;
+
+  /* ── Rules and washes on the PAPER plane ────────────────────────
+   * `--cn-border-subtle` is ink-800 against paper — very nearly
+   * invisible. The border tokens are tuned for canvas and surface,
+   * not for the reading plane, so the paper needs its own. Derived
+   * from `--cn-ink` so they invert with the theme and need no
+   * light-mode redeclaration.
+   */
+  --cn-rule-paper: color-mix(in srgb, var(--cn-ink) 12%, transparent);
+  --cn-rule-paper-strong: color-mix(in srgb, var(--cn-ink) 26%, transparent);
+  --cn-paper-hover: color-mix(in srgb, var(--cn-ink) 4%, transparent);
+  --cn-paper-active: color-mix(in srgb, var(--cn-ink) 6%, transparent);
+  --cn-paper-inset: color-mix(in srgb, var(--cn-ink) 3%, transparent);
+
+  /* ── Rhythm between page runs ───────────────────────────────────
+   * Deliberately NOT a readable quantity — the numerals state the
+   * facts. This exists so a jump from page 5 to page 41 *feels* like
+   * turning a sheaf, and two consecutive pages feel continuous.
+   */
+  --cn-run-gap-adjacent: var(--cn-space-xl);
+  --cn-run-gap-near: var(--cn-space-3xl);
+  --cn-run-gap-far: var(--cn-space-4xl);
+
+  /* ── Dwell ──────────────────────────────────────────────────────
+   * How long a transient message must persist before it earns pixels,
+   * and how long a settled one stays readable.
+   *
+   * Deliberately NOT named `--cn-duration-*`, and deliberately NOT
+   * collapsed under prefers-reduced-motion: they govern how long
+   * something remains *legible*, not how fast it moves. Shortening
+   * them would harm exactly the people that preference protects.
+   */
+  --cn-delay-status: 600ms;
+  --cn-dwell-status: 2000ms;
+
   /* ── Focus ──────────────────────────────────────────────────────
    * One ring, everywhere. A focus style that varies by component is
    * a focus style users have to relearn.

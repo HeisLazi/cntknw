@@ -14,6 +14,7 @@ import { PdfReader } from '@features/reader/PdfReader';
 import { loadPdfDocument } from '@features/reader/pdfjs';
 import type { LoadedDocument } from '@features/reader/pdfjs';
 import { useWorkspacePersistence } from '@features/workspace/useWorkspacePersistence';
+import { recoverPosition } from '@features/workspace/positionBuffer';
 import { JournalPane } from '@features/journal/JournalPane';
 import type { WorkspaceState, SourceLocation } from '@domain/index';
 import '@features/reader/reader.css';
@@ -56,8 +57,40 @@ export function StudyRoute() {
   return <StudyWorkspace key={sourceId} context={resource.value} />;
 }
 
+/**
+ * Apply anything a crash left behind.
+ *
+ * A page turn is written promptly, but promptly is still an
+ * asynchronous IndexedDB write, and a reload in the same tick can
+ * outrun it. The synchronous buffer catches that last millisecond
+ * (ADR-0005). Applied over the stored state, never instead of it —
+ * and only when it is genuinely ahead, so a stale buffer can never
+ * drag a reader backwards.
+ */
+function applyBufferedPosition(state: WorkspaceState): WorkspaceState {
+  const buffered = recoverPosition(state.sourceId);
+  if (!buffered) return state;
+
+  const storedPage = state.activeLocation.pdf?.page ?? 1;
+  if (buffered.page === storedPage && buffered.zoom === state.sourceView.zoom) {
+    return state;
+  }
+
+  const location: SourceLocation = {
+    ...state.activeLocation,
+    pdf: { ...state.activeLocation.pdf, page: buffered.page },
+  };
+  const furthest = state.furthestLocation?.pdf?.page ?? 0;
+  return {
+    ...state,
+    activeLocation: location,
+    furthestLocation: buffered.page > furthest ? location : state.furthestLocation,
+    sourceView: { ...state.sourceView, zoom: buffered.zoom },
+  };
+}
+
 function initialWorkspace(context: ResumedSourceContext): WorkspaceState {
-  if (context.workspaceState) return context.workspaceState;
+  if (context.workspaceState) return applyBufferedPosition(context.workspaceState);
   // A source imported before workspace state existed, or one whose
   // state was removed. Rendering from a default is better than
   // refusing to open the document.
@@ -210,12 +243,15 @@ function StudyWorkspace({ context }: { context: ResumedSourceContext }) {
           end={
             <section aria-label="Journal" style={{ height: '100%' }}>
               {/*
-                Keyed on the page, so moving to another page mounts a
-                journal for that page rather than re-labelling the one
-                already on screen with somebody else's blocks.
+                Deliberately NOT keyed on the page. The journal is
+                continuous (INV-003) — turning a page moves which run
+                is marked current, it does not swap one notebook for
+                another. Keying on the page was correct when the pane
+                showed a single page's notes; now it would remount and
+                re-read the whole journal on every page turn, and drop
+                any edit still inside the save debounce.
               */}
               <JournalPane
-                key={page}
                 sourceId={context.source.id}
                 journalId={context.journal.id}
                 location={state.activeLocation}

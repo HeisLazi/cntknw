@@ -477,10 +477,20 @@
   flex-direction: column;
 }
 
+/*
+ * A pane clips; it does not scroll.
+ *
+ * Its content owns its own scrollport — the reader scrolls its pages,
+ * the journal scrolls its runs. That is what lets each keep its own
+ * sticky chrome: a `position: sticky` folio numeral pins to the
+ * nearest scrolling ancestor, so if the pane scrolled instead of the
+ * journal, every numeral would stick to the wrong container and drift
+ * over the wrong run.
+ */
 .cn-split__pane {
   min-width: 0;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .cn-split__handle {

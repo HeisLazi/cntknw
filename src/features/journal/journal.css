@@ -1,3 +1,18 @@
+/*
+ * The journal as a ruled leaf with a wide left margin.
+ *
+ * The margin is not decoration — it is where provenance lives. A
+ * block belongs to page 41 because it is set beneath the numeral 41,
+ * exactly as a footnote belongs to the page it is printed on. There
+ * is no field, no dropdown, no badge, because there is nothing to
+ * state (INV-004).
+ *
+ * Two lanes, both 44px so they are also touch targets:
+ *   folio  — the sticky page numeral, one per run
+ *   mark   — per-block marginal marks (CLAIM, ?, a quote rule)
+ * The prose column then carries only prose.
+ */
+
 .cn-journal {
   display: flex;
   flex-direction: column;
@@ -6,79 +21,210 @@
   background-color: var(--cn-paper);
 }
 
+/* A running head, not a status bar. */
 .cn-journal__header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--cn-space-md);
   padding: var(--cn-space-md) var(--cn-space-xl);
-  border-bottom: var(--cn-border-width) solid var(--cn-border-subtle);
+  /* Aligned to the prose column's left edge, not the pane edge — the
+   * margin runs the full height of the leaf, including past the head. */
+  padding-inline-start: calc(var(--cn-space-xl) + var(--cn-gutter));
+  border-bottom: var(--cn-border-width) solid var(--cn-rule-paper);
+  background-color: var(--cn-paper);
   position: sticky;
   top: 0;
-  background-color: var(--cn-paper);
   z-index: var(--cn-z-sticky);
 }
 
-.cn-journal__title {
-  font-size: var(--cn-text-base);
-  font-weight: var(--cn-weight-medium);
-}
-
-/*
- * The inherited location.
- *
- * Stated, never asked for — INV-004. It is deliberately quiet: the
- * reader should be able to confirm where a note will land without
- * being nagged about it.
- */
-.cn-journal__location {
+.cn-journal__runninghead {
+  font-family: var(--cn-font-sans);
+  font-size: var(--cn-text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--cn-tracking-caps);
   color: var(--cn-ink-muted);
-  font-size: var(--cn-text-xs);
-  font-variant-numeric: tabular-nums;
 }
 
 .cn-journal__body {
   flex: 1;
   min-height: 0;
+  /* The journal owns its own scrollport, so the folio numerals can
+   * stick to it rather than to the split pane. */
   overflow-y: auto;
   padding: var(--cn-space-xl);
+  scrollbar-width: thin;
+  scrollbar-color: var(--cn-rule-paper-strong) transparent;
 }
 
 .cn-journal__hint {
   max-width: var(--cn-measure);
+  margin-inline-start: var(--cn-gutter);
   color: var(--cn-ink-muted);
-  font-size: var(--cn-text-sm);
+  font-family: var(--cn-font-serif);
+  font-size: var(--cn-journal-body-size);
   line-height: var(--cn-leading-relaxed);
 }
 
-.cn-journal__blocks {
+/* ── Runs ───────────────────────────────────────────────────────── */
+
+.cn-journal__runs {
   display: flex;
   flex-direction: column;
-  gap: var(--cn-space-md);
 }
 
-.cn-journal__block {
+.cn-run {
+  display: grid;
+  grid-template-columns: var(--cn-gutter-folio) 1fr;
+  --cn-run-gap: var(--cn-run-gap-adjacent);
+}
+
+/*
+ * The seam between two runs.
+ *
+ * A hairline across the MARGIN ONLY — never across the prose. A
+ * full-width rule turns a journal into a stack of cards, which is
+ * precisely the dashboard reading PDD §9.1 rejects.
+ */
+.cn-run + .cn-run {
+  margin-block-start: var(--cn-run-gap);
+  padding-block-start: var(--cn-space-md);
+  background-image: linear-gradient(var(--cn-rule-paper), var(--cn-rule-paper));
+  background-size: var(--cn-gutter) var(--cn-border-width);
+  background-position: left top;
+  background-repeat: no-repeat;
+}
+
+/* Rhythm from page distance. Not a readable quantity — the numerals
+ * state the facts. This makes a jump from p.5 to p.41 *feel* like
+ * turning a sheaf, and consecutive pages feel continuous. */
+.cn-run[data-gap='near'] {
+  --cn-run-gap: var(--cn-run-gap-near);
+}
+.cn-run[data-gap='far'] {
+  --cn-run-gap: var(--cn-run-gap-far);
+}
+
+/*
+ * The folio numeral.
+ *
+ * No background, no border, no chip — a numeral that stays. Sticky
+ * within its own run only: `align-self: start` means it pins for
+ * exactly the height of its run and is then released, so it never
+ * overlaps the next run's numeral.
+ */
+.cn-run__folio {
+  grid-area: 1 / 1;
+  justify-self: start;
+  align-self: start;
+  position: sticky;
+  top: var(--cn-space-md);
+  min-width: var(--cn-target-min);
+  min-height: var(--cn-target-min);
+  padding-block: var(--cn-space-2xs);
+  font-family: var(--cn-font-mono);
+  font-size: var(--cn-text-xs);
+  line-height: var(--cn-leading-tight);
+  letter-spacing: var(--cn-tracking-wide);
+  font-variant-numeric: tabular-nums;
+  color: var(--cn-ink-subtle);
+}
+
+.cn-run__folio-mark {
+  font-size: var(--cn-text-sm);
+}
+
+/*
+ * The standing rule beside the active page.
+ *
+ * The only accent in the journal besides caret, selection and focus.
+ * It sits on the folio boundary so it can never collide with a
+ * block's own marginal mark.
+ */
+.cn-run--active::before {
+  content: '';
+  grid-area: 1 / 1;
+  justify-self: end;
+  align-self: stretch;
+  width: var(--cn-border-width-thick);
+  background-color: var(--cn-accent);
+}
+
+.cn-run--active > .cn-run__folio {
+  color: var(--cn-ink-strong);
+  font-weight: var(--cn-weight-medium);
+}
+
+.cn-run__blocks {
+  grid-area: 1 / 2;
+  padding-block-start: var(--cn-space-xs);
+}
+
+/* ── The composing line ─────────────────────────────────────────────
+ *
+ * The active page with nothing written on it yet. Inserted in page
+ * order among the real runs, so its position itself teaches the
+ * ordering.
+ *
+ * One line of paper — no dashed box, no plus-in-a-circle, no card. A
+ * dashed rectangle repeated per run reads as a form; a ruled line
+ * reads as paper. Nothing is persisted for it, so leaving the page
+ * without typing leaves no trace and INV-005 holds in the data as
+ * well as in the view.
+ */
+.cn-run__opening {
+  grid-area: 1 / 2;
+  padding-block-start: var(--cn-space-xs);
+}
+
+.cn-run__start {
+  display: block;
+  width: 100%;
   max-width: var(--cn-measure);
+  min-height: calc(var(--cn-journal-body-size) * var(--cn-leading-relaxed));
+  padding: var(--cn-space-2xs) 0;
+  background: none;
+  border: 0;
+  border-bottom: var(--cn-border-width) solid var(--cn-rule-paper);
+  color: var(--cn-ink-subtle);
+  font-family: var(--cn-font-serif);
+  font-size: var(--cn-journal-body-size);
+  line-height: var(--cn-leading-relaxed);
+  /* Upright, never italic: italics carry no essential information
+   * anywhere in this interface (PDD §9.3). */
+  font-style: normal;
+  text-align: start;
+  cursor: text;
+  transition: color var(--cn-duration-fast) var(--cn-ease-standard);
+}
+
+.cn-run__start:hover {
+  color: var(--cn-ink-muted);
+}
+
+/* ── Blocks ─────────────────────────────────────────────────────── */
+
+.cn-block {
+  display: grid;
+  grid-template-columns: var(--cn-gutter-mark) minmax(0, var(--cn-measure));
+}
+
+.cn-block__body {
+  grid-column: 2;
 }
 
 /* ── The editor ─────────────────────────────────────────────────── */
 
-.cn-block-editor {
-  position: relative;
-}
-
 /*
  * Paragraphs are mostly unboxed — PDD §9.5.
  *
- * No card, no border, no background. What marks a block as editable
- * is the caret and the focus ring, not a container drawn around every
- * sentence. A journal of boxes reads as a form.
+ * No card, no border, no background at rest. What marks a block as
+ * editable is the caret and the focus ring, not a container drawn
+ * around every sentence. A journal of boxes reads as a form.
  */
 .cn-block-editor__content {
-  /* Editorial serif and a relaxed measure: this is reading-and-
-   * writing text, not UI text. */
   font-family: var(--cn-font-serif);
-  font-size: var(--cn-text-lg);
+  font-size: calc(var(--cn-journal-body-size) * var(--cn-journal-zoom));
   line-height: var(--cn-leading-relaxed);
   color: var(--cn-ink);
   padding: var(--cn-space-2xs) var(--cn-space-sm);
@@ -89,12 +235,12 @@
 }
 
 .cn-block-editor__content:hover {
-  background-color: color-mix(in srgb, var(--cn-ink) 4%, transparent);
+  background-color: var(--cn-paper-hover);
 }
 
 .cn-block-editor__content:focus-visible,
 .cn-block-editor__content:focus {
-  background-color: color-mix(in srgb, var(--cn-ink) 6%, transparent);
+  background-color: var(--cn-paper-active);
   outline: var(--cn-focus-ring-width) solid var(--cn-focus-ring);
   outline-offset: var(--cn-focus-ring-offset);
 }
@@ -116,7 +262,7 @@
   font-size: 0.9em;
   padding: 0 var(--cn-space-3xs);
   border-radius: var(--cn-radius-xs);
-  background-color: color-mix(in srgb, var(--cn-ink) 8%, transparent);
+  background-color: var(--cn-paper-inset);
 }
 
 /* An empty block shows its prompt rather than sitting invisible. */
@@ -129,35 +275,7 @@
   height: 0;
 }
 
-/* ── Adding and conflicts ───────────────────────────────────────── */
-
-.cn-journal__add {
-  display: block;
-  width: 100%;
-  max-width: var(--cn-measure);
-  min-height: var(--cn-target-min);
-  margin-top: var(--cn-space-lg);
-  padding: var(--cn-space-sm) var(--cn-space-md);
-  background: transparent;
-  border: var(--cn-border-width) dashed var(--cn-border);
-  border-radius: var(--cn-radius-md);
-  color: var(--cn-ink-muted);
-  font-size: var(--cn-text-sm);
-  text-align: left;
-  cursor: pointer;
-  transition:
-    border-color var(--cn-duration-fast) var(--cn-ease-standard),
-    color var(--cn-duration-fast) var(--cn-ease-standard);
-}
-
-.cn-journal__add:hover {
-  border-color: var(--cn-accent);
-  color: var(--cn-ink);
-}
-
-.cn-journal__add-hint {
-  color: var(--cn-ink-subtle);
-}
+/* ── Conflict ───────────────────────────────────────────────────── */
 
 .cn-journal__conflict {
   margin-top: var(--cn-space-2xs);
@@ -165,6 +283,7 @@
   border-left: var(--cn-border-width-thick) solid var(--cn-warning);
   background-color: var(--cn-warning-quiet);
   color: var(--cn-ink);
+  font-family: var(--cn-font-sans);
   font-size: var(--cn-text-sm);
 }
 
@@ -176,4 +295,28 @@
   font: inherit;
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* ── Narrow ─────────────────────────────────────────────────────────
+ *
+ * Below the width at which 60ch is reachable, the margin collapses to
+ * the folio lane alone. The numeral stays — it is the provenance —
+ * but the per-block mark lane is given back to the prose.
+ */
+@media (max-width: 55rem) {
+  .cn-run {
+    grid-template-columns: var(--cn-gutter-folio) 1fr;
+  }
+
+  .cn-block {
+    grid-template-columns: 0 minmax(0, var(--cn-measure));
+  }
+
+  .cn-journal__header {
+    padding-inline-start: calc(var(--cn-space-xl) + var(--cn-gutter-folio));
+  }
+
+  .cn-journal__hint {
+    margin-inline-start: var(--cn-gutter-folio);
+  }
 }

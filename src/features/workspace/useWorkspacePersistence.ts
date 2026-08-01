@@ -3,6 +3,7 @@ import { useRepositories } from '@app/providers/RepositoryProvider';
 import { expectedRevision } from '@data/repositories/concurrency';
 import { RevisionConflictError } from '@data/errors';
 import type { WorkspaceState } from '@domain/index';
+import { clearPosition, stashPosition } from './positionBuffer';
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -85,6 +86,8 @@ export function useWorkspacePersistence(
         expectedRevision(revision.current),
       );
       revision.current = saved.revision;
+      // Durably stored — the crash buffer no longer needs it.
+      clearPosition();
       setStatus('saved');
     } catch (error) {
       if (error instanceof RevisionConflictError) {
@@ -124,6 +127,14 @@ export function useWorkspacePersistence(
     const next = { ...latest.current, ...change };
     latest.current = next;
     dirty.current = true;
+    // Synchronous, before anything asynchronous is attempted. Even a
+    // prompt IndexedDB write is async, and a reload in the same tick
+    // can outrun it — measured at 0ms (ADR-0005).
+    stashPosition(
+      next.sourceId,
+      next.activeLocation.pdf?.page ?? 1,
+      next.sourceView.zoom,
+    );
     setState(next);
   }, []);
 

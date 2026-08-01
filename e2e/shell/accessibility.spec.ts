@@ -27,6 +27,14 @@ import { test, expect, type Page } from '@playwright/test';
  */
 async function startTabbingFromTop(page: Page): Promise<void> {
   await page.bringToFront();
+  // `bringToFront` resolves before the page has necessarily *received*
+  // focus, and a Tab dispatched into an unfocused document goes
+  // nowhere. Waiting for `document.hasFocus()` makes the precondition
+  // explicit instead of hoping the race lands the right way — which
+  // it did, about three runs in four.
+  await page.waitForFunction(() => document.hasFocus(), undefined, {
+    timeout: 5_000,
+  });
   await page.locator('body').press('Tab');
 }
 

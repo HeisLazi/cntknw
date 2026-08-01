@@ -14,10 +14,13 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { makePdf } from '../fixtures/makePdf';
+import { resetApplicationStorage } from '../browser/harness-client';
 
 const PDF = makePdf(4, 'A readable document');
 
 async function openReader(page: Page) {
+  // Fresh storage, so no spec depends on what ran before it.
+  await resetApplicationStorage(page);
   await page.goto('/library');
   await page.locator('input[type="file"]').setInputFiles({
     name: 'readable.pdf',

@@ -9,10 +9,13 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { makePdf } from '../fixtures/makePdf';
+import { resetApplicationStorage } from '../browser/harness-client';
 
 const PDF = makePdf(5, 'The Wretched of the Earth');
 
 async function importPdf(page: Page, name = 'wretched-of-the-earth.pdf') {
+  // Fresh storage, so no spec depends on what ran before it.
+  await resetApplicationStorage(page);
   await page.goto('/library');
   // The input is visually hidden and driven by the visible button.
   // Setting files on it directly is how Playwright exercises a file

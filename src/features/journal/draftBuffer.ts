@@ -19,8 +19,11 @@
  * write during `pagehide` has either happened or not by the time the
  * handler returns. That is the entire reason it is used here, and the
  * only reason it is acceptable to write anything outside the
- * repositories.
+ * repositories. The never-throwing access itself lives in
+ * `@lib/safeStore`, shared with the reading-position buffer, so the
+ * defensive handling cannot drift between the two.
  */
+import { readJson, remove, writeJson } from '@lib/safeStore';
 
 const KEY = 'cntknw:journal-drafts:v1';
 
@@ -35,28 +38,16 @@ export interface JournalDraft {
 /** Drafts older than this are discarded rather than replayed. */
 const MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7;
 
+const isRecord = (value: unknown): value is Record<string, JournalDraft> =>
+  typeof value === 'object' && value !== null;
+
 function readAll(): Record<string, JournalDraft> {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return {};
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null) return {};
-    return parsed as Record<string, JournalDraft>;
-  } catch {
-    // Private-browsing quota errors, a disabled localStorage, or a
-    // corrupt value. Recovery is a bonus; it must never be the reason
-    // the journal fails to open.
-    return {};
-  }
+  return readJson(KEY, isRecord) ?? {};
 }
 
 function writeAll(drafts: Record<string, JournalDraft>): void {
-  try {
-    if (Object.keys(drafts).length === 0) localStorage.removeItem(KEY);
-    else localStorage.setItem(KEY, JSON.stringify(drafts));
-  } catch {
-    // As above — a failure to buffer is not a failure to edit.
-  }
+  if (Object.keys(drafts).length === 0) remove(KEY);
+  else writeJson(KEY, drafts);
 }
 
 /** Record an edit that has not yet reached the repository. Synchronous. */

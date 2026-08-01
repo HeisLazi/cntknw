@@ -54,6 +54,55 @@ export function harness(page: Page) {
  */
 export const HARNESS_URL = '/e2e/harness/index.html';
 
+/**
+ * Clear every origin-scoped store the application writes to.
+ *
+ * Playwright gives each test a fresh browser context, which is
+ * usually enough — but specs that drive the *application* rather than
+ * the harness all import into the same production database name, and
+ * anything that does survive turns a green suite into an
+ * order-dependent one. An accumulated library also breaks strict-mode
+ * locators: two sources with the same title, and `getByRole('link',
+ * { name })` no longer resolves.
+ *
+ * Cheap, and it removes the entire class of problem rather than the
+ * instance of it that happened to be noticed.
+ */
+export async function resetApplicationStorage(page: Page): Promise<void> {
+  // Reset from the harness page, NOT from the application.
+  //
+  // The application opens `cntknw` on start-up and holds the
+  // connection for as long as it is mounted, so `deleteDatabase`
+  // issued from an application page is `blocked` and silently does
+  // nothing. The harness is same-origin — so it can see and delete
+  // the same databases — but opens none of them until asked.
+  await page.goto(HARNESS_URL);
+  await page.evaluate(async () => {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch {
+      // Never the reason a test fails.
+    }
+    const databases = await indexedDB.databases();
+    await Promise.all(
+      databases
+        .map((entry) => entry.name)
+        .filter((name): name is string => typeof name === 'string')
+        .map(
+          (name) =>
+            new Promise<void>((resolve) => {
+              const request = indexedDB.deleteDatabase(name);
+              request.onsuccess = () => resolve();
+              request.onerror = () => resolve();
+              request.onblocked = () => resolve();
+            }),
+        ),
+    );
+  });
+  await page.reload();
+}
+
 export async function loadHarness(page: Page): Promise<void> {
   await page.goto(HARNESS_URL);
   await expect(page.locator('body')).toHaveAttribute('data-harness', 'ready');

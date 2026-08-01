@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRepositories } from '@app/providers/RepositoryProvider';
 import { expectedRevision } from '@data/repositories/concurrency';
 import { RevisionConflictError } from '@data/errors';
 import { createPageLinkedBlock } from '@application/create-block';
-import { plainTextOf } from '@domain/journals/blockText';
+import { groupBlocksByLocation } from '@domain/journals/grouping';
+import type { JournalGroup } from '@domain/journals/grouping';
 import type { EntityId, JournalBlock, SourceLocation } from '@domain/index';
 import { BlockEditor } from './BlockEditor';
 import { clearDraft, recoverDrafts, stashDraft } from './draftBuffer';
@@ -18,8 +19,8 @@ export interface JournalPaneProps {
 
 /**
  * Short enough that a lost window is small, long enough that typing
- * does not produce a write per keystroke. Paired with a flush on
- * every path out of the page — see `flushAll` below.
+ * does not produce a write per keystroke. Paired with a synchronous
+ * crash buffer and a flush on every path out of the page (ADR-0005).
  */
 const SAVE_DEBOUNCE_MS = 400;
 
@@ -29,77 +30,83 @@ interface PendingEdit {
 }
 
 /**
+ * How far apart two runs are, as rhythm rather than as data.
+ *
+ * Deliberately not a readable quantity — the numerals state the facts.
+ * This exists so that a jump from page 5 to page 41 *feels* like
+ * turning a sheaf of pages, and two consecutive pages feel continuous.
+ */
+function gapBetween(previous: number | undefined, current: number | undefined): string {
+  if (previous === undefined || current === undefined) return 'far';
+  const distance = current - previous;
+  if (distance <= 1) return 'adjacent';
+  if (distance < 10) return 'near';
+  return 'far';
+}
+
+/**
  * The journal for one source. INV-003, INV-004, INV-005.
  *
- * **A block written while page 5 is on screen belongs to page 5, and
- * the user is never asked.** That is INV-004 and AC-003, and it is the
- * whole point of the two panes being one workspace: the location is
- * taken from where the reader is, not from a field they fill in.
+ * **One continuous journal, not a page of notes per page of book.**
+ * Every block for the source is loaded and grouped into *runs* — a
+ * page numeral in the margin, and the blocks written on that page set
+ * beneath it.
  *
- * **Only pages with writing appear.** INV-005 and AC-004 — an empty
- * page creates no section, which is why this lists the blocks for the
- * current location rather than rendering a header per page.
+ * **Provenance is carried by position, not by metadata.** A block
+ * belongs to page 41 for the same reason a footnote belongs to the
+ * page it is printed on: it is set beneath the 41. There is no field,
+ * no dropdown, no badge, because there is nothing to state. That is
+ * INV-004 and AC-003 expressed as layout rather than as a form.
  *
- * Persistence follows the pattern established for workspace state:
- * debounced, and guarded on the revision actually read (ADR-0003).
- * A journal block is more valuable than a scroll position, so a
- * conflict here does **not** reapply — it surfaces, because two
- * windows editing the same sentence is a real disagreement and
- * picking a winner silently would lose somebody's words.
+ * **A run exists only if it has writing.** There is no page-header
+ * component that *could* render for an empty page, so INV-005 and
+ * AC-004 are structural rather than a filter someone can forget. A
+ * 400-page book with notes on sixty pages shows sixty numerals — not
+ * four hundred headers with silence between them.
+ *
+ * The single exception is the *composing line*: the page the reader is
+ * on, if nothing is written there yet, gets one unsaved line at its
+ * sorted position. Nothing is persisted for it, so leaving without
+ * typing leaves no trace and INV-005 holds in the data as well as in
+ * the view.
  */
 export function JournalPane({ sourceId, journalId, location }: JournalPaneProps) {
   const repositories = useRepositories();
   const { journals } = repositories;
-  const page = location.pdf?.page;
+  const activePage = location.pdf?.page;
 
-  // `null` means "not yet loaded"; loading state is derived from it,
-  // so nothing sets state synchronously inside the effect below.
-  // Reset during render when the identity of the page-worth-of-blocks
-  // changes, matching the useAsyncResource pattern in @app/hooks.
   const [blocks, setBlocks] = useState<JournalBlock[] | null>(null);
-  const [loadedKey, setLoadedKey] = useState<string>('');
-  const currentKey = `${journalId}:${page ?? 'all'}`;
-  if (loadedKey !== currentKey) {
-    setLoadedKey(currentKey);
+  const [loadedJournal, setLoadedJournal] = useState<string>('');
+  if (loadedJournal !== journalId) {
+    setLoadedJournal(journalId);
     setBlocks(null);
   }
   const loading = blocks === null;
+
   const [conflicted, setConflicted] = useState<EntityId | null>(null);
   const [focusBlockId, setFocusBlockId] = useState<EntityId | null>(null);
 
-  // Revisions we believe are current, and edits not yet written.
   const revisions = useRef(new Map<EntityId, number>());
   const pending = useRef(new Map<EntityId, PendingEdit>());
   const timers = useRef(new Map<EntityId, ReturnType<typeof setTimeout>>());
-
-  const [reloadTrigger, setReloadTrigger] = useState(0);
-  const reload = useCallback(() => {
-    // Bumping the trigger forces the load effect to re-run.
-    setReloadTrigger((n) => n + 1);
-  }, []);
-
-  // The load effect needs `flush` to replay recovered drafts, but is
-  // declared above it. A ref breaks the cycle without making the
-  // effect depend on a callback that changes identity.
   const flushRef = useRef<(blockId: EntityId) => Promise<void>>(async () => {});
 
+  const [reloadTrigger, setReloadTrigger] = useState(0);
+  const reload = useCallback(() => setReloadTrigger((n) => n + 1), []);
+
+  // ── Load the whole journal, not one page of it ─────────────────
   useEffect(() => {
     let cancelled = false;
-    const query = page === undefined
-      ? journals.listBlocks(journalId)
-      : journals.listBlocksByPage(journalId, page);
 
-    // The setBlocks call is inside a .then callback — an external
-    // subscription resolving, not a synchronous effect body update —
-    // which is the case react-hooks/set-state-in-effect permits.
-    query
+    journals
+      .listBlocks(journalId)
       .then((found) => {
         if (cancelled) return;
         for (const block of found) revisions.current.set(block.id, block.revision);
 
-        // Replay anything a crash left behind. The draft is applied
-        // over the stored block and scheduled through the ordinary
-        // guarded save path — recovery is not a privileged write.
+        // Replay anything a crash left behind (ADR-0005). Recovery is
+        // not a privileged write: it goes through the same guarded
+        // save path as any other edit.
         const drafts = recoverDrafts();
         const restored = found.map((block) => {
           const draft = drafts.get(block.id);
@@ -135,8 +142,9 @@ export function JournalPane({ sourceId, journalId, location }: JournalPaneProps)
     return () => {
       cancelled = true;
     };
-  }, [journals, journalId, page, reloadTrigger]);
+  }, [journals, journalId, reloadTrigger]);
 
+  // ── Saving ──────────────────────────────────────────────────────
   const flush = useCallback(
     async (blockId: EntityId) => {
       const edit = pending.current.get(blockId);
@@ -152,11 +160,9 @@ export function JournalPane({ sourceId, journalId, location }: JournalPaneProps)
             id: blockId,
             content: {
               type: 'paragraph',
-              // Cast at the boundary. The domain intentionally keeps
-              // `doc` as an open record so it need not depend on the
-              // editor's type — see editorSchema.ts. The editor emits
-              // ProseMirror JSON, which is exactly this shape; the
-              // cast is the one place the two vocabularies meet.
+              // The one place the editor's vocabulary meets the
+              // domain's. The domain keeps `doc` an open record so it
+              // need not depend on ProseMirror (ADR-0004 §5).
               doc: edit.doc as Record<string, unknown>,
               text: edit.text,
             },
@@ -164,14 +170,14 @@ export function JournalPane({ sourceId, journalId, location }: JournalPaneProps)
           expectedRevision(revision),
         );
         revisions.current.set(blockId, saved.revision);
-        // Durably stored — the crash buffer no longer needs it.
         clearDraft(blockId);
         setConflicted((current) => (current === blockId ? null : current));
       } catch (error) {
         if (error instanceof RevisionConflictError) {
-          // Deliberately not reapplied. Reading position can be
+          // Deliberately not reapplied. A reading position can be
           // re-asserted by the window in use; a sentence cannot,
-          // because the other version is somebody's writing too.
+          // because the other version is somebody's writing too
+          // (ADR-0004 §6).
           setConflicted(blockId);
           return;
         }
@@ -189,9 +195,8 @@ export function JournalPane({ sourceId, journalId, location }: JournalPaneProps)
   const scheduleSave = useCallback(
     (blockId: EntityId, edit: PendingEdit) => {
       pending.current.set(blockId, edit);
-      // Synchronous, on every keystroke. This is the only write that
-      // is guaranteed to have happened if the tab dies in the next
-      // millisecond — see draftBuffer.ts.
+      // Synchronous, every keystroke. The only write guaranteed to
+      // have happened if the tab dies in the next millisecond.
       stashDraft({ blockId, doc: edit.doc, text: edit.text });
       const existing = timers.current.get(blockId);
       if (existing) clearTimeout(existing);
@@ -203,20 +208,6 @@ export function JournalPane({ sourceId, journalId, location }: JournalPaneProps)
     [flush],
   );
 
-  /**
-   * Write everything outstanding before the words can be lost.
-   *
-   * Unmount is not enough. A reload or a tab close does not unmount
-   * React cleanly, and closing a tab mid-sentence is exactly when the
-   * words matter most — the same defect measured on the workspace
-   * autosave, where a reload inside the debounce window lost a page
-   * turn entirely.
-   *
-   * Text genuinely does need debouncing — a write per keystroke would
-   * be absurd — so unlike the workspace this cannot be fixed by
-   * writing promptly. The debounce is instead kept short, and every
-   * path out of the page flushes.
-   */
   const flushAll = useCallback(() => {
     for (const timer of timers.current.values()) clearTimeout(timer);
     timers.current.clear();
@@ -237,17 +228,35 @@ export function JournalPane({ sourceId, journalId, location }: JournalPaneProps)
     };
   }, [flushAll]);
 
-  const addBlock = useCallback(async () => {
-    const block = await createPageLinkedBlock(repositories, {
-      sourceId,
-      sourceLocation: location,
-      kind: 'paragraph',
-      content: { type: 'paragraph', text: '' },
-    });
-    revisions.current.set(block.id, block.revision);
-    setBlocks((current) => [...(current ?? []), block]);
-    setFocusBlockId(block.id);
-  }, [repositories, sourceId, location]);
+  // ── Creating and removing ───────────────────────────────────────
+
+  /**
+   * Two distinct paths, and conflating them is the trap.
+   *
+   * **Capturing** — the composing line writes at the page the reader
+   * is *on*, because that is what the reader is looking at.
+   *
+   * **Continuing** — Enter at the end of a block creates a sibling in
+   * the *same run*, inheriting that block's location. If the reader
+   * has scrolled the source away, continuing a note about page 12
+   * must still land on page 12, not on wherever the source happens to
+   * be showing.
+   */
+  const addBlock = useCallback(
+    async (at: SourceLocation, afterBlockId?: EntityId) => {
+      const block = await createPageLinkedBlock(repositories, {
+        sourceId,
+        sourceLocation: at,
+        kind: 'paragraph',
+        content: { type: 'paragraph', text: '' },
+        ...(afterBlockId === undefined ? {} : { afterBlockId }),
+      });
+      revisions.current.set(block.id, block.revision);
+      setBlocks((current) => [...(current ?? []), block]);
+      setFocusBlockId(block.id);
+    },
+    [repositories, sourceId],
+  );
 
   const removeBlock = useCallback(
     async (blockId: EntityId) => {
@@ -258,19 +267,44 @@ export function JournalPane({ sourceId, journalId, location }: JournalPaneProps)
       // is the clearest case for one.
       await journals.softDeleteBlock(blockId, expectedRevision(revision));
       revisions.current.delete(blockId);
-      setBlocks((current) => (current ?? []).filter((block) => block.id !== blockId));
+      clearDraft(blockId);
+      setBlocks((current) => (current ?? []).filter((b) => b.id !== blockId));
     },
     [journals],
   );
 
+  // ── Runs ────────────────────────────────────────────────────────
+  const runs = useMemo<JournalGroup[]>(
+    () => groupBlocksByLocation(blocks ?? []),
+    [blocks],
+  );
+
+  const activeHasWriting =
+    activePage !== undefined && runs.some((run) => run.page === activePage);
+
+  /** Runs plus, if the active page is empty, one unsaved composing line. */
+  const rendered = useMemo(() => {
+    if (activePage === undefined || activeHasWriting) return runs;
+    const composing: JournalGroup = {
+      key: `composing-${activePage}`,
+      page: activePage,
+      blocks: [],
+    };
+    const placed = runs.filter((r) => r.page !== undefined);
+    const unplaced = runs.filter((r) => r.page === undefined);
+    const before = placed.filter((r) => (r.page ?? 0) < activePage);
+    const after = placed.filter((r) => (r.page ?? 0) > activePage);
+    return [...before, composing, ...after, ...unplaced];
+  }, [runs, activePage, activeHasWriting]);
+
   return (
     <div className="cn-journal">
+      {/* A running head, not a status bar. The page number is
+          deliberately absent — it lives in the margin now, and
+          printing it twice would make the header authoritative and
+          the margin decoration, inverting the whole idea. */}
       <div className="cn-journal__header">
-        <h2 className="cn-journal__title">Journal</h2>
-        {page !== undefined ? (
-          // The inherited location, shown rather than asked for.
-          <p className="cn-journal__location">Page {page}</p>
-        ) : null}
+        <span className="cn-journal__runninghead">Journal</span>
       </div>
 
       <div className="cn-journal__body">
@@ -278,53 +312,109 @@ export function JournalPane({ sourceId, journalId, location }: JournalPaneProps)
           <p className="cn-journal__hint" role="status">
             Loading…
           </p>
-        ) : (blocks ?? []).length === 0 ? (
+        ) : rendered.length === 0 ? (
           <p className="cn-journal__hint">
-            {page !== undefined
-              ? `Nothing written on page ${page} yet. Anything you write here will belong to this page.`
-              : 'Nothing written yet.'}
+            Nothing written yet. Open a page and start — what you write will
+            belong to the page you wrote it on.
           </p>
         ) : (
-          <ul className="cn-journal__blocks">
-            {(blocks ?? []).map((block) => (
-              <li key={block.id} className="cn-journal__block">
-                <BlockEditor
-                  doc={block.content.type === 'paragraph' ? block.content.doc : undefined}
-                  text={
-                    block.content.type === 'paragraph'
-                      ? block.content.text
-                      : plainTextOf(undefined)
-                  }
-                  autoFocus={block.id === focusBlockId}
-                  placeholder="Write…"
-                  onChange={(next) => scheduleSave(block.id, next)}
-                  onSplit={() => void addBlock()}
-                  onRemove={() => void removeBlock(block.id)}
-                />
-                {conflicted === block.id ? (
-                  <p className="cn-journal__conflict" role="alert">
-                    This block was changed in another window. Your text has not
-                    been saved over it.{' '}
-                    <button
-                      type="button"
-                      className="cn-journal__reload"
-                      onClick={reload}
-                    >
-                      Reload the block
-                    </button>
-                  </p>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
+          <ol className="cn-journal__runs">
+            {rendered.map((run, index) => {
+              const isActive = run.page !== undefined && run.page === activePage;
+              const isComposing = run.blocks.length === 0;
+              const gap = gapBetween(rendered[index - 1]?.page, run.page);
 
-        <button type="button" className="cn-journal__add" onClick={() => void addBlock()}>
-          {(blocks ?? []).length === 0 ? 'Start writing' : 'Add a block'}
-          {page !== undefined ? (
-            <span className="cn-journal__add-hint"> on page {page}</span>
-          ) : null}
-        </button>
+              return (
+                <li
+                  key={run.key}
+                  className={[
+                    'cn-run',
+                    isActive ? 'cn-run--active' : null,
+                    isComposing ? 'cn-run--composing' : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  data-gap={gap}
+                  aria-current={isActive ? 'location' : undefined}
+                  aria-label={
+                    run.page === undefined
+                      ? 'Notes about the whole work'
+                      : `Page ${run.page}${isComposing ? ', empty' : ''}`
+                  }
+                >
+                  <p className="cn-run__folio">
+                    {run.page === undefined ? (
+                      <span className="cn-run__folio-mark">§</span>
+                    ) : (
+                      <>
+                        <span aria-hidden="true">p.</span>
+                        {run.page}
+                      </>
+                    )}
+                  </p>
+
+                  {isComposing ? (
+                    <div className="cn-run__opening">
+                      <button
+                        type="button"
+                        className="cn-run__start"
+                        onClick={() => void addBlock(location)}
+                      >
+                        Start writing, quote the source, or draw.
+                      </button>
+                    </div>
+                  ) : (
+                    <ol className="cn-run__blocks">
+                      {run.blocks.map((block) => (
+                        <li key={block.id} className="cn-block">
+                          <div className="cn-block__body">
+                            <BlockEditor
+                              doc={
+                                block.content.type === 'paragraph'
+                                  ? block.content.doc
+                                  : undefined
+                              }
+                              text={
+                                block.content.type === 'paragraph'
+                                  ? block.content.text
+                                  : ''
+                              }
+                              autoFocus={block.id === focusBlockId}
+                              placeholder="Write…"
+                              onChange={(next) => scheduleSave(block.id, next)}
+                              // Continuing inherits from THIS block, not
+                              // from wherever the source is showing.
+                              onSplit={() =>
+                                void addBlock(
+                                  block.sourceLocation ?? location,
+                                  block.id,
+                                )
+                              }
+                              onRemove={() => void removeBlock(block.id)}
+                            />
+                            {conflicted === block.id ? (
+                              <p className="cn-journal__conflict" role="alert">
+                                This block was changed in another window. Your
+                                text has not been saved over it.{' '}
+                                <button
+                                  type="button"
+                                  className="cn-journal__reload"
+                                  onClick={reload}
+                                >
+                                  Reload the block
+                                </button>
+                              </p>
+                            ) : null}
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        )}
       </div>
     </div>
   );
