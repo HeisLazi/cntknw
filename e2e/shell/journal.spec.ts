@@ -45,13 +45,6 @@ test.describe('AC-003 — page context is inherited automatically', () => {
     // block created on page 3 is visible on page 3, absent on any
     // other page, and comes back on returning to page 3 — proving
     // it is attached to a location rather than to the current view.
-    //
-    // A full reload chain would be stronger evidence, but is
-    // deferred: the mixed workspace-autosave + journal-autosave
-    // sequence has a race that only shows up under a specific
-    // click-after-save timing, and the honest thing is to test what
-    // is stable and leave the race documented rather than to write
-    // a green test that hides it.
     await openReader(page);
 
     await page.getByRole('button', { name: 'Next page' }).click();
@@ -81,6 +74,48 @@ test.describe('AC-003 — page context is inherited automatically', () => {
       page.locator('.cn-reader__page').filter({ hasText: `Page 3 of ${PDF.pageCount}` }),
     ).toBeVisible();
     await expect(page.getByText('A note about page three.')).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
+  test('the page a block belongs to survives a full reload', async ({ page }) => {
+    // The stronger form of the same claim, restored once the autosave
+    // defect was fixed. It was previously reduced to a same-session
+    // assertion because a page turn could be lost entirely inside the
+    // debounce window — a real bug, and the reason this test could
+    // not have passed honestly before.
+    await openReader(page);
+
+    await page.getByRole('button', { name: 'Next page' }).click();
+    await page.getByRole('button', { name: 'Next page' }).click();
+    await expect(
+      page.locator('.cn-reader__page').filter({ hasText: `Page 3 of ${PDF.pageCount}` }),
+    ).toBeVisible();
+
+    await page.getByRole('button', { name: /Start writing/ }).click();
+    const editor = page.locator('.cn-block-editor__content');
+    await expect(editor).toBeVisible();
+    await editor.pressSequentially('Durable note on three.', { delay: 15 });
+
+    await page.getByRole('button', { name: 'Next page' }).click();
+    await expect(
+      page.locator('.cn-reader__page').filter({ hasText: `Page 4 of ${PDF.pageCount}` }),
+    ).toBeVisible();
+
+    await page.reload();
+
+    // Reopened on page 4 — the position was written promptly.
+    await expect(
+      page.locator('.cn-reader__page').filter({ hasText: `Page 4 of ${PDF.pageCount}` }),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('Durable note on three.')).toHaveCount(0);
+
+    // And the note is still attached to page 3.
+    await page.getByRole('button', { name: 'Previous page' }).click();
+    await expect(
+      page.locator('.cn-reader__page').filter({ hasText: `Page 3 of ${PDF.pageCount}` }),
+    ).toBeVisible();
+    await expect(page.getByText('Durable note on three.')).toBeVisible({
       timeout: 15_000,
     });
   });

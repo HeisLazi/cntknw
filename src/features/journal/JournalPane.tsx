@@ -6,6 +6,7 @@ import { createPageLinkedBlock } from '@application/create-block';
 import { plainTextOf } from '@domain/journals/blockText';
 import type { EntityId, JournalBlock, SourceLocation } from '@domain/index';
 import { BlockEditor } from './BlockEditor';
+import { clearDraft, recoverDrafts, stashDraft } from './draftBuffer';
 import './journal.css';
 
 export interface JournalPaneProps {
@@ -15,7 +16,12 @@ export interface JournalPaneProps {
   location: SourceLocation;
 }
 
-const SAVE_DEBOUNCE_MS = 700;
+/**
+ * Short enough that a lost window is small, long enough that typing
+ * does not produce a write per keystroke. Paired with a flush on
+ * every path out of the page — see `flushAll` below.
+ */
+const SAVE_DEBOUNCE_MS = 400;
 
 interface PendingEdit {
   doc: unknown;
@@ -72,6 +78,11 @@ export function JournalPane({ sourceId, journalId, location }: JournalPaneProps)
     setReloadTrigger((n) => n + 1);
   }, []);
 
+  // The load effect needs `flush` to replay recovered drafts, but is
+  // declared above it. A ref breaks the cycle without making the
+  // effect depend on a callback that changes identity.
+  const flushRef = useRef<(blockId: EntityId) => Promise<void>>(async () => {});
+
   useEffect(() => {
     let cancelled = false;
     const query = page === undefined
@@ -85,7 +96,37 @@ export function JournalPane({ sourceId, journalId, location }: JournalPaneProps)
       .then((found) => {
         if (cancelled) return;
         for (const block of found) revisions.current.set(block.id, block.revision);
-        setBlocks(found);
+
+        // Replay anything a crash left behind. The draft is applied
+        // over the stored block and scheduled through the ordinary
+        // guarded save path — recovery is not a privileged write.
+        const drafts = recoverDrafts();
+        const restored = found.map((block) => {
+          const draft = drafts.get(block.id);
+          if (!draft) return block;
+          const storedText =
+            block.content.type === 'paragraph' ? block.content.text : '';
+          if (draft.text === storedText) {
+            clearDraft(block.id);
+            return block;
+          }
+          pending.current.set(block.id, { doc: draft.doc, text: draft.text });
+          return block.content.type === 'paragraph'
+            ? {
+                ...block,
+                content: {
+                  ...block.content,
+                  doc: draft.doc as Record<string, unknown>,
+                  text: draft.text,
+                },
+              }
+            : block;
+        });
+
+        setBlocks(restored);
+        for (const block of restored) {
+          if (pending.current.has(block.id)) void flushRef.current(block.id);
+        }
       })
       .catch(() => {
         if (!cancelled) setBlocks([]);
@@ -123,6 +164,8 @@ export function JournalPane({ sourceId, journalId, location }: JournalPaneProps)
           expectedRevision(revision),
         );
         revisions.current.set(blockId, saved.revision);
+        // Durably stored — the crash buffer no longer needs it.
+        clearDraft(blockId);
         setConflicted((current) => (current === blockId ? null : current));
       } catch (error) {
         if (error instanceof RevisionConflictError) {
@@ -138,9 +181,18 @@ export function JournalPane({ sourceId, journalId, location }: JournalPaneProps)
     [journals],
   );
 
+  const syncFlushRef = useCallback(() => {
+    flushRef.current = flush;
+  }, [flush]);
+  useEffect(syncFlushRef);
+
   const scheduleSave = useCallback(
     (blockId: EntityId, edit: PendingEdit) => {
       pending.current.set(blockId, edit);
+      // Synchronous, on every keystroke. This is the only write that
+      // is guaranteed to have happened if the tab dies in the next
+      // millisecond — see draftBuffer.ts.
+      stashDraft({ blockId, doc: edit.doc, text: edit.text });
       const existing = timers.current.get(blockId);
       if (existing) clearTimeout(existing);
       timers.current.set(
@@ -151,15 +203,39 @@ export function JournalPane({ sourceId, journalId, location }: JournalPaneProps)
     [flush],
   );
 
-  // Write everything outstanding when the pane goes away — closing a
-  // tab mid-sentence is exactly when the words matter most.
-  useEffect(() => {
-    const pendingTimers = timers.current;
-    return () => {
-      for (const timer of pendingTimers.values()) clearTimeout(timer);
-      for (const blockId of pending.current.keys()) void flush(blockId);
-    };
+  /**
+   * Write everything outstanding before the words can be lost.
+   *
+   * Unmount is not enough. A reload or a tab close does not unmount
+   * React cleanly, and closing a tab mid-sentence is exactly when the
+   * words matter most — the same defect measured on the workspace
+   * autosave, where a reload inside the debounce window lost a page
+   * turn entirely.
+   *
+   * Text genuinely does need debouncing — a write per keystroke would
+   * be absurd — so unlike the workspace this cannot be fixed by
+   * writing promptly. The debounce is instead kept short, and every
+   * path out of the page flushes.
+   */
+  const flushAll = useCallback(() => {
+    for (const timer of timers.current.values()) clearTimeout(timer);
+    timers.current.clear();
+    for (const blockId of [...pending.current.keys()]) void flush(blockId);
   }, [flush]);
+
+  useEffect(() => {
+    const onPageHide = () => flushAll();
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flushAll();
+    };
+    window.addEventListener('pagehide', onPageHide);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', onPageHide);
+      document.removeEventListener('visibilitychange', onVisibility);
+      flushAll();
+    };
+  }, [flushAll]);
 
   const addBlock = useCallback(async () => {
     const block = await createPageLinkedBlock(repositories, {

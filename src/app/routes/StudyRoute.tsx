@@ -90,7 +90,9 @@ function initialWorkspace(context: ResumedSourceContext): WorkspaceState {
 
 function StudyWorkspace({ context }: { context: ResumedSourceContext }) {
   const { assets } = useRepositories();
-  const { state, update, status } = useWorkspacePersistence(initialWorkspace(context));
+  const { state, drift, commit, status } = useWorkspacePersistence(
+    initialWorkspace(context),
+  );
   const [document, setDocument] = useState<LoadedDocument | null>(null);
   const [documentError, setDocumentError] = useState<string | null>(null);
 
@@ -136,7 +138,10 @@ function StudyWorkspace({ context }: { context: ResumedSourceContext }) {
       ...state.activeLocation,
       pdf: { ...state.activeLocation.pdf, page: next },
     };
-    update({
+    // A page turn is discrete and deliberate — written promptly, not
+    // debounced. See useWorkspacePersistence for what debouncing this
+    // used to cost.
+    commit({
       activeLocation: location,
       // Furthest only ever moves forward — it records how far the
       // reader has been, not where they are.
@@ -164,7 +169,9 @@ function StudyWorkspace({ context }: { context: ResumedSourceContext }) {
           label="Source and journal"
           defaultRatio={state.layout.splitRatio}
           onRatioChange={(ratio) =>
-            update({ layout: { ...state.layout, splitRatio: ratio } })
+            // Dragging emits continuously; the divider position is not
+            // worth a write per frame.
+            drift({ layout: { ...state.layout, splitRatio: ratio } })
           }
           start={
             documentError ? (
@@ -180,10 +187,13 @@ function StudyWorkspace({ context }: { context: ResumedSourceContext }) {
                 scrollOffset={state.sourceView.scrollOffset}
                 onPageChange={setPage}
                 onZoomChange={(zoom) =>
-                  update({ sourceView: { ...state.sourceView, zoom } })
+                  // A zoom step is a discrete decision, like a page turn.
+                  commit({ sourceView: { ...state.sourceView, zoom } })
                 }
                 onScroll={(scrollOffset) =>
-                  update({ sourceView: { ...state.sourceView, scrollOffset } })
+                  // Continuous by nature — the one thing that genuinely
+                  // needs debouncing.
+                  drift({ sourceView: { ...state.sourceView, scrollOffset } })
                 }
               />
             ) : assetId ? (

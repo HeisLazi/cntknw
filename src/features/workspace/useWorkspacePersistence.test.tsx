@@ -50,16 +50,30 @@ function makeState(page = 1): WorkspaceState {
 
 /** A probe that drives the hook the way the workspace does. */
 function Probe({ initial }: { initial: WorkspaceState }) {
-  const { state, update, status } = useWorkspacePersistence(initial);
+  const { state, drift, commit, status } = useWorkspacePersistence(initial);
+  const page = state.activeLocation.pdf?.page ?? 1;
   return (
     <div>
-      <span data-testid="page">{state.activeLocation.pdf?.page}</span>
+      <span data-testid="page">{page}</span>
+      <span data-testid="scroll">{state.sourceView.scrollOffset}</span>
       <span data-testid="status">{status}</span>
+      {/* Discrete — written promptly. */}
+      <button type="button" onClick={() => commit({ activeLocation: at(page + 1) })}>
+        next page
+      </button>
+      {/* Continuous — debounced. */}
       <button
         type="button"
-        onClick={() => update({ activeLocation: at((state.activeLocation.pdf?.page ?? 1) + 1) })}
+        onClick={() =>
+          drift({
+            sourceView: {
+              ...state.sourceView,
+              scrollOffset: state.sourceView.scrollOffset + 10,
+            },
+          })
+        }
       >
-        next page
+        scroll
       </button>
     </div>
   );
@@ -87,27 +101,51 @@ describe('useWorkspacePersistence', () => {
   });
 
   it('shows the new position immediately, before the write lands', async () => {
-    // A reader who turns a page must see the page turn now, not in
-    // 600ms. Local state leads; persistence follows.
+    // A reader who turns a page must see the page turn now. Local
+    // state leads; persistence follows.
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     await renderProbe(makeState(1));
 
     await user.click(screen.getByRole('button', { name: 'next page' }));
     expect(screen.getByTestId('page')).toHaveTextContent('2');
-
-    const stored = await repositories.workspaceStates.getBySource(SOURCE_ID);
-    expect(stored?.activeLocation.pdf?.page).toBe(1);
   });
 
-  it('debounces a burst of changes into a single write', async () => {
+  // ─── The defect this design exists to prevent ──────────────────
+
+  it('writes a page turn promptly rather than debouncing it', async () => {
+    // THE REGRESSION TEST. Debouncing a page turn meant that closing
+    // the tab within the debounce window lost it entirely — measured
+    // in a real browser, a reload 400ms after a page turn reopened
+    // the source at page 1, not at the page just turned to.
+    //
+    // A page turn is discrete and deliberate. Only continuous change
+    // — scrolling — is worth debouncing.
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await renderProbe(makeState(1));
+
+    await user.click(screen.getByRole('button', { name: 'next page' }));
+
+    // No timer advanced. The write is already on its way.
+    await waitFor(async () => {
+      const stored = await repositories.workspaceStates.getBySource(SOURCE_ID);
+      expect(stored?.activeLocation.pdf?.page).toBe(2);
+    });
+  });
+
+  it('debounces continuous scrolling into a single write', async () => {
     // Scrolling produces dozens of events per second. One write each
-    // would be a write storm against IndexedDB for no benefit.
+    // would be a write storm against IndexedDB for no benefit — which
+    // is why `drift` exists alongside `commit` rather than instead
+    // of it.
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const spy = vi.spyOn(repositories.workspaceStates, 'update');
     await renderProbe(makeState(1));
 
-    const button = screen.getByRole('button', { name: 'next page' });
-    for (let i = 0; i < 5; i += 1) await user.click(button);
+    const scroll = screen.getByRole('button', { name: 'scroll' });
+    for (let i = 0; i < 5; i += 1) await user.click(scroll);
+
+    // Nothing written yet.
+    expect(spy).not.toHaveBeenCalled();
 
     await act(async () => {
       vi.advanceTimersByTime(700);
@@ -115,7 +153,29 @@ describe('useWorkspacePersistence', () => {
 
     await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
     const stored = await repositories.workspaceStates.getBySource(SOURCE_ID);
-    expect(stored?.activeLocation.pdf?.page).toBe(6);
+    expect(stored?.sourceView.scrollOffset).toBe(50);
+  });
+
+  it('serialises writes so a burst cannot conflict with itself', async () => {
+    // Two overlapping writes would each read the same revision, so
+    // the second would conflict with the first — a self-inflicted
+    // conflict the recovery path would then have to clean up.
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await renderProbe(makeState(1));
+
+    const button = screen.getByRole('button', { name: 'next page' });
+    for (let i = 0; i < 4; i += 1) await user.click(button);
+
+    await waitFor(async () => {
+      const stored = await repositories.workspaceStates.getBySource(SOURCE_ID);
+      expect(stored?.activeLocation.pdf?.page).toBe(5);
+    });
+
+    const stored = await repositories.workspaceStates.getBySource(SOURCE_ID);
+    // Four writes, four revisions — none lost, none doubled by a
+    // conflict-and-retry.
+    expect(stored?.revision).toBe(4);
+    expect(screen.getByTestId('status')).toHaveTextContent('saved');
   });
 
   it('guards the write on the revision it actually read', async () => {
@@ -208,19 +268,37 @@ describe('useWorkspacePersistence', () => {
     );
   });
 
-  it('flushes a pending change on unmount', async () => {
+  it('flushes a pending scroll on unmount', async () => {
     // Closing the tab inside the debounce window is exactly when a
     // reader stops reading — the most valuable position to keep, and
     // the one a naive debounce always loses.
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const { unmount } = await renderProbe(makeState(1));
 
-    await user.click(screen.getByRole('button', { name: 'next page' }));
+    await user.click(screen.getByRole('button', { name: 'scroll' }));
     unmount();
 
     await waitFor(async () => {
       const stored = await repositories.workspaceStates.getBySource(SOURCE_ID);
-      expect(stored?.activeLocation.pdf?.page).toBe(2);
+      expect(stored?.sourceView.scrollOffset).toBe(10);
+    });
+  });
+
+  it('flushes a pending scroll when the page is hidden', async () => {
+    // `pagehide` fires on a reload, which `visibilitychange` does not
+    // reliably do — and a reload is exactly how the original defect
+    // was found.
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await renderProbe(makeState(1));
+
+    await user.click(screen.getByRole('button', { name: 'scroll' }));
+    await act(async () => {
+      window.dispatchEvent(new Event('pagehide'));
+    });
+
+    await waitFor(async () => {
+      const stored = await repositories.workspaceStates.getBySource(SOURCE_ID);
+      expect(stored?.sourceView.scrollOffset).toBe(10);
     });
   });
 });
