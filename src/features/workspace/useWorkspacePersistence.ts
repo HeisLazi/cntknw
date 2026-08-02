@@ -87,7 +87,7 @@ export function useWorkspacePersistence(
       );
       revision.current = saved.revision;
       // Durably stored — the crash buffer no longer needs it.
-      clearPosition();
+      clearPosition(next.sourceId);
       setStatus('saved');
     } catch (error) {
       if (error instanceof RevisionConflictError) {
@@ -100,6 +100,7 @@ export function useWorkspacePersistence(
               expectedRevision(current.revision),
             );
             revision.current = saved.revision;
+            clearPosition(next.sourceId);
             setStatus('saved');
             return;
           } catch {

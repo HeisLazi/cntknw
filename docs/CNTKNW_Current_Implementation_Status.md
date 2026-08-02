@@ -33,12 +33,13 @@ be read* — is met.
 
 | Phase | Scope | State |
 |---|---|---|
-| 0A | Clean build, TypeScript strict, lint and test scripts | **Complete** — the Playwright gap is closed |
+| 0A | Clean build, TypeScript strict, lint and test scripts | **Complete** |
 | 0B | Domain and application contracts | **Complete and verified** |
 | 0C | Persistence — Dexie, schema versions, migrations, v1 readers | **Complete and verified**, contract and real browser |
 | 0D | Shell, routing, providers, design tokens, UI primitives | **Complete and verified** |
-| 0E | Editor spike, then journal vertical slice | **Not started** |
-| 1 | Reliable PDF core — import, render, exact resume | **AC-001 and AC-002 accepted**; text layer and outline outstanding |
+| 0E | Editor spike, then journal vertical slice | **Complete and verified** (ADR-0004, ADR-0005) |
+| 1 | Reliable PDF core — import, render, exact resume | **Complete and verified** (Text layer added) |
+| 2 | Infinite Journal | **In Progress** (Folio margin ADR-0006 landed) |
 
 Phase order per ADR-0001 §1, which supersedes Handoff §19.
 
@@ -147,9 +148,6 @@ That is checked in five tests, not asserted in prose — the earlier phrase
 - **`applyMigration`.** Dry run only — deliberately no destructive path exists.
 - **Soft deletion beyond blocks and claims.** Every other entity hard-deletes; NFR-008 partial.
 - **`appState` migration.** Needs a settings store.
-- **A PDF text layer.** Pages render as canvas only, so text cannot be
-  selected, searched or read by a screen reader. Phase 3 needs it for
-  annotation anchoring; it is the largest single gap in the reader.
 - **Document outline, thumbnails, page-number entry, search within a source.**
 - **Annotation UI, editor, dictionary, cross-source search, maps.**
 - **Atlas entities.** Primitives only.

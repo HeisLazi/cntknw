@@ -15,7 +15,7 @@
  */
 import { readJson, remove, writeJson } from '@lib/safeStore';
 
-const KEY = 'cntknw:reading-position:v1';
+const keyFor = (sourceId: string) => `cntknw:reading-position:v1:${sourceId}`;
 
 export interface BufferedPosition {
   sourceId: string;
@@ -40,12 +40,12 @@ function isBuffered(value: unknown): value is BufferedPosition {
 
 /** Record a position that may not have reached IndexedDB. Synchronous. */
 export function stashPosition(sourceId: string, page: number, zoom: number): void {
-  writeJson(KEY, { sourceId, page, zoom, savedAt: Date.now() });
+  writeJson(keyFor(sourceId), { sourceId, page, zoom, savedAt: Date.now() });
 }
 
 /** Forget it, because the durable write succeeded. */
-export function clearPosition(): void {
-  remove(KEY);
+export function clearPosition(sourceId: string): void {
+  remove(keyFor(sourceId));
 }
 
 /**
@@ -56,11 +56,11 @@ export function clearPosition(): void {
  * the wrong page of the right book.
  */
 export function recoverPosition(sourceId: string): BufferedPosition | null {
-  const buffered = readJson(KEY, isBuffered);
+  const buffered = readJson(keyFor(sourceId), isBuffered);
   if (!buffered) return null;
-  if (buffered.sourceId !== sourceId) return null;
+  if (buffered.sourceId !== sourceId) return null; // Sanity check
   if (Date.now() - buffered.savedAt > MAX_AGE_MS) {
-    clearPosition();
+    clearPosition(sourceId);
     return null;
   }
   return buffered;

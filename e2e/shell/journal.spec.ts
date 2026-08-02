@@ -43,18 +43,15 @@ async function writeHere(page: Page, text: string) {
 
 /** Navigate to a page from wherever the reader currently is. */
 const turnTo = async (page: Page, target: number) => {
-  const label = page.locator('.cn-reader__page');
+  const label = page.locator('.cn-reader__page-input');
   for (let guard = 0; guard < PDF.pageCount * 2; guard += 1) {
-    const text = (await label.textContent()) ?? '';
-    const current = Number(/Page (\d+) of/.exec(text)?.[1] ?? '0');
+    const current = Number(await label.inputValue() ?? '0');
     if (current === target) break;
     await page
       .getByRole('button', { name: current < target ? 'Next page' : 'Previous page' })
       .click();
   }
-  await expect(
-    label.filter({ hasText: `Page ${target} of ${PDF.pageCount}` }),
-  ).toBeVisible();
+  await expect(label).toHaveValue(String(target));
 };
 
 test.describe('AC-003 — page context is inherited, never asked for', () => {

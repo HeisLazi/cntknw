@@ -37,8 +37,8 @@ async function openReader(page: Page) {
   });
 }
 
-const pageLabel = (page: Page) =>
-  page.locator('.cn-reader__page').textContent().then((t) => t?.trim() ?? '');
+const readPage = (page: Page) =>
+  page.locator('.cn-reader__page-input').inputValue().then((t) => t?.trim() ?? '');
 
 test.describe('a page turn survives an immediate reload', () => {
   // 0ms is the real case: the reader turns a page and the machine
@@ -50,17 +50,17 @@ test.describe('a page turn survives an immediate reload', () => {
 
       await page.getByRole('button', { name: 'Next page' }).click();
       await page.getByRole('button', { name: 'Next page' }).click();
-      expect(await pageLabel(page)).toBe(`Page 3 of ${PDF.pageCount}`);
+      expect(await readPage(page)).toBe('3');
 
       if (delay > 0) await page.waitForTimeout(delay);
       await page.reload();
 
-      await expect(page.locator('.cn-reader__page')).toBeVisible({
-        timeout: 15_000,
+      await expect(page.locator('.cn-reader__page-input')).toBeVisible({
+        timeout: 10_000,
       });
       await expect
-        .poll(() => pageLabel(page), { timeout: 10_000 })
-        .toBe(`Page 3 of ${PDF.pageCount}`);
+        .poll(() => readPage(page), { timeout: 10_000 })
+        .toBe('3');
     });
   }
 

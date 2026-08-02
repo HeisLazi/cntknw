@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IconButton } from '@components/primitives';
 import { PdfPage } from './PdfPage';
+import { PdfOutline } from './PdfOutline';
+import { PdfSearch } from './PdfSearch';
 import type { LoadedDocument } from './pdfjs';
 import './reader.css';
 
@@ -51,6 +53,28 @@ export function PdfReader({
   const scrollRef = useRef<HTMLDivElement>(null);
   const restoredFor = useRef<number | null>(null);
   const [pageHeight, setPageHeight] = useState(0);
+  const [outlineOpen, setOutlineOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  const [pageInput, setPageInput] = useState(String(page));
+  const [prevPage, setPrevPage] = useState(page);
+  
+  if (page !== prevPage) {
+    setPrevPage(page);
+    setPageInput(String(page));
+  }
+
+  const handlePageSubmit = (e: React.FormEvent | React.FocusEvent) => {
+    e.preventDefault();
+    const parsed = parseInt(pageInput, 10);
+    if (!isNaN(parsed) && parsed >= 1 && parsed <= document.pageCount) {
+      if (parsed !== page) {
+        onPageChange(parsed);
+      }
+    } else {
+      setPageInput(String(page)); // Reset on invalid input
+    }
+  };
 
   const visiblePages = useMemo(() => {
     const first = Math.max(1, page - PAGE_WINDOW);
@@ -112,6 +136,14 @@ export function PdfReader({
       <div className="cn-reader__toolbar">
         <div className="cn-reader__group">
           <IconButton
+            label="Toggle contents"
+            icon="≡"
+            size="sm"
+            onClick={() => setOutlineOpen((o) => !o)}
+          />
+        </div>
+        <div className="cn-reader__group" style={{ flex: 1, justifyContent: 'center' }}>
+          <IconButton
             label="Previous page"
             icon="‹"
             size="sm"
@@ -122,10 +154,27 @@ export function PdfReader({
             A live region, so a screen reader hears the page change.
             Turning pages silently is the commonest way a PDF reader
             becomes unusable without sight.
+            This span also serves as a test hook (.cn-reader__page).
           */}
-          <span className="cn-reader__page" role="status" aria-live="polite">
+          <span className="cn-reader__page sr-only" role="status" aria-live="polite">
             Page {page} of {document.pageCount}
           </span>
+          <form className="cn-reader__page-form" onSubmit={handlePageSubmit}>
+            <span className="cn-reader__page-count" aria-hidden="true" style={{ marginRight: '0.25rem' }}>Page</span>
+            <input
+              type="number"
+              className="cn-reader__page-input"
+              value={pageInput}
+              onChange={(e) => setPageInput(e.target.value)}
+              onBlur={handlePageSubmit}
+              min={1}
+              max={document.pageCount}
+              aria-label={`Page ${page} of ${document.pageCount}`}
+            />
+            <span className="cn-reader__page-count" aria-hidden="true">
+              of {document.pageCount}
+            </span>
+          </form>
           <IconButton
             label="Next page"
             icon="›"
@@ -152,28 +201,57 @@ export function PdfReader({
             onClick={() => onZoomChange(nextZoom(zoom, 1))}
           />
         </div>
+        <div className="cn-reader__group">
+          <IconButton
+            label="Search document"
+            icon="⌕"
+            size="sm"
+            onClick={() => setSearchOpen((s) => !s)}
+          />
+        </div>
       </div>
 
-      <div
-        ref={scrollRef}
-        className="cn-reader__scroll cn-scroll-area"
-        onScroll={handleScroll}
-        onKeyDown={onKeyDown}
-        tabIndex={0}
-        role="region"
-        aria-label="Source pages"
-      >
-        {visiblePages.map((pageNumber) => (
-          <PdfPage
-            key={pageNumber}
+      {searchOpen && (
+        <PdfSearch
+          document={document}
+          onNavigate={(p) => {
+            onPageChange(p);
+          }}
+          onClose={() => setSearchOpen(false)}
+        />
+      )}
+
+      <div className="cn-reader__body">
+        {outlineOpen && (
+          <PdfOutline
             document={document}
-            pageNumber={pageNumber}
-            zoom={zoom}
-            onRendered={
-              pageNumber === page ? (size) => setPageHeight(size.height) : undefined
-            }
+            onNavigate={(p) => {
+              onPageChange(p);
+            }}
+            onClose={() => setOutlineOpen(false)}
           />
-        ))}
+        )}
+        <div
+          ref={scrollRef}
+          className="cn-reader__scroll cn-scroll-area"
+          onScroll={handleScroll}
+          onKeyDown={onKeyDown}
+          tabIndex={0}
+          role="region"
+          aria-label="Source pages"
+        >
+          {visiblePages.map((pageNumber) => (
+            <PdfPage
+              key={pageNumber}
+              document={document}
+              pageNumber={pageNumber}
+              zoom={zoom}
+              onRendered={
+                pageNumber === page ? (size) => setPageHeight(size.height) : undefined
+              }
+            />
+          ))}
+        </div>
       </div>
     </div>
   );

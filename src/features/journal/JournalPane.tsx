@@ -15,6 +15,8 @@ export interface JournalPaneProps {
   journalId: EntityId;
   /** Where the reader currently is. Inherited by anything written now. */
   location: SourceLocation;
+  scrollOffset?: number;
+  onScroll?: (offset: number) => void;
 }
 
 /**
@@ -70,7 +72,13 @@ function gapBetween(previous: number | undefined, current: number | undefined): 
  * typing leaves no trace and INV-005 holds in the data as well as in
  * the view.
  */
-export function JournalPane({ sourceId, journalId, location }: JournalPaneProps) {
+export function JournalPane({
+  sourceId,
+  journalId,
+  location,
+  scrollOffset,
+  onScroll,
+}: JournalPaneProps) {
   const repositories = useRepositories();
   const { journals } = repositories;
   const activePage = location.pdf?.page;
@@ -92,7 +100,15 @@ export function JournalPane({ sourceId, journalId, location }: JournalPaneProps)
   const flushRef = useRef<(blockId: EntityId) => Promise<void>>(async () => {});
 
   const [reloadTrigger, setReloadTrigger] = useState(0);
-  const reload = useCallback(() => setReloadTrigger((n) => n + 1), []);
+  const scrollport = useRef<HTMLDivElement>(null);
+  const [initialScrollSet, setInitialScrollSet] = useState(false);
+
+  const reloadBlock = useCallback((id: EntityId) => {
+    clearDraft(id);
+    pending.current.delete(id);
+    setConflicted(null);
+    setReloadTrigger((n) => n + 1);
+  }, []);
 
   // ── Load the whole journal, not one page of it ─────────────────
   useEffect(() => {
@@ -143,6 +159,14 @@ export function JournalPane({ sourceId, journalId, location }: JournalPaneProps)
       cancelled = true;
     };
   }, [journals, journalId, reloadTrigger]);
+
+  // ── Restore scroll position once loaded ──────────────────────────
+  useEffect(() => {
+    if (!loading && !initialScrollSet && scrollport.current && scrollOffset !== undefined) {
+      scrollport.current.scrollTop = scrollOffset;
+      setInitialScrollSet(true);
+    }
+  }, [loading, initialScrollSet, scrollOffset]);
 
   // ── Saving ──────────────────────────────────────────────────────
   const flush = useCallback(
@@ -307,7 +331,11 @@ export function JournalPane({ sourceId, journalId, location }: JournalPaneProps)
         <span className="cn-journal__runninghead">Journal</span>
       </div>
 
-      <div className="cn-journal__body">
+      <div
+        className="cn-journal__body"
+        ref={scrollport}
+        onScroll={(e) => onScroll?.(e.currentTarget.scrollTop)}
+      >
         {loading ? (
           <p className="cn-journal__hint" role="status">
             Loading…
@@ -399,7 +427,7 @@ export function JournalPane({ sourceId, journalId, location }: JournalPaneProps)
                                 <button
                                   type="button"
                                   className="cn-journal__reload"
-                                  onClick={reload}
+                                  onClick={() => reloadBlock(block.id)}
                                 >
                                   Reload the block
                                 </button>

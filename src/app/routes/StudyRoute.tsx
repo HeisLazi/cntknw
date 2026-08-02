@@ -255,6 +255,10 @@ function StudyWorkspace({ context }: { context: ResumedSourceContext }) {
                 sourceId={context.source.id}
                 journalId={context.journal.id}
                 location={state.activeLocation}
+                scrollOffset={state.journalView.scrollOffset}
+                onScroll={(scrollOffset) =>
+                  drift({ journalView: { ...state.journalView, scrollOffset } })
+                }
               />
             </section>
           }

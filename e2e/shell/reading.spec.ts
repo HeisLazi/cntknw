@@ -103,12 +103,12 @@ test.describe('AC-002 — exact workspace state resumes', () => {
     await expect(page.locator('.cn-pdf-page[data-page="1"]')).toBeVisible({
       timeout: 15_000,
     });
-    await expect(page.getByText(`Page 1 of ${PDF.pageCount}`)).toBeVisible();
+    await expect(page.getByRole('spinbutton', { name: `Page 1 of ${PDF.pageCount}` })).toBeVisible();
 
     // Read forward.
     await page.getByRole('button', { name: 'Next page' }).click();
     await page.getByRole('button', { name: 'Next page' }).click();
-    await expect(page.getByText(`Page 3 of ${PDF.pageCount}`)).toBeVisible();
+    await expect(page.getByRole('spinbutton', { name: `Page 3 of ${PDF.pageCount}` })).toBeVisible();
     await expect(page.locator('.cn-pdf-page[data-page="3"]')).toBeVisible();
 
     // Wait for the debounced save to report itself.
@@ -116,7 +116,7 @@ test.describe('AC-002 — exact workspace state resumes', () => {
 
     // The actual test: a real reload, then the same place.
     await page.reload();
-    await expect(page.getByText(`Page 3 of ${PDF.pageCount}`)).toBeVisible({
+    await expect(page.getByRole('spinbutton', { name: `Page 3 of ${PDF.pageCount}` })).toBeVisible({
       timeout: 15_000,
     });
     await expect(page.locator('.cn-pdf-page[data-page="3"]')).toBeVisible();
@@ -149,7 +149,7 @@ test.describe('AC-002 — exact workspace state resumes', () => {
 
     await page.getByRole('link', { name: 'Library' }).click();
     await expect(
-      page.getByText(`Page 2 of ${PDF.pageCount}`),
+      page.getByRole('spinbutton', { name: `Page 2 of ${PDF.pageCount}` }),
     ).toBeVisible({ timeout: 15_000 });
   });
 
@@ -162,15 +162,15 @@ test.describe('AC-002 — exact workspace state resumes', () => {
 
     await page.getByRole('region', { name: 'Source pages' }).focus();
     await page.keyboard.press('PageDown');
-    await expect(page.getByText(`Page 2 of ${PDF.pageCount}`)).toBeVisible();
+    await expect(page.getByRole('spinbutton', { name: `Page 2 of ${PDF.pageCount}` })).toBeVisible();
 
     await page.keyboard.press('End');
     await expect(
-      page.getByText(`Page ${PDF.pageCount} of ${PDF.pageCount}`),
+      page.getByRole('spinbutton', { name: `Page ${PDF.pageCount} of ${PDF.pageCount}` }),
     ).toBeVisible();
 
     await page.keyboard.press('Home');
-    await expect(page.getByText(`Page 1 of ${PDF.pageCount}`)).toBeVisible();
+    await expect(page.getByRole('spinbutton', { name: `Page 1 of ${PDF.pageCount}` })).toBeVisible();
   });
 
   test('page changes are announced, not only painted', async ({ page }) => {
@@ -181,7 +181,7 @@ test.describe('AC-002 — exact workspace state resumes', () => {
     });
 
     // A live region, so turning a page is audible to a screen reader.
-    const status = page.getByRole('status').filter({ hasText: 'Page 1 of' });
+    const status = page.locator('.cn-reader__page');
     await expect(status).toHaveAttribute('aria-live', 'polite');
   });
 });

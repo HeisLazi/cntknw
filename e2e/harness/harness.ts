@@ -199,6 +199,36 @@ const api = {
     return { blockId: block.id, revision: block.revision };
   },
 
+  async getFirstBlock(journalId: EntityId) {
+    const { repos } = active();
+    const blocks = await repos.journals.listBlocks(journalId);
+    return blocks[0];
+  },
+
+  async updateBlockText(journalId: EntityId, blockId: EntityId, text: string, expectedRev: number): Promise<HarnessResult<{ revision: number }>> {
+    const { repos } = active();
+    try {
+      const blocks = await repos.journals.listBlocks(journalId);
+      const block = blocks.find(b => b.id === blockId);
+      if (!block) throw new Error('not found');
+      const saved = await repos.journals.updateBlock({
+        ...block,
+        content: { type: 'paragraph', doc: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] }, text }
+      }, expectedRevision(expectedRev));
+      return { ok: true, value: { revision: saved.revision } };
+    } catch (e: unknown) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (isStorageError(e)) return { ok: false, errorName: e.name, message: e.message, kind: (e as any).kind, expectedRevision: (e as any).expectedRevision, actualRevision: (e as any).actualRevision };
+      throw e;
+    }
+  },
+
+  async getJournalId(sourceId: EntityId): Promise<EntityId | undefined> {
+    const { repos } = active();
+    const journal = await repos.journals.getJournalForSource(sourceId);
+    return journal?.id;
+  },
+
   /** BV-001 — move the reading position, so there is state to resume. */
   async moveReadingPosition(
     sourceId: EntityId,

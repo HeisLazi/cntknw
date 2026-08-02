@@ -1,0 +1,157 @@
+import { useEffect, useState } from 'react';
+import type { LoadedDocument } from './pdfjs';
+import { IconButton } from '@components/primitives';
+
+export interface PdfOutlineProps {
+  document: LoadedDocument;
+  onNavigate: (page: number) => void;
+  onClose: () => void;
+}
+
+export interface PdfOutlineItem {
+  title: string;
+  dest?: unknown;
+  items?: PdfOutlineItem[];
+}
+
+export function PdfOutline({ document, onNavigate, onClose }: PdfOutlineProps) {
+  const [outline, setOutline] = useState<PdfOutlineItem[] | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    document.getOutline().then((result) => {
+      if (active) {
+        setOutline(result as PdfOutlineItem[]);
+        setLoading(false);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [document]);
+
+  if (loading) {
+    return (
+      <div className="cn-outline">
+        <div className="cn-outline__header">
+          <h2 className="cn-outline__title">Contents</h2>
+          <IconButton icon="×" label="Close contents" onClick={onClose} size="sm" />
+        </div>
+        <div className="cn-outline__body">
+          <p className="cn-outline__hint">Loading outline…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!outline || outline.length === 0) {
+    return (
+      <div className="cn-outline">
+        <div className="cn-outline__header">
+          <h2 className="cn-outline__title">Contents</h2>
+          <IconButton icon="×" label="Close contents" onClick={onClose} size="sm" />
+        </div>
+        <div className="cn-outline__body">
+          <p className="cn-outline__hint">This document has no outline.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="cn-outline">
+      <div className="cn-outline__header">
+        <h2 className="cn-outline__title">Contents</h2>
+        <IconButton icon="×" label="Close contents" onClick={onClose} size="sm" />
+      </div>
+      <div className="cn-outline__body">
+        <OutlineList items={outline} document={document} onNavigate={onNavigate} />
+      </div>
+    </div>
+  );
+}
+
+function OutlineList({
+  items,
+  document,
+  onNavigate,
+}: {
+  items: PdfOutlineItem[];
+  document: LoadedDocument;
+  onNavigate: (page: number) => void;
+}) {
+  return (
+    <ul className="cn-outline__list">
+      {items.map((item, index) => (
+        <OutlineItem
+          key={index}
+          item={item}
+          document={document}
+          onNavigate={onNavigate}
+        />
+      ))}
+    </ul>
+  );
+}
+
+function OutlineItem({
+  item,
+  document,
+  onNavigate,
+}: {
+  item: PdfOutlineItem;
+  document: LoadedDocument;
+  onNavigate: (page: number) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const hasChildren = item.items && item.items.length > 0;
+
+  const handleClick = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (item.dest) {
+      try {
+        const pageIndex = await document.getPageIndex(item.dest);
+        onNavigate(pageIndex);
+      } catch (err) {
+        console.warn('Failed to resolve outline destination', err);
+      }
+    } else if (hasChildren) {
+      setExpanded(!expanded);
+    }
+  };
+
+  return (
+    <li className="cn-outline__item">
+      <div className="cn-outline__row">
+        {hasChildren ? (
+          <button
+            type="button"
+            className="cn-outline__toggle"
+            aria-expanded={expanded}
+            onClick={() => setExpanded(!expanded)}
+          >
+            {expanded ? '▼' : '▶'}
+          </button>
+        ) : (
+          <span className="cn-outline__spacer" />
+        )}
+        <a
+          href="#"
+          className="cn-outline__link"
+          onClick={handleClick}
+          title={item.title}
+        >
+          {item.title}
+        </a>
+      </div>
+      {hasChildren && expanded && (
+        <OutlineList
+          items={item.items || []}
+          document={document}
+          onNavigate={onNavigate}
+        />
+      )}
+    </li>
+  );
+}

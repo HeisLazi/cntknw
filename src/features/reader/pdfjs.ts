@@ -24,6 +24,9 @@ export interface LoadedDocument {
   title: string | undefined;
   author: string | undefined;
   getPage(pageNumber: number): Promise<PDFPageProxy>;
+  getOutline(): Promise<unknown[] | null>;
+  getPageIndex(dest: unknown): Promise<number>;
+  searchDocument(query: string, abortSignal: AbortSignal): AsyncGenerator<{ pageNumber: number, matches: number }>;
   destroy(): Promise<void>;
 }
 
@@ -100,6 +103,48 @@ export async function loadPdfDocument(
     title,
     author,
     getPage: (pageNumber) => document.getPage(pageNumber),
+    getOutline: () => document.getOutline(),
+    getPageIndex: async (dest: unknown) => {
+      let explicitDest = dest;
+      if (typeof dest === 'string') {
+        explicitDest = await document.getDestination(dest);
+      }
+      if (Array.isArray(explicitDest) && explicitDest.length > 0) {
+        const ref = explicitDest[0];
+        if (ref !== null && typeof ref === 'object') {
+          // pdf.js getPageIndex returns a 0-based index. Our domain is 1-based.
+          const pageIndex = await document.getPageIndex(ref);
+          return pageIndex + 1;
+        }
+      }
+      throw new Error('Invalid destination');
+    },
+    searchDocument: async function* (query: string, abortSignal: AbortSignal) {
+      if (!query.trim()) return;
+      const lowerQuery = query.toLowerCase();
+      
+      for (let i = 1; i <= document.numPages; i++) {
+        if (abortSignal.aborted) break;
+        try {
+          const page = await document.getPage(i);
+          const textContent = await page.getTextContent();
+          const fullText = textContent.items.map((item: unknown) => (item as { str?: string }).str ?? '').join('');
+          
+          let matches = 0;
+          let index = fullText.toLowerCase().indexOf(lowerQuery);
+          while (index !== -1) {
+            matches++;
+            index = fullText.toLowerCase().indexOf(lowerQuery, index + 1);
+          }
+          
+          if (matches > 0) {
+            yield { pageNumber: i, matches };
+          }
+        } catch (err) {
+          console.warn(`Failed to search page ${i}`, err);
+        }
+      }
+    },
     destroy: () => document.destroy(),
   };
 }
