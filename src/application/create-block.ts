@@ -55,7 +55,12 @@ export async function createPageLinkedBlock(
   let anchorRank: string | null = null;
   if (input.afterBlockId !== undefined) {
     const anchor = siblings.find((b) => b.id === input.afterBlockId);
-    anchorRank = anchor?.rank ?? null;
+    if (!anchor) {
+      // Stale/missing anchor: append safely rather than inserting at beginning.
+      anchorRank = siblingRanks.length > 0 ? [...siblingRanks].sort().at(-1)! : null;
+    } else {
+      anchorRank = anchor.rank;
+    }
   } else if (siblingRanks.length > 0) {
     // Append: anchor to the last sibling.
     anchorRank = [...siblingRanks].sort().at(-1) ?? null;

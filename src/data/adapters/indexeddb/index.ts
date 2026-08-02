@@ -263,9 +263,11 @@ export class DexieJournalRepository implements JournalRepository {
     sourceId: EntityId,
     title: string,
   ): Promise<Journal> {
-    const existing = await this.getJournalForSource(sourceId);
-    if (existing) return existing;
-    return this.createJournal({ sourceId, title, kind: 'source' });
+    return this.transact(async () => {
+      const existing = await this.getJournalForSource(sourceId);
+      if (existing) return existing;
+      return this.createJournal({ sourceId, title, kind: 'source' });
+    });
   }
   async getJournalById(id: EntityId): Promise<Journal | null> {
     const record = await guarded('Reading a journal', () => this.db.journals.get(id));
@@ -287,7 +289,7 @@ export class DexieJournalRepository implements JournalRepository {
     return records
       .filter((r) => r.deletedAt === UNSET)
       .map(journalBlockFromStorage)
-      .sort((a, b) => compareRank(a.rank, b.rank));
+      .sort((a, b) => compareRank(a.rank, b.rank) || a.id.localeCompare(b.id));
   }
   async listBlocksByPage(
     journalId: EntityId,
@@ -305,7 +307,7 @@ export class DexieJournalRepository implements JournalRepository {
     return records
       .filter((r) => r.deletedAt === UNSET)
       .map(journalBlockFromStorage)
-      .sort((a, b) => compareRank(a.rank, b.rank));
+      .sort((a, b) => compareRank(a.rank, b.rank) || a.id.localeCompare(b.id));
   }
   async getBlockById(id: EntityId): Promise<JournalBlock | null> {
     const record = await guarded('Reading a block', () =>

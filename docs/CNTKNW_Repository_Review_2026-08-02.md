@@ -47,27 +47,27 @@ This living audit document tracks the findings and resolutions from the adversar
 
 ## Finding 7: One Journal Per Source Is Not Database-Unique
 **Severity**: MEDIUM
-**Status**: TO DO
+**Status**: FIXED
 **Description**: IndexedDB uses `sourceId` as an index, but `getOrCreateJournalForSource` relies on read-then-create rather than structural identity, risking duplicate source journals.
-**Action**: Investigate making `sourceId` the primary key for source journals, or implement a transactional guard.
+**Action**: Wrapped the check-and-create sequence inside a Dexie transaction, leveraging IndexedDB transaction strict serialization to structurally guarantee atomicity and uniqueness. MemoryAdapter similarly refactored for synchronous atomicity.
 
 ## Finding 8: Rank Insertion With a Stale Anchor
 **Severity**: MEDIUM
-**Status**: TO DO
+**Status**: FIXED
 **Description**: `createPageLinkedBlock` inserts before all siblings (null anchor) if the requested `afterBlockId` doesn't exist.
-**Action**: Reject stale anchors or append safely. Investigate equal rank possibilities.
+**Action**: Missing/stale anchors are now handled by appending safely to the end of the block group. Added `id` string comparison tiebreaker to block ordering across the repository to enforce deterministic sorting for concurrent equal-rank fractional insertions.
 
 ## Finding 9: Workspace Conflict Retry Reapplies Too Much State
 **Severity**: MEDIUM
-**Status**: TO DO
+**Status**: FIXED
 **Description**: Workspace state conflict retries read the record and reapply the entire old state, overwriting unrelated concurrent changes.
-**Action**: Merge specific fields instead of replaying stale objects.
+**Action**: Introduced an in-memory `pendingChanges` diff in `useWorkspacePersistence`. On `RevisionConflictError`, the exact diff is applied over the freshly fetched remote state, safely merging independent concurrent operations.
 
 ## Finding 10: Position-Buffer Implementation Fix is Good; Regression Test is Weak
 **Severity**: MEDIUM
-**Status**: TO DO
+**Status**: FIXED
 **Description**: `bv-007-position-buffer-scope.spec.ts` manually sets `localStorage` instead of exercising `stashPosition()`.
-**Action**: Add direct unit tests for `stashPosition`, `recoverPosition`, `clearPosition`, and expiry behavior.
+**Action**: Deleted the manual UI E2E test and added rigorous direct component tests for `stashPosition`, `recoverPosition`, `clearPosition`, including malformed records and expiry in `positionBuffer.test.ts`.
 
 ## Finding 11: Make PDF Scrolling Actually Continuous
 **Severity**: HIGH PRODUCT/UX

@@ -64,6 +64,7 @@ export function useWorkspacePersistence(
   // re-debounced — on every render.
   const revision = useRef(initial.revision);
   const latest = useRef(initial);
+  const pendingChanges = useRef<Partial<WorkspaceState>>({});
   const dirty = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -76,31 +77,41 @@ export function useWorkspacePersistence(
 
   const writeNow = useCallback(async (): Promise<void> => {
     if (!dirty.current) return;
-    const next = latest.current;
+    const toSave = latest.current;
+    const diff = pendingChanges.current;
     dirty.current = false;
+    pendingChanges.current = {};
     setStatus('saving');
 
     try {
       const saved = await workspaceStates.update(
-        next,
+        toSave,
         expectedRevision(revision.current),
       );
       revision.current = saved.revision;
       // Durably stored — the crash buffer no longer needs it.
-      clearPosition(next.sourceId);
+      clearPosition(toSave.sourceId);
       setStatus('saved');
     } catch (error) {
       if (error instanceof RevisionConflictError) {
-        const current = await workspaceStates.getBySource(next.sourceId);
+        const current = await workspaceStates.getBySource(toSave.sourceId);
         if (current) {
+          // Re-apply our specific diff over the newly fetched remote state
+          const merged = { ...current, ...diff };
           revision.current = current.revision;
           try {
             const saved = await workspaceStates.update(
-              { ...next, revision: current.revision },
+              merged,
               expectedRevision(current.revision),
             );
             revision.current = saved.revision;
-            clearPosition(next.sourceId);
+            
+            // Bring latest.current and UI state into sync with the merged remote state,
+            // while preserving any NEW pending changes that accumulated during the await!
+            latest.current = { ...merged, ...pendingChanges.current };
+            setState(latest.current);
+            
+            clearPosition(toSave.sourceId);
             setStatus('saved');
             return;
           } catch {
@@ -125,6 +136,7 @@ export function useWorkspacePersistence(
   }, [writeNow]);
 
   const apply = useCallback((change: Partial<WorkspaceState>) => {
+    pendingChanges.current = { ...pendingChanges.current, ...change };
     const next = { ...latest.current, ...change };
     latest.current = next;
     dirty.current = true;

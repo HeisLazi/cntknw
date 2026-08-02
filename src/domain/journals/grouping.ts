@@ -74,14 +74,14 @@ export function groupBlocksByLocation(
       page,
       // Rank is the ordering within a page — fractional indexing, so
       // inserting between two blocks never renumbers the others.
-      blocks: [...pageBlocks].sort((a, b) => compareRank(a.rank, b.rank)),
+      blocks: [...pageBlocks].sort((a, b) => compareRank(a.rank, b.rank) || a.id.localeCompare(b.id)),
     }));
 
   if (unplaced.length > 0) {
     groups.push({
       key: 'unplaced',
       page: undefined,
-      blocks: [...unplaced].sort((a, b) => compareRank(a.rank, b.rank)),
+      blocks: [...unplaced].sort((a, b) => compareRank(a.rank, b.rank) || a.id.localeCompare(b.id)),
     });
   }
 

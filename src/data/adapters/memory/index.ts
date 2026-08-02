@@ -209,9 +209,14 @@ export class MemoryJournalRepository implements JournalRepository {
     sourceId: EntityId,
     title: string,
   ): Promise<Journal> {
-    const existing = await this.getJournalForSource(sourceId);
-    if (existing) return existing;
-    return this.createJournal({ sourceId, title, kind: 'source' });
+    // Atomic in JS since there is no `await` between check and creation.
+    let existing = Array.from(this.journals.values()).find(j => j.sourceId === sourceId);
+    if (!existing) {
+      const parsed = CreateJournalInputSchema.parse({ sourceId, title, kind: 'source' });
+      existing = { ...parsed, ...baseFields() };
+      this.journals.set(existing.id, existing);
+    }
+    return existing;
   }
   async getJournalById(id: EntityId): Promise<Journal | null> {
     return this.journals.get(id) ?? null;
@@ -226,7 +231,7 @@ export class MemoryJournalRepository implements JournalRepository {
   async listBlocks(journalId: EntityId): Promise<JournalBlock[]> {
     return Array.from(this.blocks.values())
       .filter((b) => b.journalId === journalId && b.deletedAt === undefined)
-      .sort((a, b) => compareRank(a.rank, b.rank));
+      .sort((a, b) => compareRank(a.rank, b.rank) || a.id.localeCompare(b.id));
   }
   async listBlocksByPage(
     journalId: EntityId,
@@ -239,7 +244,7 @@ export class MemoryJournalRepository implements JournalRepository {
           b.deletedAt === undefined &&
           b.sourceLocation?.pdf?.page === page,
       )
-      .sort((a, b) => compareRank(a.rank, b.rank));
+      .sort((a, b) => compareRank(a.rank, b.rank) || a.id.localeCompare(b.id));
   }
   async getBlockById(id: EntityId): Promise<JournalBlock | null> {
     return this.blocks.get(id) ?? null;
