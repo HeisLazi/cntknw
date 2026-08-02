@@ -12,6 +12,8 @@ export interface JournalBlockViewProps {
   onChange: (next: { doc: unknown; text: string }) => void;
   onSplit: () => void;
   onRemove: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
   onChangeKind: (to: BlockKind) => void;
   /** Rendered beneath the block — a conflict notice, for instance. */
   footer?: React.ReactNode;
@@ -38,6 +40,8 @@ export function JournalBlockView({
   onChange,
   onSplit,
   onRemove,
+  onMoveUp,
+  onMoveDown,
   onChangeKind,
   footer,
 }: JournalBlockViewProps) {
@@ -100,6 +104,8 @@ export function JournalBlockView({
             onChange={onChange}
             onSplit={onSplit}
             onRemove={onRemove}
+            onMoveUp={onMoveUp}
+            onMoveDown={onMoveDown}
           />
         ) : (
           <NonTextualBlock block={block} />

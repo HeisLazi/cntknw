@@ -20,6 +20,10 @@ export interface BlockEditorProps {
   onSplit?: () => void;
   /** Backspace at the very start of an empty block. */
   onRemove?: () => void;
+  /** Shift-Mod-Up to move the block earlier in the document. */
+  onMoveUp?: () => void;
+  /** Shift-Mod-Down to move the block later in the document. */
+  onMoveDown?: () => void;
 }
 
 /**
@@ -43,6 +47,8 @@ export function BlockEditor({
   onChange,
   onSplit,
   onRemove,
+  onMoveUp,
+  onMoveDown,
 }: BlockEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -53,10 +59,10 @@ export function BlockEditor({
   // render — a ref write during render is the trap
   // `react-hooks/refs` exists to catch, and rendering must remain
   // free of side effects.
-  const handlers = useRef({ onChange, onSplit, onRemove });
+  const handlers = useRef({ onChange, onSplit, onRemove, onMoveUp, onMoveDown });
   const syncHandlers = useCallback(() => {
-    handlers.current = { onChange, onSplit, onRemove };
-  }, [onChange, onSplit, onRemove]);
+    handlers.current = { onChange, onSplit, onRemove, onMoveUp, onMoveDown };
+  }, [onChange, onSplit, onRemove, onMoveUp, onMoveDown]);
   useEffect(syncHandlers);
 
   useEffect(() => {
@@ -79,6 +85,14 @@ export function BlockEditor({
             // into — so Enter means "start the next block", which is
             // CNTKNW's decision to make, not the editor's.
             handlers.current.onSplit?.();
+            return true;
+          },
+          'Mod-Shift-ArrowUp': () => {
+            handlers.current.onMoveUp?.();
+            return true;
+          },
+          'Mod-Shift-ArrowDown': () => {
+            handlers.current.onMoveDown?.();
             return true;
           },
           Backspace: (editorState) => {

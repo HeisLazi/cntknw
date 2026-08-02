@@ -4,7 +4,6 @@ import {
   recoverPosition,
   clearPosition,
 } from './positionBuffer';
-import { writeJson } from '@lib/safeStore';
 
 describe('positionBuffer', () => {
   beforeEach(() => {

@@ -217,12 +217,15 @@ describe('Rank Property Tests', () => {
         const currentTail = collection[collection.length - 1]!;
         next = rankBetween(currentTail, null);
         collection.push(next);
-      } else {
+      } else if (collection.length >= 2) {
         const index = Math.floor(Math.random() * (collection.length - 1));
         const currentLow = collection[index]!;
         const currentHigh = collection[index + 1]!;
         next = rankBetween(currentLow, currentHigh);
         collection.splice(index + 1, 0, next);
+      } else {
+        next = rankBetween(collection[0]!, null);
+        collection.push(next);
       }
       expect(endsInLowestDigit(next)).toBe(false);
       // Validate alphabet

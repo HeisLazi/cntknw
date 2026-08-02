@@ -30,7 +30,7 @@ describe('IndexedDB Concurrent Operations', () => {
     const connB = createIndexedDbRepositories(dbB);
     const connC = createIndexedDbRepositories(dbC); // Third connection for verification
 
-    const sourceId = 'test-source';
+    const sourceId = '00000000-0000-4000-0000-000000000001';
     
     // Setup initial state: block A and block C
     const journalA = await connA.journals.getOrCreateJournalForSource(sourceId, 'Title');
@@ -117,7 +117,7 @@ describe('IndexedDB Concurrent Operations', () => {
     const connB = createIndexedDbRepositories(dbB);
     const connC = createIndexedDbRepositories(dbC); // Third connection for verification
 
-    const sourceId = 'test-unique-source';
+    const sourceId = '00000000-0000-4000-0000-000000000002';
 
     // Concurrently attempt to getOrCreateJournalForSource
     const [journalA, journalB] = await Promise.all([

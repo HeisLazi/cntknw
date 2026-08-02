@@ -5,8 +5,10 @@ import { RevisionConflictError } from '@data/errors';
 import { createPageLinkedBlock } from '@application/create-block';
 import { groupBlocksByLocation } from '@domain/journals/grouping';
 import type { JournalGroup } from '@domain/journals/grouping';
-import type { EntityId, JournalBlock, SourceLocation, ParagraphContent } from '@domain/index';
-import { BlockEditor } from './BlockEditor';
+import type { EntityId, JournalBlock, SourceLocation, ParagraphContent, BlockKind, BlockContentInput } from '@domain/index';
+import { contentForKind } from '@domain/journals/transform';
+import { rankAfter, rankBetween } from '@lib/rank';
+import { JournalBlockView } from './JournalBlockView';
 import { clearDraft, recoverDrafts, stashDraft } from './draftBuffer';
 import './journal.css';
 
@@ -176,17 +178,32 @@ export function JournalPane({
       if (revision === undefined) return;
 
       try {
+        const currentBlock = blocks?.find((b) => b.id === blockId);
+        if (!currentBlock) return;
+
+        let mergedContent: BlockContentInput;
+        if (currentBlock.content.type === 'paragraph') {
+          mergedContent = {
+            ...currentBlock.content,
+            doc: edit.doc as Record<string, unknown>,
+            text: edit.text,
+          };
+        } else if (currentBlock.content.type === 'quote') {
+          mergedContent = {
+            ...currentBlock.content,
+            quote: edit.text,
+          };
+        } else {
+          mergedContent = {
+            ...currentBlock.content,
+            text: edit.text,
+          } as BlockContentInput;
+        }
+
         const saved = await journals.updateBlock(
           {
             id: blockId,
-            content: {
-              type: 'paragraph',
-              // The one place the editor's vocabulary meets the
-              // domain's. The domain keeps `doc` an open record so it
-              // need not depend on ProseMirror (ADR-0004 §5).
-              doc: edit.doc as Record<string, unknown>,
-              text: edit.text,
-            },
+            content: mergedContent,
           },
           expectedRevision(revision),
         );
@@ -226,7 +243,7 @@ export function JournalPane({
         });
       }
     },
-    [journals],
+    [journals, blocks],
   );
 
   const syncFlushRef = useCallback(() => {
@@ -300,6 +317,10 @@ export function JournalPane({
     [repositories, sourceId],
   );
 
+  const deletedBlocks = useMemo(() => {
+    return (blocks ?? []).filter(b => b.deletedAt);
+  }, [blocks]);
+
   const removeBlock = useCallback(
     async (blockId: EntityId) => {
       const revision = revisions.current.get(blockId);
@@ -308,18 +329,105 @@ export function JournalPane({
       // destructive action, and a block removed by a stray Backspace
       // is the clearest case for one.
       await journals.softDeleteBlock(blockId, expectedRevision(revision));
+      setBlocks((current) => (current ?? []).map((b) => b.id === blockId ? { ...b, deletedAt: new Date().toISOString() } : b));
       revisions.current.delete(blockId);
       clearDraft(blockId);
-      setBlocks((current) => (current ?? []).filter((b) => b.id !== blockId));
     },
     [journals],
   );
 
+  const restoreBlock = useCallback(
+    async (blockId: EntityId) => {
+      const block = deletedBlocks.find(b => b.id === blockId);
+      if (!block) return;
+      await journals.restoreBlock(
+        blockId,
+        expectedRevision(block.revision)
+      );
+      setReloadTrigger(n => n + 1);
+    },
+    [journals, deletedBlocks],
+  );
+
+  const changeBlockKind = useCallback(
+    async (blockId: EntityId, to: BlockKind) => {
+      const block = blocks?.find((b) => b.id === blockId);
+      if (!block) return;
+      
+      const revision = revisions.current.get(blockId);
+      if (revision === undefined) return;
+
+      try {
+        const newContent = contentForKind(block.content, to);
+        const saved = await journals.updateBlock(
+          {
+            id: blockId,
+            kind: to,
+            content: newContent,
+          },
+          expectedRevision(revision)
+        );
+        revisions.current.set(blockId, saved.revision);
+        setBlocks((current) => (current ?? []).map((b) => b.id === blockId ? saved : b));
+      } catch (err) {
+        console.error("Failed to change block kind", err);
+      }
+    },
+    [blocks, journals]
+  );
+
+  const moveBlock = useCallback(
+    async (blockId: EntityId, direction: 'up' | 'down') => {
+      const block = blocks?.find((b) => b.id === blockId);
+      if (!block || !blocks) return;
+
+      const revision = revisions.current.get(blockId);
+      if (revision === undefined) return;
+
+      // Find siblings on the same page, ordered by rank
+      const siblings = blocks
+        .filter((b) => b.sourceLocation?.pdf?.page === block.sourceLocation?.pdf?.page && !b.deletedAt)
+        .sort((a, b) => a.rank.localeCompare(b.rank));
+      
+      const index = siblings.findIndex((b) => b.id === blockId);
+      if (index === -1) return;
+
+      let newRank: string;
+      if (direction === 'up') {
+        if (index === 0) return; // Already at top
+        const prev = siblings[index - 1];
+        const prevPrev = siblings[index - 2];
+        newRank = prevPrev ? rankBetween(prevPrev.rank, prev.rank) : rankBetween(null, prev.rank);
+      } else {
+        if (index === siblings.length - 1) return; // Already at bottom
+        const next = siblings[index + 1];
+        const nextNext = siblings[index + 2];
+        newRank = nextNext ? rankBetween(next.rank, nextNext.rank) : rankAfter(next.id, siblings);
+      }
+
+      try {
+        const saved = await journals.updateBlock(
+          {
+            id: blockId,
+            rank: newRank,
+          },
+          expectedRevision(revision)
+        );
+        revisions.current.set(blockId, saved.revision);
+        setBlocks((current) => (current ?? []).map((b) => b.id === blockId ? saved : b));
+      } catch (err) {
+        console.error("Failed to move block", err);
+      }
+    },
+    [blocks, journals]
+  );
+
   // ── Runs ────────────────────────────────────────────────────────
   const runs = useMemo<JournalGroup[]>(
-    () => groupBlocksByLocation(blocks ?? []),
+    () => groupBlocksByLocation((blocks ?? []).filter(b => !b.deletedAt)),
     [blocks],
   );
+
 
   const activeHasWriting =
     activePage !== undefined && runs.some((run) => run.page === activePage);
@@ -426,24 +534,11 @@ export function JournalPane({
                   ) : (
                     <ol className="cn-run__blocks">
                       {run.blocks.map((block) => (
-                        <li key={`${block.id}-${resetKeys.get(block.id) || 0}`} className="cn-block">
-                          <div className="cn-block__body">
-                            <BlockEditor
-                              doc={
-                                block.content.type === 'paragraph'
-                                  ? block.content.doc
-                                  : undefined
-                              }
-                              text={
-                                block.content.type === 'paragraph'
-                                  ? block.content.text
-                                  : ''
-                              }
+                        <li key={`${block.id}-${resetKeys.get(block.id) || 0}`}>
+                            <JournalBlockView
+                              block={block}
                               autoFocus={block.id === focusBlockId}
-                              placeholder="Write…"
                               onChange={(next) => scheduleSave(block.id, next)}
-                              // Continuing inherits from THIS block, not
-                              // from wherever the source is showing.
                               onSplit={() =>
                                 void addBlock(
                                   block.sourceLocation ?? location,
@@ -451,20 +546,24 @@ export function JournalPane({
                                 )
                               }
                               onRemove={() => void removeBlock(block.id)}
-                            />
-                            {failedWrites.has(block.id) && conflicted !== block.id ? (
-                              <p className="cn-journal__error" role="alert">
-                                Failed to save your changes. Your draft is kept safe locally.
-                                <button
-                                  type="button"
-                                  className="cn-journal__retry"
-                                  onClick={() => void flush(block.id)}
-                                >
-                                  Retry saving
-                                </button>
-                              </p>
-                            ) : null}
-                            {conflicted === block.id ? (
+                              onMoveUp={() => void moveBlock(block.id, 'up')}
+                              onMoveDown={() => void moveBlock(block.id, 'down')}
+                              onChangeKind={(to) => void changeBlockKind(block.id, to)}
+                              footer={
+                                <>
+                                  {failedWrites.has(block.id) && conflicted !== block.id ? (
+                                    <p className="cn-journal__error" role="alert">
+                                      Failed to save your changes. Your draft is kept safe locally.
+                                      <button
+                                        type="button"
+                                        className="cn-journal__retry"
+                                        onClick={() => void flush(block.id)}
+                                      >
+                                        Retry saving
+                                      </button>
+                                    </p>
+                                  ) : null}
+                                  {conflicted === block.id ? (
                               <div className="cn-journal__conflict" role="alert">
                                 <strong>Conflict:</strong> This block was changed in another window.
                                 <div className="cn-journal__conflict-diff">
@@ -507,10 +606,12 @@ export function JournalPane({
                                   >
                                     Use my version
                                   </button>
+                                  </div>
                                 </div>
-                              </div>
-                            ) : null}
-                          </div>
+                              ) : null}
+                              </>
+                            }
+                          />
                         </li>
                       ))}
                     </ol>
@@ -519,6 +620,27 @@ export function JournalPane({
               );
             })}
           </ol>
+        )}
+
+        {deletedBlocks.length > 0 && (
+          <details className="cn-journal__trash">
+            <summary>Recently Deleted ({deletedBlocks.length})</summary>
+            <ol className="cn-journal__trash-list">
+              {deletedBlocks.map(block => (
+                <li key={block.id} className="cn-journal__trash-item">
+                  <div className="cn-journal__trash-content">
+                    <span className="cn-journal__trash-kind">{block.kind}</span>
+                    <span className="cn-journal__trash-text">
+                      {block.content.type === 'paragraph' ? block.content.text : 
+                       block.content.type === 'quote' ? block.content.quote : 
+                       'text' in block.content ? (block.content as {text?: string}).text : '...'}
+                    </span>
+                  </div>
+                  <button type="button" onClick={() => void restoreBlock(block.id)}>Restore</button>
+                </li>
+              ))}
+            </ol>
+          </details>
         )}
       </div>
     </div>

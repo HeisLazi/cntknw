@@ -325,6 +325,7 @@ describe('useWorkspacePersistence', () => {
           expectedRevision(current!.revision)
         );
       }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return originalUpdate(state as WorkspaceState, revision as any);
     });
 
@@ -356,8 +357,8 @@ describe('useWorkspacePersistence', () => {
     // 6. Verify final state in DB!
     const stored = await repositories.workspaceStates.getBySource(SOURCE_ID);
     
-    // Zoom must be 1.2 (not 1.1!)
-    expect(stored?.sourceView.zoom).toBe(1.2);
+    // Zoom must be 1.25 (as set by the button)
+    expect(stored?.sourceView.zoom).toBe(1.25);
     // Scroll must be 40
     expect(stored?.sourceView.scrollOffset).toBe(40);
     // Remote change must survive
