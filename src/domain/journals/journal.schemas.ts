@@ -214,7 +214,7 @@ export type BlockContentInput = z.input<typeof BlockContentSchema>;
 
 // ─── Journal Block ───────────────────────────────────────────────
 
-export const JournalBlockSchema = BaseEntityFieldsSchema.merge(
+const BaseJournalBlockSchema = BaseEntityFieldsSchema.merge(
   SoftDeletableFieldsSchema,
 ).extend({
   journalId: EntityIdSchema,
@@ -234,7 +234,12 @@ export const JournalBlockSchema = BaseEntityFieldsSchema.merge(
    */
   epistemicClaimId: EntityIdSchema.optional(),
 });
-export type JournalBlock = z.infer<typeof JournalBlockSchema>;
+
+export const JournalBlockSchema = BaseJournalBlockSchema.refine(
+  (data) => data.kind === data.content.type,
+  { message: "Block kind must match content type", path: ["kind"] }
+);
+export type JournalBlock = z.infer<typeof BaseJournalBlockSchema>;
 
 // ─── Create Inputs ───────────────────────────────────────────────
 
@@ -268,14 +273,17 @@ function deriveBlockText<T extends { content?: unknown }>(value: T): T {
   };
 }
 
-export const CreateBlockInputSchema = JournalBlockSchema.omit({
+export const CreateBlockInputSchema = BaseJournalBlockSchema.omit({
   id: true,
   createdAt: true,
   updatedAt: true,
   revision: true,
   deletedAt: true,
-}).transform(deriveBlockText);
-export type CreateBlockInput = z.input<typeof CreateBlockInputSchema>;
+}).refine(
+  (data) => data.kind === data.content.type,
+  { message: "Block kind must match content type", path: ["kind"] }
+).transform(deriveBlockText);
+export type CreateBlockInput = Omit<z.input<typeof BaseJournalBlockSchema>, 'id' | 'createdAt' | 'updatedAt' | 'revision' | 'deletedAt'>;
 
 export const CreateJournalInputSchema = JournalSchema.omit({
   id: true,
@@ -293,7 +301,15 @@ export const UpdateBlockInputSchema = z.object({
   parentBlockId: EntityIdSchema.nullable().optional(),
   rank: z.string().optional(),
   epistemicClaimId: EntityIdSchema.nullable().optional(),
-}).transform(deriveBlockText);
+}).refine(
+  (data) => {
+    if (data.kind && data.content) {
+      return data.kind === data.content.type;
+    }
+    return true;
+  },
+  { message: "Block kind must match content type when both are provided", path: ["kind"] }
+).transform(deriveBlockText);
 export type UpdateBlockInput = z.input<typeof UpdateBlockInputSchema>;
 
 export const MoveBlockInputSchema = z.object({

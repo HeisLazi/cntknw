@@ -54,17 +54,42 @@ test.describe('Journal Conflict Recovery', () => {
     const conflictNotice = uiPage.locator('.cn-journal__conflict');
     await expect(conflictNotice).toBeVisible();
 
-    // 7. Click Reload on the conflict notice
-    await uiPage.getByRole('button', { name: /Reload/ }).click();
+    // 7. Verify both truths are visible in the conflict diff
+    await expect(uiPage.getByText('Saved version: Truth A')).toBeVisible();
+    await expect(uiPage.getByText('Your unsaved version: Truth B')).toBeVisible();
 
-    // 8. Assert: ADR-0004 requires no silent reapplies. The UI should load "Truth A" (the remote truth)
-    // rather than blindly flushing "Truth B" over it.
-    await uiPage.waitForTimeout(1000); // wait for load and potential erroneous flush
+    // 8. Click "Use my version"
+    await uiPage.getByRole('button', { name: /Use my version/ }).click();
+
+    // 9. Assert: Truth B should have overwritten Truth A
+    await uiPage.waitForTimeout(1000); // wait for flush
     
     // Check DB
     const remoteBlockAfter = await api.call('getFirstBlock', journalId);
     const textAfter = remoteBlockAfter.content.type === 'paragraph' ? remoteBlockAfter.content.text : '';
     
-    expect(textAfter).toBe('Truth A');
+    expect(textAfter).toBe('Truth B');
+
+    // 10. Harness secretly updates the block in the background again
+    const rev1 = remoteBlockAfter.revision;
+    await api.call('updateBlockText', journalId, blockId, 'Truth C', rev1);
+
+    // 11. UI types again (drafting "Truth D")
+    await editor.fill('');
+    await editor.pressSequentially('Truth D', { delay: 10 });
+
+    // 12. Conflict notice appears again
+    await expect(conflictNotice).toBeVisible();
+
+    // 13. Click "Keep saved"
+    await uiPage.getByRole('button', { name: /Keep saved/ }).click();
+
+    // 14. Assert: The editor should now display Truth C
+    await expect(editor).toHaveText('Truth C');
+
+    // Check DB (should remain Truth C)
+    const remoteBlockFinal = await api.call('getFirstBlock', journalId);
+    const textFinal = remoteBlockFinal.content.type === 'paragraph' ? remoteBlockFinal.content.text : '';
+    expect(textFinal).toBe('Truth C');
   });
 });

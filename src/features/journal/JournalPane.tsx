@@ -5,7 +5,7 @@ import { RevisionConflictError } from '@data/errors';
 import { createPageLinkedBlock } from '@application/create-block';
 import { groupBlocksByLocation } from '@domain/journals/grouping';
 import type { JournalGroup } from '@domain/journals/grouping';
-import type { EntityId, JournalBlock, SourceLocation } from '@domain/index';
+import type { EntityId, JournalBlock, SourceLocation, ParagraphContent } from '@domain/index';
 import { BlockEditor } from './BlockEditor';
 import { clearDraft, recoverDrafts, stashDraft } from './draftBuffer';
 import './journal.css';
@@ -84,14 +84,19 @@ export function JournalPane({
   const activePage = location.pdf?.page;
 
   const [blocks, setBlocks] = useState<JournalBlock[] | null>(null);
+  const [readError, setReadError] = useState<Error | null>(null);
   const [loadedJournal, setLoadedJournal] = useState<string>('');
   if (loadedJournal !== journalId) {
     setLoadedJournal(journalId);
     setBlocks(null);
+    setReadError(null);
   }
-  const loading = blocks === null;
+  const loading = blocks === null && readError === null;
 
   const [conflicted, setConflicted] = useState<EntityId | null>(null);
+  const [conflictData, setConflictData] = useState<Map<EntityId, { remoteText: string, localText: string }>>(new Map());
+  const [failedWrites, setFailedWrites] = useState<Set<EntityId>>(new Set());
+  const [resetKeys, setResetKeys] = useState<Map<EntityId, number>>(new Map());
   const [focusBlockId, setFocusBlockId] = useState<EntityId | null>(null);
 
   const revisions = useRef(new Map<EntityId, number>());
@@ -102,13 +107,6 @@ export function JournalPane({
   const [reloadTrigger, setReloadTrigger] = useState(0);
   const scrollport = useRef<HTMLDivElement>(null);
   const [initialScrollSet, setInitialScrollSet] = useState(false);
-
-  const reloadBlock = useCallback((id: EntityId) => {
-    clearDraft(id);
-    pending.current.delete(id);
-    setConflicted(null);
-    setReloadTrigger((n) => n + 1);
-  }, []);
 
   // ── Load the whole journal, not one page of it ─────────────────
   useEffect(() => {
@@ -151,8 +149,8 @@ export function JournalPane({
           if (pending.current.has(block.id)) void flushRef.current(block.id);
         }
       })
-      .catch(() => {
-        if (!cancelled) setBlocks([]);
+      .catch((error) => {
+        if (!cancelled) setReadError(error instanceof Error ? error : new Error(String(error)));
       });
 
     return () => {
@@ -173,7 +171,6 @@ export function JournalPane({
     async (blockId: EntityId) => {
       const edit = pending.current.get(blockId);
       if (!edit) return;
-      pending.current.delete(blockId);
 
       const revision = revisions.current.get(blockId);
       if (revision === undefined) return;
@@ -193,9 +190,16 @@ export function JournalPane({
           },
           expectedRevision(revision),
         );
+        pending.current.delete(blockId);
         revisions.current.set(blockId, saved.revision);
         clearDraft(blockId);
         setConflicted((current) => (current === blockId ? null : current));
+        setFailedWrites((current) => {
+          if (!current.has(blockId)) return current;
+          const next = new Set(current);
+          next.delete(blockId);
+          return next;
+        });
       } catch (error) {
         if (error instanceof RevisionConflictError) {
           // Deliberately not reapplied. A reading position can be
@@ -203,9 +207,23 @@ export function JournalPane({
           // because the other version is somebody's writing too
           // (ADR-0004 §6).
           setConflicted(blockId);
+          journals.getBlockById(blockId).then(remoteBlock => {
+            if (remoteBlock && remoteBlock.content.type === 'paragraph') {
+              setConflictData(curr => new Map(curr).set(blockId, { 
+                remoteText: (remoteBlock.content as ParagraphContent).text,
+                localText: edit.text 
+              }));
+            }
+          });
           return;
         }
-        throw error;
+        
+        console.error('Failed to save block', error);
+        setFailedWrites((current) => {
+          const next = new Set(current);
+          next.add(blockId);
+          return next;
+        });
       }
     },
     [journals],
@@ -336,7 +354,21 @@ export function JournalPane({
         ref={scrollport}
         onScroll={(e) => onScroll?.(e.currentTarget.scrollTop)}
       >
-        {loading ? (
+        {readError ? (
+          <div className="cn-journal__error" role="alert">
+            <p>Your journal could not be loaded. Your stored work has not been deleted.</p>
+            <button
+              type="button"
+              className="cn-journal__retry"
+              onClick={() => {
+                setReadError(null);
+                setReloadTrigger(n => n + 1);
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        ) : loading ? (
           <p className="cn-journal__hint" role="status">
             Loading…
           </p>
@@ -394,7 +426,7 @@ export function JournalPane({
                   ) : (
                     <ol className="cn-run__blocks">
                       {run.blocks.map((block) => (
-                        <li key={block.id} className="cn-block">
+                        <li key={`${block.id}-${resetKeys.get(block.id) || 0}`} className="cn-block">
                           <div className="cn-block__body">
                             <BlockEditor
                               doc={
@@ -420,18 +452,63 @@ export function JournalPane({
                               }
                               onRemove={() => void removeBlock(block.id)}
                             />
-                            {conflicted === block.id ? (
-                              <p className="cn-journal__conflict" role="alert">
-                                This block was changed in another window. Your
-                                text has not been saved over it.{' '}
+                            {failedWrites.has(block.id) && conflicted !== block.id ? (
+                              <p className="cn-journal__error" role="alert">
+                                Failed to save your changes. Your draft is kept safe locally.
                                 <button
                                   type="button"
-                                  className="cn-journal__reload"
-                                  onClick={() => reloadBlock(block.id)}
+                                  className="cn-journal__retry"
+                                  onClick={() => void flush(block.id)}
                                 >
-                                  Reload the block
+                                  Retry saving
                                 </button>
                               </p>
+                            ) : null}
+                            {conflicted === block.id ? (
+                              <div className="cn-journal__conflict" role="alert">
+                                <strong>Conflict:</strong> This block was changed in another window.
+                                <div className="cn-journal__conflict-diff">
+                                  <p><strong>Saved version:</strong> {conflictData.get(block.id)?.remoteText || 'Loading...'}</p>
+                                  <p><strong>Your unsaved version:</strong> {conflictData.get(block.id)?.localText || 'Loading...'}</p>
+                                </div>
+                                <div className="cn-journal__conflict-actions">
+                                  <button
+                                    type="button"
+                                    className="cn-journal__reload"
+                                    onClick={async () => {
+                                      clearDraft(block.id);
+                                      pending.current.delete(block.id);
+                                      
+                                      const remote = await journals.getBlockById(block.id);
+                                      if (remote) {
+                                        setBlocks(current => (current || []).map(b => b.id === block.id ? remote : b));
+                                        revisions.current.set(block.id, remote.revision);
+                                      }
+
+                                      setConflicted(null);
+                                      setConflictData(curr => { const n = new Map(curr); n.delete(block.id); return n; });
+                                      setResetKeys(curr => new Map(curr).set(block.id, (curr.get(block.id) || 0) + 1));
+                                    }}
+                                  >
+                                    Keep saved
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="cn-journal__reload"
+                                    onClick={async () => {
+                                      const remote = await journals.getBlockById(block.id);
+                                      if (remote) {
+                                        revisions.current.set(block.id, remote.revision);
+                                        void flush(block.id);
+                                      }
+                                      setConflicted(null);
+                                      setConflictData(curr => { const n = new Map(curr); n.delete(block.id); return n; });
+                                    }}
+                                  >
+                                    Use my version
+                                  </button>
+                                </div>
+                              </div>
                             ) : null}
                           </div>
                         </li>
