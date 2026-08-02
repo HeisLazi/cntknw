@@ -5,6 +5,7 @@ import { RevisionConflictError } from '@data/errors';
 import type { WorkspaceState } from '@domain/index';
 import { clearPosition, stashPosition } from './positionBuffer';
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Computes a deep difference representing only the scalar leaves that changed.
  * This ensures that nested objects like `sourceView` do not overwrite each other
@@ -43,6 +44,7 @@ function applyDiff(target: any, diff: any): any {
   }
   return result;
 }
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 

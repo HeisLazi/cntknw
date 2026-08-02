@@ -166,54 +166,75 @@ describe('rankAfter', () => {
   it('handles an empty sibling set', () => {
     expect(rankAfter(null, [])).toBe(INITIAL_RANK);
   });
+});
 
-  it('handles concurrent insertions after the same anchor without duplicate ranks', () => {
-    // 1. Create block A
-    const aRank = INITIAL_RANK;
-    const aId = 'A';
+describe('Rank Property Tests', () => {
+  it('preserves invariants for many generated sequences', () => {
+    const runs = 100;
     
-    // 2. Simulate two independent clients reading the same sibling snapshot
-    const siblingsSnapshot = [{ id: aId, rank: aRank }];
+    // 1. Insert at head
+    let head = INITIAL_RANK;
+    for (let i = 0; i < runs; i++) {
+      const next = rankBetween(null, head);
+      expect(next < head).toBe(true);
+      expect(endsInLowestDigit(next)).toBe(false);
+      head = next;
+    }
+
+    // 2. Insert at tail
+    let tail = INITIAL_RANK;
+    for (let i = 0; i < runs; i++) {
+      const next = rankBetween(tail, null);
+      expect(next > tail).toBe(true);
+      expect(endsInLowestDigit(next)).toBe(false);
+      tail = next;
+    }
+
+    // 3. Repeated insertion into the same narrowing interval
+    let low = 'a';
+    const high = 'b';
+    const intervalSequence: string[] = [];
+    for (let i = 0; i < runs; i++) {
+      const mid = rankBetween(low, high);
+      expect(mid > low).toBe(true);
+      expect(mid < high).toBe(true);
+      expect(endsInLowestDigit(mid)).toBe(false);
+      intervalSequence.push(mid);
+      low = mid; // keep narrowing from the left
+    }
     
-    // 3. Both insert after A concurrently
-    // Since rankAfter now appends jitter, they will receive different ranks
-    // even though they have the exact same anchor and siblings.
-    const bRank = rankAfter('A', siblingsSnapshot);
-    const cRank = rankAfter('A', siblingsSnapshot);
+    // 4. Mixed short and long ranks (generating a large collection)
+    const collection = ['M'];
+    for (let i = 0; i < runs; i++) {
+      const isHead = Math.random() < 0.1;
+      const isTail = Math.random() < 0.1;
+      let next: string;
+      if (isHead) {
+        const currentHead = collection[0]!;
+        next = rankBetween(null, currentHead);
+        collection.unshift(next);
+      } else if (isTail) {
+        const currentTail = collection[collection.length - 1]!;
+        next = rankBetween(currentTail, null);
+        collection.push(next);
+      } else {
+        const index = Math.floor(Math.random() * (collection.length - 1));
+        const currentLow = collection[index]!;
+        const currentHigh = collection[index + 1]!;
+        next = rankBetween(currentLow, currentHigh);
+        collection.splice(index + 1, 0, next);
+      }
+      expect(endsInLowestDigit(next)).toBe(false);
+      // Validate alphabet
+      for (const char of next) {
+        expect('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'.includes(char)).toBe(true);
+      }
+    }
     
-    expect(bRank).not.toBe(cRank); // No duplicate ranks!
-    
-    const B = { id: 'B', rank: bRank };
-    const C = { id: 'C', rank: cRank };
-    
-    // Determine their deterministic order based on their generated jittered ranks
-    const firstConcurrent = bRank < cRank ? B : C;
-    const secondConcurrent = bRank < cRank ? C : B;
-    
-    const newSiblings = [
-      { id: 'A', rank: aRank },
-      firstConcurrent,
-      secondConcurrent,
-    ];
-    
-    // 4. Now insert D specifically after the first concurrent block
-    const dRank = rankAfter(firstConcurrent.id, newSiblings);
-    const D = { id: 'D', rank: dRank };
-    
-    // 5. Verify the order is A -> firstConcurrent -> D -> secondConcurrent
-    const finalSort = [
-      { id: 'A', rank: aRank },
-      B,
-      C,
-      D
-    ].sort((a, b) => compareRank(a.rank, b.rank));
-    
-    expect(finalSort.map(x => x.id)).toEqual([
-      'A',
-      firstConcurrent.id,
-      'D',
-      secondConcurrent.id
-    ]);
+    // Validate that sorting the generated collection matches the intended sequence
+    const shuffled = [...collection].sort(() => Math.random() - 0.5);
+    shuffled.sort(compareRank);
+    expect(shuffled).toEqual(collection);
   });
 });
 

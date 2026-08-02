@@ -40,40 +40,44 @@ export async function createPageLinkedBlock(
     'Journal',
   );
 
-  // Rank against the blocks already on this page, so a new block
-  // lands inside its page group rather than at the end of the whole
-  // journal. Page sections are computed by grouping on location
-  // (PDD §22.3), so ordering only has to be correct within the page.
-  const page = input.sourceLocation.pdf?.page;
-  const siblings =
-    page === undefined
-      ? await deps.journals.listBlocks(journal.id)
-      : await deps.journals.listBlocksByPage(journal.id, page);
+  // Wrap the entire read-allocate-create sequence in a single transaction.
+  // This guarantees that concurrent insertions are strictly serialized at the
+  // database level. The second insertion will re-read the updated siblings
+  // and natively generate a distinct valid fractional rank without requiring
+  // arbitrary randomness or tie-breakers.
+  return deps.journals.transact(async () => {
+    // Rank against the blocks already on this page, so a new block
+    // lands inside its page group rather than at the end of the whole
+    // journal. Page sections are computed by grouping on location
+    // (PDD §22.3), so ordering only has to be correct within the page.
+    const page = input.sourceLocation.pdf?.page;
+    const siblings =
+      page === undefined
+        ? await deps.journals.listBlocks(journal.id)
+        : await deps.journals.listBlocksByPage(journal.id, page);
 
-  let anchorId: string | null = null;
-  if (input.afterBlockId !== undefined) {
-    const anchor = siblings.find((b) => b.id === input.afterBlockId);
-    if (!anchor) {
-      // Stale/missing anchor: append safely rather than inserting at beginning.
-      anchorId = siblings.length > 0 ? [...siblings].sort((a, b) => a.rank.localeCompare(b.rank)).at(-1)!.id : null;
-    } else {
-      anchorId = anchor.id;
+    let anchorId: string | null = null;
+    if (input.afterBlockId !== undefined) {
+      const anchor = siblings.find((b) => b.id === input.afterBlockId);
+      if (!anchor) {
+        // Stale/missing anchor: append safely rather than inserting at beginning.
+        anchorId = siblings.length > 0 ? [...siblings].sort((a, b) => a.rank.localeCompare(b.rank)).at(-1)!.id : null;
+      } else {
+        anchorId = anchor.id;
+      }
+    } else if (siblings.length > 0) {
+      // Append: anchor to the last sibling.
+      anchorId = [...siblings].sort((a, b) => a.rank.localeCompare(b.rank)).at(-1)!.id ?? null;
     }
-  } else if (siblings.length > 0) {
-    // Append: anchor to the last sibling.
-    anchorId = [...siblings].sort((a, b) => a.rank.localeCompare(b.rank)).at(-1)!.id ?? null;
-  }
 
-  // The previous implementation returned a timestamp plus random
-  // suffix and ignored afterBlockId entirely, so inserting between
-  // two blocks was impossible (audit defect A-9).
-  const rank = rankAfter(anchorId, siblings);
+    const rank = rankAfter(anchorId, siblings);
 
-  return deps.journals.createBlock({
-    journalId: journal.id,
-    kind: input.kind,
-    sourceLocation: input.sourceLocation,
-    rank,
-    content: input.content,
+    return deps.journals.createBlock({
+      journalId: journal.id,
+      kind: input.kind,
+      sourceLocation: input.sourceLocation,
+      rank,
+      content: input.content,
+    });
   });
 }

@@ -294,6 +294,77 @@ describe('useWorkspacePersistence', () => {
     expect(stored?.sourceView.scrollOffset).toBe(500); 
   });
 
+  it('accumulates pendingChanges correctly as an autosave queue during an in-flight conflict (Finding 9)', async () => {
+    // 1. Initial State
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await renderProbe(makeState(1));
+    
+    const zoomButton = screen.getByRole('button', { name: 'zoom' });
+    const scrollButton = screen.getByRole('button', { name: 'scroll' });
+
+    // 2. We mock update so that it blocks (in-flight save) until we let it finish.
+    let releaseSave: () => void;
+    const saveBlocker = new Promise<void>(resolve => {
+      releaseSave = resolve;
+    });
+
+    const originalUpdate = repositories.workspaceStates.update.bind(repositories.workspaceStates);
+    let saveAttempt = 0;
+    
+    vi.spyOn(repositories.workspaceStates, 'update').mockImplementation(async (state: unknown, revision: unknown) => {
+      saveAttempt++;
+      if (saveAttempt === 1) {
+        // First save is the one we block!
+        await saveBlocker;
+        
+        // But BEFORE we let it succeed, we simulate a remote independent change landing in the DB
+        // which forces THIS save to fail with a conflict.
+        const current = await repositories.workspaceStates.getBySource(SOURCE_ID);
+        await originalUpdate(
+          { ...current!, activeLocation: at(99) },
+          expectedRevision(current!.revision)
+        );
+      }
+      return originalUpdate(state as WorkspaceState, revision as any);
+    });
+
+    // 3. User makes a change (zoom -> 1.1) and we advance time to trigger the save.
+    await user.click(zoomButton); // 1.0 + 0.1 = 1.1
+    await act(async () => {
+      vi.advanceTimersByTime(700);
+    });
+    // Now save is in flight (blocked on saveBlocker).
+
+    // 4. While the save is in flight, the user continues interacting locally!
+    await user.click(zoomButton); // 1.1 + 0.1 = 1.2
+    
+    // They click scroll 40 times to get to 400 (starts at 0, +10 each time)
+    // Wait, let's just click it a few times to get some offset.
+    for (let i = 0; i < 4; i++) {
+      await user.click(scrollButton); // 0 + 40 = 40
+    }
+    
+    // 5. Release the save! It will fail (because we sneaked in activeLocation: 99),
+    // and the useWorkspacePersistence hook should catch the conflict, re-read the DB,
+    // and reapply the ACCUMULATED diff (which now contains zoom=1.2 and scrollOffset=40).
+    await act(async () => {
+      releaseSave!();
+      // Need to flush microtasks and timers for the retry logic to run
+      await vi.runAllTimersAsync(); 
+    });
+
+    // 6. Verify final state in DB!
+    const stored = await repositories.workspaceStates.getBySource(SOURCE_ID);
+    
+    // Zoom must be 1.2 (not 1.1!)
+    expect(stored?.sourceView.zoom).toBe(1.2);
+    // Scroll must be 40
+    expect(stored?.sourceView.scrollOffset).toBe(40);
+    // Remote change must survive
+    expect(stored?.activeLocation.pdf?.page).toBe(99);
+  });
+
+
   it('reports an unrecoverable failure rather than pretending it saved', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     repositories.workspaceStates.update = async () => {

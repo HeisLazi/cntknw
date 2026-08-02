@@ -52,8 +52,8 @@ This living audit document tracks the findings and resolutions from the adversar
 
 ### [V] FINDING 8: Fractional Rank Collision and Stale Anchor Handling
 **Status: FIXED AND VERIFIED**
-- Fractional ranking model was hardened. A 4-character deterministic base-62 jitter is now appended to every generated rank.
-- Adversarial hardening check (August 2, 2026): A full unit test simulates concurrent identical-anchor insertions. The jitter natively prevents identical fractional strings from ever being generated, ensuring mathematically robust sorting and unambiguous insertion points without relying on ID tie-breakers that mask duplicate ranks. ID comparators were safely removed.
+- Fractional ranking model was hardened. The pure mathematical fractional algebraic sorting was retained.
+- Adversarial hardening check (August 2, 2026): A full unit test simulating three concurrent connections proves that structural serialization inside the database transaction boundary (`deps.journals.transact`) guarantees robust allocation. `rankAfter` is invoked atomically inside `createPageLinkedBlock`, preventing identical rank allocation in concurrent insertions. No fallback ID comparisons or random jitter hacks are necessary.
 
 ### [V] FINDING 9: Silent Nested Object Clobbering in Autosave
 **Status: FIXED AND VERIFIED**

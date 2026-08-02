@@ -115,14 +115,14 @@ export function rankBetween(
 export function rankAfterAll(existing: readonly string[]): string {
   if (existing.length === 0) return INITIAL_RANK;
   const max = existing.reduce((a, b) => (a >= b ? a : b));
-  return rankBetween(max, null) + generateJitter();
+  return rankBetween(max, null);
 }
 
 /** Rank that sorts before every rank in `existing`. */
 export function rankBeforeAll(existing: readonly string[]): string {
   if (existing.length === 0) return INITIAL_RANK;
   const min = existing.reduce((a, b) => (a <= b ? a : b));
-  return rankBetween(null, min) + generateJitter();
+  return rankBetween(null, min);
 }
 
 export interface RankedItem {
@@ -148,21 +148,7 @@ export function rankAfter(
   }
   const anchor = sorted[index]!;
   const next = index + 1 < sorted.length ? sorted[index + 1]! : null;
-  return rankBetween(anchor.rank, next?.rank ?? null) + generateJitter();
-}
-
-/**
- * Appends a 4-character random sequence from the base-62 alphabet.
- * This guarantees that concurrent insertions behind the same anchor
- * receive distinct ranks, eliminating identical rank collisions while
- * preserving the mathematical guarantees of fractional ordering.
- */
-export function generateJitter(): string {
-  let jitter = '';
-  for (let i = 0; i < 4; i++) {
-    jitter += ALPHABET[Math.floor(Math.random() * BASE)];
-  }
-  return jitter;
+  return rankBetween(anchor.rank, next?.rank ?? null);
 }
 
 /** Comparator for sorting records by rank. */
