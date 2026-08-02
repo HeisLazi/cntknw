@@ -5,6 +5,45 @@ import { RevisionConflictError } from '@data/errors';
 import type { WorkspaceState } from '@domain/index';
 import { clearPosition, stashPosition } from './positionBuffer';
 
+/**
+ * Computes a deep difference representing only the scalar leaves that changed.
+ * This ensures that nested objects like `sourceView` do not overwrite each other
+ * entirely when two tabs make independent changes to different properties.
+ */
+function computeDiff(original: any, updated: any): any {
+  if (original === updated) return undefined;
+  if (original == null || updated == null) return updated;
+  if (typeof original !== 'object' || typeof updated !== 'object') return updated;
+  if (Array.isArray(original) || Array.isArray(updated)) return updated;
+
+  const diff: any = {};
+  let hasChanges = false;
+  for (const key of Object.keys(updated)) {
+    const valDiff = computeDiff(original[key], updated[key]);
+    if (valDiff !== undefined) {
+      diff[key] = valDiff;
+      hasChanges = true;
+    }
+  }
+  return hasChanges ? diff : undefined;
+}
+
+/**
+ * Deeply applies a diff (computed by computeDiff) onto a target object.
+ */
+function applyDiff(target: any, diff: any): any {
+  if (diff === undefined) return target;
+  if (diff === null) return null;
+  if (typeof target !== 'object' || target == null || Array.isArray(target) || typeof diff !== 'object') {
+    return diff;
+  }
+  const result = { ...target };
+  for (const key of Object.keys(diff)) {
+    result[key] = applyDiff(target[key], diff[key]);
+  }
+  return result;
+}
+
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 export interface WorkspacePersistence {
@@ -96,8 +135,8 @@ export function useWorkspacePersistence(
       if (error instanceof RevisionConflictError) {
         const current = await workspaceStates.getBySource(toSave.sourceId);
         if (current) {
-          // Re-apply our specific diff over the newly fetched remote state
-          const merged = { ...current, ...diff };
+          // Re-apply our specific deep diff over the newly fetched remote state
+          const merged = applyDiff(current, diff);
           revision.current = current.revision;
           try {
             const saved = await workspaceStates.update(
@@ -108,7 +147,7 @@ export function useWorkspacePersistence(
             
             // Bring latest.current and UI state into sync with the merged remote state,
             // while preserving any NEW pending changes that accumulated during the await!
-            latest.current = { ...merged, ...pendingChanges.current };
+            latest.current = applyDiff(merged, pendingChanges.current);
             setState(latest.current);
             
             clearPosition(toSave.sourceId);
@@ -136,8 +175,12 @@ export function useWorkspacePersistence(
   }, [writeNow]);
 
   const apply = useCallback((change: Partial<WorkspaceState>) => {
-    pendingChanges.current = { ...pendingChanges.current, ...change };
-    const next = { ...latest.current, ...change };
+    // Instead of completely overwriting top-level objects, compute ONLY what changed
+    // compared to the latest known state, and accumulate that deep diff.
+    const diff = computeDiff(latest.current, change) || {};
+    pendingChanges.current = applyDiff(pendingChanges.current, diff);
+    
+    const next = applyDiff(latest.current, diff);
     latest.current = next;
     dirty.current = true;
     // Synchronous, before anything asynchronous is attempted. Even a

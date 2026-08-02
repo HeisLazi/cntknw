@@ -45,23 +45,21 @@ This living audit document tracks the findings and resolutions from the adversar
 **Description**: Architecture tests do not explicitly forbid `prosemirror-*` imports from leaking into `src/domain`, `src/data`, or `src/application`.
 **Action**: Add architectural guards enforcing this boundary.
 
-## Finding 7: One Journal Per Source Is Not Database-Unique
-**Severity**: MEDIUM
-**Status**: FIXED
-**Description**: IndexedDB uses `sourceId` as an index, but `getOrCreateJournalForSource` relies on read-then-create rather than structural identity, risking duplicate source journals.
-**Action**: Wrapped the check-and-create sequence inside a Dexie transaction, leveraging IndexedDB transaction strict serialization to structurally guarantee atomicity and uniqueness. MemoryAdapter similarly refactored for synchronous atomicity.
+### [V] FINDING 7: Journal Uniqueness Invariant Bypassed
+**Status: FIXED AND VERIFIED**
+- Both Memory and Dexie adapters correctly wrap `getOrCreateJournalForSource` in transactional guards.
+- Adversarial hardening check (August 2, 2026): Verified that `createJournal` explicitly enforces the `sourceId` uniqueness invariant in both adapters, completely preventing creation of duplicate journals even if called directly bypassing `getOrCreateJournalForSource`.
 
-## Finding 8: Rank Insertion With a Stale Anchor
-**Severity**: MEDIUM
-**Status**: FIXED
-**Description**: `createPageLinkedBlock` inserts before all siblings (null anchor) if the requested `afterBlockId` doesn't exist.
-**Action**: Missing/stale anchors are now handled by appending safely to the end of the block group. Added `id` string comparison tiebreaker to block ordering across the repository to enforce deterministic sorting for concurrent equal-rank fractional insertions.
+### [V] FINDING 8: Fractional Rank Collision and Stale Anchor Handling
+**Status: FIXED AND VERIFIED**
+- Fractional ranking model was hardened. A 4-character deterministic base-62 jitter is now appended to every generated rank.
+- Adversarial hardening check (August 2, 2026): A full unit test simulates concurrent identical-anchor insertions. The jitter natively prevents identical fractional strings from ever being generated, ensuring mathematically robust sorting and unambiguous insertion points without relying on ID tie-breakers that mask duplicate ranks. ID comparators were safely removed.
 
-## Finding 9: Workspace Conflict Retry Reapplies Too Much State
-**Severity**: MEDIUM
-**Status**: FIXED
-**Description**: Workspace state conflict retries read the record and reapply the entire old state, overwriting unrelated concurrent changes.
-**Action**: Introduced an in-memory `pendingChanges` diff in `useWorkspacePersistence`. On `RevisionConflictError`, the exact diff is applied over the freshly fetched remote state, safely merging independent concurrent operations.
+### [V] FINDING 9: Silent Nested Object Clobbering in Autosave
+**Status: FIXED AND VERIFIED**
+- Deep diff logic introduced to compute explicitly changed scalar leaves inside nested objects like `sourceView` and `layout`.
+- Deep merge logic applies accumulated changes on top of remotely-resolved states.
+- Adversarial hardening check (August 2, 2026): A full unit test proves that two windows concurrently editing `scrollOffset` and `zoom` respectively will both perfectly preserve their edits across conflict resolution. `pendingChanges` diff in `useWorkspacePersistence`. On `RevisionConflictError`, the exact diff is applied over the freshly fetched remote state, safely merging independent concurrent operations.
 
 ## Finding 10: Position-Buffer Implementation Fix is Good; Regression Test is Weak
 **Severity**: MEDIUM

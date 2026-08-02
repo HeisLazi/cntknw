@@ -223,6 +223,14 @@ export class MemoryJournalRepository implements JournalRepository {
   }
   async createJournal(input: CreateJournalInput): Promise<Journal> {
     const parsed = CreateJournalInputSchema.parse(input);
+    if (parsed.sourceId) {
+      const existing = Array.from(this.journals.values()).find(
+        (j) => j.sourceId === parsed.sourceId,
+      );
+      if (existing) {
+        throw new Error(`A journal already exists for source ${parsed.sourceId}`);
+      }
+    }
     const journal: Journal = { ...parsed, ...baseFields() };
     this.journals.set(journal.id, journal);
     return journal;
@@ -231,7 +239,7 @@ export class MemoryJournalRepository implements JournalRepository {
   async listBlocks(journalId: EntityId): Promise<JournalBlock[]> {
     return Array.from(this.blocks.values())
       .filter((b) => b.journalId === journalId && b.deletedAt === undefined)
-      .sort((a, b) => compareRank(a.rank, b.rank) || a.id.localeCompare(b.id));
+      .sort((a, b) => compareRank(a.rank, b.rank));
   }
   async listBlocksByPage(
     journalId: EntityId,
@@ -244,7 +252,7 @@ export class MemoryJournalRepository implements JournalRepository {
           b.deletedAt === undefined &&
           b.sourceLocation?.pdf?.page === page,
       )
-      .sort((a, b) => compareRank(a.rank, b.rank) || a.id.localeCompare(b.id));
+      .sort((a, b) => compareRank(a.rank, b.rank));
   }
   async getBlockById(id: EntityId): Promise<JournalBlock | null> {
     return this.blocks.get(id) ?? null;

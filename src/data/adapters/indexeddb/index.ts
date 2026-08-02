@@ -274,12 +274,20 @@ export class DexieJournalRepository implements JournalRepository {
     return record ? journalFromStorage(record) : null;
   }
   async createJournal(input: CreateJournalInput): Promise<Journal> {
-    const parsed = CreateJournalInputSchema.parse(input);
-    const journal: Journal = { ...parsed, ...baseFields() };
-    await guarded('Creating a journal', () =>
-      this.db.journals.add(journalToStorage(journal)),
-    );
-    return journal;
+    return this.transact(async () => {
+      const parsed = CreateJournalInputSchema.parse(input);
+      if (parsed.sourceId) {
+        const existing = await this.getJournalForSource(parsed.sourceId);
+        if (existing) {
+          throw new Error(`A journal already exists for source ${parsed.sourceId}`);
+        }
+      }
+      const journal: Journal = { ...parsed, ...baseFields() };
+      await guarded('Creating a journal', () =>
+        this.db.journals.add(journalToStorage(journal)),
+      );
+      return journal;
+    });
   }
 
   async listBlocks(journalId: EntityId): Promise<JournalBlock[]> {
@@ -289,7 +297,7 @@ export class DexieJournalRepository implements JournalRepository {
     return records
       .filter((r) => r.deletedAt === UNSET)
       .map(journalBlockFromStorage)
-      .sort((a, b) => compareRank(a.rank, b.rank) || a.id.localeCompare(b.id));
+      .sort((a, b) => compareRank(a.rank, b.rank));
   }
   async listBlocksByPage(
     journalId: EntityId,
@@ -307,7 +315,7 @@ export class DexieJournalRepository implements JournalRepository {
     return records
       .filter((r) => r.deletedAt === UNSET)
       .map(journalBlockFromStorage)
-      .sort((a, b) => compareRank(a.rank, b.rank) || a.id.localeCompare(b.id));
+      .sort((a, b) => compareRank(a.rank, b.rank));
   }
   async getBlockById(id: EntityId): Promise<JournalBlock | null> {
     const record = await guarded('Reading a block', () =>

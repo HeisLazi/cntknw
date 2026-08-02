@@ -50,26 +50,24 @@ export async function createPageLinkedBlock(
       ? await deps.journals.listBlocks(journal.id)
       : await deps.journals.listBlocksByPage(journal.id, page);
 
-  const siblingRanks = siblings.map((b) => b.rank);
-
-  let anchorRank: string | null = null;
+  let anchorId: string | null = null;
   if (input.afterBlockId !== undefined) {
     const anchor = siblings.find((b) => b.id === input.afterBlockId);
     if (!anchor) {
       // Stale/missing anchor: append safely rather than inserting at beginning.
-      anchorRank = siblingRanks.length > 0 ? [...siblingRanks].sort().at(-1)! : null;
+      anchorId = siblings.length > 0 ? [...siblings].sort((a, b) => a.rank.localeCompare(b.rank)).at(-1)!.id : null;
     } else {
-      anchorRank = anchor.rank;
+      anchorId = anchor.id;
     }
-  } else if (siblingRanks.length > 0) {
+  } else if (siblings.length > 0) {
     // Append: anchor to the last sibling.
-    anchorRank = [...siblingRanks].sort().at(-1) ?? null;
+    anchorId = [...siblings].sort((a, b) => a.rank.localeCompare(b.rank)).at(-1)!.id ?? null;
   }
 
   // The previous implementation returned a timestamp plus random
   // suffix and ignored afterBlockId entirely, so inserting between
   // two blocks was impossible (audit defect A-9).
-  const rank = rankAfter(anchorRank, siblingRanks);
+  const rank = rankAfter(anchorId, siblings);
 
   return deps.journals.createBlock({
     journalId: journal.id,

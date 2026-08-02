@@ -139,32 +139,81 @@ describe('rankAfterAll / rankBeforeAll', () => {
 
 describe('rankAfter', () => {
   it('inserts at the head when the anchor is null', () => {
-    const siblings = ['b', 'd', 'f'];
+    const siblings = [{id: '1', rank: 'b'}, {id: '2', rank: 'd'}, {id: '3', rank: 'f'}];
     const next = rankAfter(null, siblings);
     expect(next < 'b').toBe(true);
   });
 
   it('inserts between the anchor and the following sibling', () => {
-    const siblings = ['b', 'd', 'f'];
-    const next = rankAfter('b', siblings);
+    const siblings = [{id: '1', rank: 'b'}, {id: '2', rank: 'd'}, {id: '3', rank: 'f'}];
+    const next = rankAfter('1', siblings);
     expect(next > 'b').toBe(true);
     expect(next < 'd').toBe(true);
   });
 
   it('appends when the anchor is the last sibling', () => {
-    const siblings = ['b', 'd', 'f'];
-    const next = rankAfter('f', siblings);
+    const siblings = [{id: '1', rank: 'b'}, {id: '2', rank: 'd'}, {id: '3', rank: 'f'}];
+    const next = rankAfter('3', siblings);
     expect(next > 'f').toBe(true);
   });
 
   it('appends rather than guessing when the anchor is unknown', () => {
-    const siblings = ['b', 'd', 'f'];
+    const siblings = [{id: '1', rank: 'b'}, {id: '2', rank: 'd'}, {id: '3', rank: 'f'}];
     const next = rankAfter('zzz-not-present', siblings);
-    for (const rank of siblings) expect(next > rank).toBe(true);
+    for (const rank of siblings.map(s => s.rank)) expect(next > rank).toBe(true);
   });
 
   it('handles an empty sibling set', () => {
     expect(rankAfter(null, [])).toBe(INITIAL_RANK);
+  });
+
+  it('handles concurrent insertions after the same anchor without duplicate ranks', () => {
+    // 1. Create block A
+    const aRank = INITIAL_RANK;
+    const aId = 'A';
+    
+    // 2. Simulate two independent clients reading the same sibling snapshot
+    const siblingsSnapshot = [{ id: aId, rank: aRank }];
+    
+    // 3. Both insert after A concurrently
+    // Since rankAfter now appends jitter, they will receive different ranks
+    // even though they have the exact same anchor and siblings.
+    const bRank = rankAfter('A', siblingsSnapshot);
+    const cRank = rankAfter('A', siblingsSnapshot);
+    
+    expect(bRank).not.toBe(cRank); // No duplicate ranks!
+    
+    const B = { id: 'B', rank: bRank };
+    const C = { id: 'C', rank: cRank };
+    
+    // Determine their deterministic order based on their generated jittered ranks
+    const firstConcurrent = bRank < cRank ? B : C;
+    const secondConcurrent = bRank < cRank ? C : B;
+    
+    const newSiblings = [
+      { id: 'A', rank: aRank },
+      firstConcurrent,
+      secondConcurrent,
+    ];
+    
+    // 4. Now insert D specifically after the first concurrent block
+    const dRank = rankAfter(firstConcurrent.id, newSiblings);
+    const D = { id: 'D', rank: dRank };
+    
+    // 5. Verify the order is A -> firstConcurrent -> D -> secondConcurrent
+    const finalSort = [
+      { id: 'A', rank: aRank },
+      B,
+      C,
+      D
+    ].sort((a, b) => compareRank(a.rank, b.rank));
+    
+    expect(finalSort.map(x => x.id)).toEqual([
+      'A',
+      firstConcurrent.id,
+      'D',
+      secondConcurrent.id
+    ]);
   });
 });
 

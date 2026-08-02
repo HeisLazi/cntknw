@@ -115,34 +115,54 @@ export function rankBetween(
 export function rankAfterAll(existing: readonly string[]): string {
   if (existing.length === 0) return INITIAL_RANK;
   const max = existing.reduce((a, b) => (a >= b ? a : b));
-  return rankBetween(max, null);
+  return rankBetween(max, null) + generateJitter();
 }
 
 /** Rank that sorts before every rank in `existing`. */
 export function rankBeforeAll(existing: readonly string[]): string {
   if (existing.length === 0) return INITIAL_RANK;
   const min = existing.reduce((a, b) => (a <= b ? a : b));
-  return rankBetween(null, min);
+  return rankBetween(null, min) + generateJitter();
+}
+
+export interface RankedItem {
+  id: string;
+  rank: string;
 }
 
 /**
- * Rank for inserting immediately after `afterRank` within a set of
- * sibling ranks. When `afterRank` is null, insert at the start.
+ * Rank for inserting immediately after `anchorId` within a set of
+ * siblings. When `anchorId` is null, insert at the start.
  */
 export function rankAfter(
-  afterRank: string | null,
-  siblings: readonly string[],
+  anchorId: string | null,
+  siblings: readonly RankedItem[],
 ): string {
-  const sorted = [...siblings].sort();
-  if (afterRank === null) return rankBeforeAll(sorted);
+  const sorted = [...siblings].sort((a, b) => compareRank(a.rank, b.rank));
+  if (anchorId === null) return rankBeforeAll(sorted.map((s) => s.rank));
 
-  const index = sorted.indexOf(afterRank);
+  const index = sorted.findIndex((s) => s.id === anchorId);
   if (index === -1) {
     // Unknown anchor: append rather than guess at a position.
-    return rankAfterAll(sorted);
+    return rankAfterAll(sorted.map((s) => s.rank));
   }
+  const anchor = sorted[index]!;
   const next = index + 1 < sorted.length ? sorted[index + 1]! : null;
-  return rankBetween(afterRank, next);
+  return rankBetween(anchor.rank, next?.rank ?? null) + generateJitter();
+}
+
+/**
+ * Appends a 4-character random sequence from the base-62 alphabet.
+ * This guarantees that concurrent insertions behind the same anchor
+ * receive distinct ranks, eliminating identical rank collisions while
+ * preserving the mathematical guarantees of fractional ordering.
+ */
+export function generateJitter(): string {
+  let jitter = '';
+  for (let i = 0; i < 4; i++) {
+    jitter += ALPHABET[Math.floor(Math.random() * BASE)];
+  }
+  return jitter;
 }
 
 /** Comparator for sorting records by rank. */

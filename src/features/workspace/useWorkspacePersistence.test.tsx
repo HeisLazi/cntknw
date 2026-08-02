@@ -75,6 +75,19 @@ function Probe({ initial }: { initial: WorkspaceState }) {
       >
         scroll
       </button>
+      <button
+        type="button"
+        onClick={() =>
+          commit({
+            sourceView: {
+              ...state.sourceView,
+              zoom: 1.25,
+            },
+          })
+        }
+      >
+        zoom
+      </button>
     </div>
   );
 }
@@ -249,6 +262,36 @@ describe('useWorkspacePersistence', () => {
     for (const call of spy.mock.calls) {
       expect(call[1]).toMatchObject({ mode: 'expected' });
     }
+  });
+
+  it('deep merges nested objects during conflict recovery', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await renderProbe(makeState(1));
+
+    // A second writer moves the stored record on, changing ONLY scrollOffset
+    const current = await repositories.workspaceStates.getBySource(SOURCE_ID);
+    await repositories.workspaceStates.update(
+      { ...current!, sourceView: { ...current!.sourceView, scrollOffset: 500 } },
+      expectedRevision(current!.revision),
+    );
+
+    // This tab (which only knows about scrollOffset: 0) changes zoom to 1.25
+    // It passes the stale scrollOffset back in the object because UI components
+    // typically spread the previous state.
+    await user.click(screen.getByRole('button', { name: 'zoom' }));
+    await act(async () => {
+      vi.advanceTimersByTime(700);
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('status')).toHaveTextContent('saved'),
+    );
+
+    const stored = await repositories.workspaceStates.getBySource(SOURCE_ID);
+    
+    // The remote scroll offset must survive, and our local zoom must be applied!
+    expect(stored?.sourceView.zoom).toBe(1.25);
+    expect(stored?.sourceView.scrollOffset).toBe(500); 
   });
 
   it('reports an unrecoverable failure rather than pretending it saved', async () => {
