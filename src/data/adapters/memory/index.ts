@@ -35,6 +35,7 @@ import {
   CreateArtworkDetailsInputSchema,
   CreateJournalInputSchema,
   CreateBlockInputSchema,
+  JournalBlockSchema,
   UpdateBlockInputSchema,
   CreateAssetInputSchema,
   CreateAnnotationInputSchema,
@@ -286,8 +287,11 @@ export class MemoryJournalRepository implements JournalRepository {
     else if (epistemicClaimId !== undefined) {
       updated.epistemicClaimId = epistemicClaimId;
     }
-    this.blocks.set(parsed.id, updated);
-    return updated;
+    
+    // NFR-007: Enforce domain invariants upon final assembled record
+    const validated = JournalBlockSchema.parse(updated);
+    this.blocks.set(parsed.id, validated);
+    return validated;
   }
   async moveBlock(
     input: MoveBlockInput,
@@ -313,33 +317,37 @@ export class MemoryJournalRepository implements JournalRepository {
   async softDeleteBlock(
     blockId: EntityId,
     guard: ConcurrencyGuard,
-  ): Promise<void> {
+  ): Promise<JournalBlock> {
     const existing = this.blocks.get(blockId);
-    if (!existing) return;
+    if (!existing) throw new RecordNotFoundError('JournalBlock', blockId);
     assertRevision('JournalBlock', blockId, existing.revision, guard);
     // Marked, not removed. The previous implementation called
     // Map.delete here, which made recovery impossible and
     // contradicted PDD §19.3 and NFR-008 (audit defect A-6).
-    this.blocks.set(blockId, {
+    const updated = {
       ...existing,
       deletedAt: now(),
       updatedAt: now(),
       revision: existing.revision + 1,
-    });
+    };
+    this.blocks.set(blockId, updated);
+    return updated;
   }
   async restoreBlock(
     blockId: EntityId,
     guard: ConcurrencyGuard,
-  ): Promise<void> {
+  ): Promise<JournalBlock> {
     const existing = this.blocks.get(blockId);
-    if (!existing) return;
+    if (!existing) throw new RecordNotFoundError('JournalBlock', blockId);
     assertRevision('JournalBlock', blockId, existing.revision, guard);
     const { deletedAt: _removed, ...rest } = existing;
-    this.blocks.set(blockId, {
+    const updated = {
       ...rest,
       updatedAt: now(),
       revision: existing.revision + 1,
-    });
+    };
+    this.blocks.set(blockId, updated);
+    return updated;
   }
   async listDeletedBlocks(journalId: EntityId): Promise<JournalBlock[]> {
     return Array.from(this.blocks.values()).filter(

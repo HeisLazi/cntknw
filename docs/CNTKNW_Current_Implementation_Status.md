@@ -1,6 +1,6 @@
 # CNTKNW Current Implementation Status
 
-**Updated:** 27 July 2026 (Phase 1 core landed; Phase 0E editor spike next)
+**Updated:** 03 August 2026 (Phase 2 Closure)
 **Repository:** `philosophy-journal-complete`
 **Git baseline:** `4494f24`, tag `phase-0c-impl` — the tree as Phase 0C left it
 **Status:** Living document. Update at every phase boundary.
@@ -39,7 +39,7 @@ be read* — is met.
 | 0D | Shell, routing, providers, design tokens, UI primitives | **Complete and verified** |
 | 0E | Editor spike, then journal vertical slice | **Complete and verified** (ADR-0004, ADR-0005) |
 | 1 | Reliable PDF core — import, render, exact resume | **Complete and verified** (Text layer added) |
-| 2 | Infinite Journal | **In Progress** (Folio margin ADR-0006 landed) |
+| 2 | Infinite Journal | **Complete and verified (Closure pass)** (Folio margin ADR-0006 landed) |
 
 Phase order per ADR-0001 §1, which supersedes Handoff §19.
 

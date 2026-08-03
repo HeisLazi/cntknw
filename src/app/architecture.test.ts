@@ -156,4 +156,20 @@ describe('architecture', () => {
     }
     expect(offenders).toEqual([]);
   });
+
+  it('keeps ProseMirror imports inside the journal feature', () => {
+    const offenders: string[] = [];
+    for (const file of filesUnder(SRC)) {
+      if (isTest(file)) continue;
+      const path = relative(SRC, file).replace(/\\/g, '/');
+      if (path.startsWith('features/journal/')) continue;
+      
+      for (const specifier of importsOf(readFileSync(file, 'utf-8'))) {
+        if (specifier.startsWith('prosemirror-')) {
+          offenders.push(`${path} -> ${specifier}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
 });

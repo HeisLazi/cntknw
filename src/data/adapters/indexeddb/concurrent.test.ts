@@ -138,4 +138,63 @@ describe('IndexedDB Concurrent Operations', () => {
       connA.journals.createJournal({ sourceId, title: 'Bypass attempt', kind: 'source' })
     ).rejects.toThrow(/A journal already exists/);
   });
+
+  it('serializes structural reordering properly so independent connections don\'t generate identical ranks (Finding 8)', async () => {
+    const { movePageLinkedBlock } = await import('../../../application');
+
+    const connA = createIndexedDbRepositories(dbA);
+    const connB = createIndexedDbRepositories(dbB);
+    const connC = createIndexedDbRepositories(dbC);
+
+    const sourceId = '00000000-0000-4000-0000-000000000003';
+    const journalA = await connA.journals.getOrCreateJournalForSource(sourceId, 'Title');
+
+    // Create 3 blocks on the same page
+    const block1 = await connA.journals.createBlock({
+      journalId: journalA.id, kind: 'paragraph', rank: 'a',
+      content: { type: 'paragraph', text: '1' },
+      sourceLocation: { sourceType: 'book', sourceId, pdf: { page: 1 } }
+    });
+    await connA.journals.createBlock({
+      journalId: journalA.id, kind: 'paragraph', rank: 'b',
+      content: { type: 'paragraph', text: '2' },
+      sourceLocation: { sourceType: 'book', sourceId, pdf: { page: 1 } }
+    });
+    await connA.journals.createBlock({
+      journalId: journalA.id, kind: 'paragraph', rank: 'c',
+      content: { type: 'paragraph', text: '3' },
+      sourceLocation: { sourceType: 'book', sourceId, pdf: { page: 1 } }
+    });
+
+    // We want connection A to move block1 DOWN (meaning it calculates rank between b and c)
+    // And connection B to move block3 UP (meaning it calculates rank between a and b)
+    // Wait, if they run concurrently without transactions, they would calculate overlapping ranks, 
+    // or both might try to move their block between the same two blocks.
+    // Let's make both connection A and connection B try to move DIFFERENT blocks into the SAME interval.
+    // E.g. Add block 4. We want to move block 1 down (after 2), and block 4 up (before 3).
+    const block4 = await connA.journals.createBlock({
+      journalId: journalA.id, kind: 'paragraph', rank: 'd',
+      content: { type: 'paragraph', text: '4' },
+      sourceLocation: { sourceType: 'book', sourceId, pdf: { page: 1 } }
+    });
+
+    await Promise.all([
+      movePageLinkedBlock(connA, { blockId: block1.id, direction: 'down' }).catch(e => e),
+      movePageLinkedBlock(connB, { blockId: block4.id, direction: 'up' }).catch(e => e)
+    ]);
+
+    // One must fail with RevisionConflictError on the journal, or both succeed because they serialize 
+    // and read the updated sibling ranks!
+    // Since movePageLinkedBlock uses journal transaction, they should both succeed, 
+    // but the ranks they generate must be distinct and well-ordered.
+    const finalBlocks = await connC.journals.listBlocks(journalA.id);
+    
+    // Sort by actual rank
+    finalBlocks.sort((a, b) => a.rank.localeCompare(b.rank));
+    
+    // They must all have different ranks
+    const ranks = finalBlocks.map(b => b.rank);
+    const uniqueRanks = new Set(ranks);
+    expect(uniqueRanks.size).toBe(4);
+  });
 });

@@ -45,8 +45,8 @@ export interface JournalRepository {
    * Idempotent when the block is already absent; guarded whenever it
    * is present.
    */
-  softDeleteBlock(blockId: EntityId, guard: ConcurrencyGuard): Promise<void>;
-  restoreBlock(blockId: EntityId, guard: ConcurrencyGuard): Promise<void>;
+  softDeleteBlock(blockId: EntityId, guard: ConcurrencyGuard): Promise<JournalBlock>;
+  restoreBlock(blockId: EntityId, guard: ConcurrencyGuard): Promise<JournalBlock>;
   listDeletedBlocks(journalId: EntityId): Promise<JournalBlock[]>;
 
   /** Live blocks only, matching listBlocks. */

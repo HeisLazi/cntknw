@@ -48,8 +48,8 @@ export function JournalBlockView({
   const vocabulary = vocabularyFor(block.kind);
 
   const items = useCallback(
-    () =>
-      CHANGEABLE_KINDS.map((entry) => {
+    () => [
+      ...CHANGEABLE_KINDS.map((entry) => {
         const verdict = canChangeKind(block.content, entry.kind);
         return {
           id: entry.kind,
@@ -61,7 +61,10 @@ export function JournalBlockView({
           onSelect: () => onChangeKind(entry.kind),
         };
       }),
-    [block.content, block.kind, onChangeKind],
+      { id: 'move-up', label: 'Move up', onSelect: onMoveUp },
+      { id: 'move-down', label: 'Move down', onSelect: onMoveDown },
+    ],
+    [block.content, block.kind, onChangeKind, onMoveUp, onMoveDown],
   );
 
   return (
@@ -106,6 +109,7 @@ export function JournalBlockView({
             onRemove={onRemove}
             onMoveUp={onMoveUp}
             onMoveDown={onMoveDown}
+            allowRichText={block.kind === 'paragraph'}
           />
         ) : (
           <NonTextualBlock block={block} />

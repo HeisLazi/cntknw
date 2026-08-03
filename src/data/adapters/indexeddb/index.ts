@@ -38,6 +38,7 @@ import {
   CreateArtworkDetailsInputSchema,
   CreateJournalInputSchema,
   CreateBlockInputSchema,
+  JournalBlockSchema,
   UpdateBlockInputSchema,
   CreateAssetInputSchema,
   CreateAnnotationInputSchema,
@@ -355,8 +356,11 @@ export class DexieJournalRepository implements JournalRepository {
       else if (epistemicClaimId !== undefined) {
         updated.epistemicClaimId = epistemicClaimId;
       }
-      await this.db.journalBlocks.put(journalBlockToStorage(updated));
-      return updated;
+      
+      // NFR-007: Enforce domain invariants upon final assembled record
+      const validated = JournalBlockSchema.parse(updated);
+      await this.db.journalBlocks.put(journalBlockToStorage(validated));
+      return validated;
     });
   }
   async moveBlock(
@@ -386,39 +390,39 @@ export class DexieJournalRepository implements JournalRepository {
   async softDeleteBlock(
     blockId: EntityId,
     guard: ConcurrencyGuard,
-  ): Promise<void> {
-    await guarded('Deleting a block', async () => {
+  ): Promise<JournalBlock> {
+    return guarded('Deleting a block', async () => {
       const record = await this.db.journalBlocks.get(blockId);
-      if (!record) return;
+      if (!record) throw new RecordNotFoundError('JournalBlock', blockId);
       const existing = journalBlockFromStorage(record);
       assertRevision('JournalBlock', blockId, existing.revision, guard);
-      await this.db.journalBlocks.put(
-        journalBlockToStorage({
-          ...existing,
-          deletedAt: now(),
-          updatedAt: now(),
-          revision: existing.revision + 1,
-        }),
-      );
+      const updated = {
+        ...existing,
+        deletedAt: now(),
+        updatedAt: now(),
+        revision: existing.revision + 1,
+      };
+      await this.db.journalBlocks.put(journalBlockToStorage(updated));
+      return updated;
     });
   }
   async restoreBlock(
     blockId: EntityId,
     guard: ConcurrencyGuard,
-  ): Promise<void> {
-    await guarded('Restoring a block', async () => {
+  ): Promise<JournalBlock> {
+    return guarded('Restoring a block', async () => {
       const record = await this.db.journalBlocks.get(blockId);
-      if (!record) return;
+      if (!record) throw new RecordNotFoundError('JournalBlock', blockId);
       const existing = journalBlockFromStorage(record);
       assertRevision('JournalBlock', blockId, existing.revision, guard);
       const { deletedAt: _removed, ...rest } = existing;
-      await this.db.journalBlocks.put(
-        journalBlockToStorage({
-          ...rest,
-          updatedAt: now(),
-          revision: existing.revision + 1,
-        }),
-      );
+      const updated = {
+        ...rest,
+        updatedAt: now(),
+        revision: existing.revision + 1,
+      };
+      await this.db.journalBlocks.put(journalBlockToStorage(updated));
+      return updated;
     });
   }
   async listDeletedBlocks(journalId: EntityId): Promise<JournalBlock[]> {

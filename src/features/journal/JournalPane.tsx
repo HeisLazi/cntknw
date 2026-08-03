@@ -5,9 +5,10 @@ import { RevisionConflictError } from '@data/errors';
 import { createPageLinkedBlock } from '@application/create-block';
 import { groupBlocksByLocation } from '@domain/journals/grouping';
 import type { JournalGroup } from '@domain/journals/grouping';
-import type { EntityId, JournalBlock, SourceLocation, ParagraphContent, BlockKind, BlockContentInput } from '@domain/index';
+import type { EntityId, JournalBlock, SourceLocation, ParagraphContent, BlockKind, BlockContentInput, BlockContent } from '@domain/index';
 import { contentForKind } from '@domain/journals/transform';
 import { rankAfter, rankBetween } from '@lib/rank';
+import { movePageLinkedBlock } from '@application/index';
 import { JournalBlockView } from './JournalBlockView';
 import { clearDraft, recoverDrafts, stashDraft } from './draftBuffer';
 import './journal.css';
@@ -86,6 +87,7 @@ export function JournalPane({
   const activePage = location.pdf?.page;
 
   const [blocks, setBlocks] = useState<JournalBlock[] | null>(null);
+  const [deletedBlocks, setDeletedBlocks] = useState<JournalBlock[]>([]);
   const [readError, setReadError] = useState<Error | null>(null);
   const [loadedJournal, setLoadedJournal] = useState<string>('');
   if (loadedJournal !== journalId) {
@@ -116,8 +118,11 @@ export function JournalPane({
 
     journals
       .listBlocks(journalId)
-      .then((found) => {
+      .then(async (found) => {
         if (cancelled) return;
+        const foundTrash = await journals.listDeletedBlocks(journalId);
+        if (cancelled) return;
+        setDeletedBlocks(foundTrash);
         for (const block of found) revisions.current.set(block.id, block.revision);
 
         // Replay anything a crash left behind (ADR-0005). Recovery is
@@ -127,23 +132,29 @@ export function JournalPane({
         const restored = found.map((block) => {
           const draft = drafts.get(block.id);
           if (!draft) return block;
-          const storedText =
-            block.content.type === 'paragraph' ? block.content.text : '';
+          let storedText = '';
+          if (block.content.type === 'paragraph' || block.content.type === 'question' || block.content.type === 'claim' || block.content.type === 'heading') {
+            storedText = block.content.text;
+          } else if (block.content.type === 'quote') {
+            storedText = block.content.quote;
+          }
+
           if (draft.text === storedText) {
             clearDraft(block.id);
             return block;
           }
           pending.current.set(block.id, { doc: draft.doc, text: draft.text });
-          return block.content.type === 'paragraph'
-            ? {
-                ...block,
-                content: {
-                  ...block.content,
-                  doc: draft.doc as Record<string, unknown>,
-                  text: draft.text,
-                },
-              }
-            : block;
+          
+          let newContent = block.content;
+          if (block.content.type === 'paragraph') {
+            newContent = { ...block.content, doc: draft.doc as Record<string, unknown>, text: draft.text };
+          } else if (block.content.type === 'quote') {
+            newContent = { ...block.content, quote: draft.text };
+          } else if (block.content.type === 'question' || block.content.type === 'claim' || block.content.type === 'heading') {
+            newContent = { ...block.content, text: draft.text } as BlockContent;
+          }
+          
+          return { ...block, content: newContent };
         });
 
         setBlocks(restored);
@@ -207,9 +218,12 @@ export function JournalPane({
           },
           expectedRevision(revision),
         );
-        pending.current.delete(blockId);
+        if (pending.current.get(blockId) === edit) {
+          pending.current.delete(blockId);
+          clearDraft(blockId);
+        }
         revisions.current.set(blockId, saved.revision);
-        clearDraft(blockId);
+        setBlocks(current => current?.map(b => b.id === blockId ? saved : b) ?? null);
         setConflicted((current) => (current === blockId ? null : current));
         setFailedWrites((current) => {
           if (!current.has(blockId)) return current;
@@ -225,11 +239,20 @@ export function JournalPane({
           // (ADR-0004 §6).
           setConflicted(blockId);
           journals.getBlockById(blockId).then(remoteBlock => {
-            if (remoteBlock && remoteBlock.content.type === 'paragraph') {
-              setConflictData(curr => new Map(curr).set(blockId, { 
-                remoteText: (remoteBlock.content as ParagraphContent).text,
-                localText: edit.text 
-              }));
+            if (remoteBlock) {
+              let remoteText = '';
+              if (remoteBlock.content.type === 'paragraph' || remoteBlock.content.type === 'question' || remoteBlock.content.type === 'claim' || remoteBlock.content.type === 'heading') {
+                remoteText = remoteBlock.content.text;
+              } else if (remoteBlock.content.type === 'quote') {
+                remoteText = remoteBlock.content.quote;
+              }
+
+              if (remoteText !== undefined) {
+                setConflictData(curr => new Map(curr).set(blockId, { 
+                  remoteText: remoteText,
+                  localText: edit.text 
+                }));
+              }
             }
           });
           return;
@@ -317,10 +340,6 @@ export function JournalPane({
     [repositories, sourceId],
   );
 
-  const deletedBlocks = useMemo(() => {
-    return (blocks ?? []).filter(b => b.deletedAt);
-  }, [blocks]);
-
   const removeBlock = useCallback(
     async (blockId: EntityId) => {
       const revision = revisions.current.get(blockId);
@@ -328,8 +347,9 @@ export function JournalPane({
       // Soft delete: NFR-008 wants a recovery path for every
       // destructive action, and a block removed by a stray Backspace
       // is the clearest case for one.
-      await journals.softDeleteBlock(blockId, expectedRevision(revision));
-      setBlocks((current) => (current ?? []).map((b) => b.id === blockId ? { ...b, deletedAt: new Date().toISOString() } : b));
+      const saved = await journals.softDeleteBlock(blockId, expectedRevision(revision));
+      setBlocks((current) => (current ?? []).filter((b) => b.id !== blockId));
+      setDeletedBlocks(current => [...current, saved]);
       revisions.current.delete(blockId);
       clearDraft(blockId);
     },
@@ -340,11 +360,17 @@ export function JournalPane({
     async (blockId: EntityId) => {
       const block = deletedBlocks.find(b => b.id === blockId);
       if (!block) return;
-      await journals.restoreBlock(
+      const restored = await journals.restoreBlock(
         blockId,
         expectedRevision(block.revision)
       );
-      setReloadTrigger(n => n + 1);
+      setDeletedBlocks(current => current.filter(b => b.id !== blockId));
+      setBlocks(current => {
+        const next = [...(current ?? []), restored];
+        next.sort((a, b) => a.rank.localeCompare(b.rank));
+        return next;
+      });
+      revisions.current.set(blockId, restored.revision);
     },
     [journals, deletedBlocks],
   );
@@ -358,7 +384,10 @@ export function JournalPane({
       if (revision === undefined) return;
 
       try {
-        const newContent = contentForKind(block.content, to);
+        const edit = pending.current.get(blockId);
+        const baseContent = edit ? { ...block.content, text: edit.text } : block.content;
+        const newContent = contentForKind(baseContent as BlockContent, to);
+        
         const saved = await journals.updateBlock(
           {
             id: blockId,
@@ -367,6 +396,13 @@ export function JournalPane({
           },
           expectedRevision(revision)
         );
+        if (pending.current.get(blockId) === edit) {
+          pending.current.delete(blockId);
+          const existingTimer = timers.current.get(blockId);
+          if (existingTimer) clearTimeout(existingTimer);
+          clearDraft(blockId);
+        }
+        
         revisions.current.set(blockId, saved.revision);
         setBlocks((current) => (current ?? []).map((b) => b.id === blockId ? saved : b));
       } catch (err) {
@@ -378,48 +414,10 @@ export function JournalPane({
 
   const moveBlock = useCallback(
     async (blockId: EntityId, direction: 'up' | 'down') => {
-      const block = blocks?.find((b) => b.id === blockId);
-      if (!block || !blocks) return;
-
-      const revision = revisions.current.get(blockId);
-      if (revision === undefined) return;
-
-      // Find siblings on the same page, ordered by rank
-      const siblings = blocks
-        .filter((b) => b.sourceLocation?.pdf?.page === block.sourceLocation?.pdf?.page && !b.deletedAt)
-        .sort((a, b) => a.rank.localeCompare(b.rank));
-      
-      const index = siblings.findIndex((b) => b.id === blockId);
-      if (index === -1) return;
-
-      let newRank: string;
-      if (direction === 'up') {
-        if (index === 0) return; // Already at top
-        const prev = siblings[index - 1];
-        const prevPrev = siblings[index - 2];
-        newRank = prevPrev ? rankBetween(prevPrev.rank, prev.rank) : rankBetween(null, prev.rank);
-      } else {
-        if (index === siblings.length - 1) return; // Already at bottom
-        const next = siblings[index + 1];
-        const nextNext = siblings[index + 2];
-        newRank = nextNext ? rankBetween(next.rank, nextNext.rank) : rankAfter(next.id, siblings);
-      }
-
-      try {
-        const saved = await journals.updateBlock(
-          {
-            id: blockId,
-            rank: newRank,
-          },
-          expectedRevision(revision)
-        );
-        revisions.current.set(blockId, saved.revision);
-        setBlocks((current) => (current ?? []).map((b) => b.id === blockId ? saved : b));
-      } catch (err) {
-        console.error("Failed to move block", err);
-      }
+      await movePageLinkedBlock(repositories, { blockId, direction });
+      setReloadTrigger(n => n + 1);
     },
-    [blocks, journals]
+    [repositories]
   );
 
   // ── Runs ────────────────────────────────────────────────────────
@@ -528,7 +526,7 @@ export function JournalPane({
                         className="cn-run__start"
                         onClick={() => void addBlock(location)}
                       >
-                        Start writing, quote the source, or draw.
+                        Start writing.
                       </button>
                     </div>
                   ) : (
@@ -594,15 +592,31 @@ export function JournalPane({
                                   <button
                                     type="button"
                                     className="cn-journal__reload"
-                                    onClick={async () => {
-                                      const remote = await journals.getBlockById(block.id);
-                                      if (remote) {
-                                        revisions.current.set(block.id, remote.revision);
-                                        void flush(block.id);
-                                      }
-                                      setConflicted(null);
-                                      setConflictData(curr => { const n = new Map(curr); n.delete(block.id); return n; });
-                                    }}
+                                      onClick={async () => {
+                                        const remote = await journals.getBlockById(block.id);
+                                        if (remote) {
+                                          const edit = pending.current.get(block.id);
+                                          if (edit) {
+                                            let newContent = remote.content;
+                                            if (remote.content.type === 'paragraph') newContent = { ...remote.content, doc: edit.doc as Record<string, unknown>, text: edit.text };
+                                            else if (remote.content.type === 'quote') newContent = { ...remote.content, quote: edit.text };
+                                            else if (remote.content.type === 'question' || remote.content.type === 'claim' || remote.content.type === 'heading') newContent = { ...remote.content, text: edit.text } as BlockContent;
+
+                                            try {
+                                              const saved = await journals.updateBlock({ id: block.id, content: newContent }, expectedRevision(remote.revision));
+                                              revisions.current.set(block.id, saved.revision);
+                                              setBlocks(current => (current || []).map(b => b.id === block.id ? saved : b));
+                                              pending.current.delete(block.id);
+                                              clearDraft(block.id);
+                                              setResetKeys(curr => new Map(curr).set(block.id, (curr.get(block.id) || 0) + 1));
+                                            } catch (err) {
+                                              console.error("Conflict resolution failed", err);
+                                            }
+                                          }
+                                        }
+                                        setConflicted(null);
+                                        setConflictData(curr => { const n = new Map(curr); n.delete(block.id); return n; });
+                                      }}
                                   >
                                     Use my version
                                   </button>

@@ -14,6 +14,7 @@ import { createEntityId } from '@lib/id';
 import { createMemoryRepositories } from './memory';
 import type { MemoryRepositories } from './memory';
 import { createIndexedDbRepositories } from './indexeddb';
+import type { UpdateBlockInput } from '@domain/index';
 import { createTestDatabase } from '../db/database';
 import type { CntknwDatabase } from '../db/database';
 import {
@@ -298,6 +299,42 @@ for (const adapter of adapters) {
         } as unknown as Parameters<typeof repos.journals.createBlock>[0];
 
         await expect(repos.journals.createBlock(invalid)).rejects.toThrow();
+      });
+
+      it('rejects updateBlock if a content patch creates a kind mismatch', async () => {
+        const journal = await repos.journals.getOrCreateJournalForSource(id(), 'J');
+        const block = await repos.journals.createBlock({
+          journalId: journal.id,
+          kind: 'paragraph',
+          rank: 'a',
+          content: { type: 'paragraph', text: 'original' },
+        });
+
+        // Patching with mismatched content type should fail validation
+        await expect(
+          repos.journals.updateBlock({
+            id: block.id,
+            content: { type: 'question', text: 'new text' } as unknown as UpdateBlockInput['content']
+          }, expectedRevision(block.revision))
+        ).rejects.toThrow();
+      });
+
+      it('rejects updateBlock if a kind patch creates a content mismatch', async () => {
+        const journal = await repos.journals.getOrCreateJournalForSource(id(), 'J');
+        const block = await repos.journals.createBlock({
+          journalId: journal.id,
+          kind: 'paragraph',
+          rank: 'a',
+          content: { type: 'paragraph', text: 'original' },
+        });
+
+        // Patching with mismatched kind should fail validation
+        await expect(
+          repos.journals.updateBlock({
+            id: block.id,
+            kind: 'question'
+          }, expectedRevision(block.revision))
+        ).rejects.toThrow();
       });
     });
 

@@ -24,6 +24,8 @@ export interface BlockEditorProps {
   onMoveUp?: () => void;
   /** Shift-Mod-Down to move the block later in the document. */
   onMoveDown?: () => void;
+  /** Whether to enable bold/italic/code shortcuts. Default true. */
+  allowRichText?: boolean;
 }
 
 /**
@@ -49,6 +51,7 @@ export function BlockEditor({
   onRemove,
   onMoveUp,
   onMoveDown,
+  allowRichText = true,
 }: BlockEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -74,9 +77,11 @@ export function BlockEditor({
       plugins: [
         history(),
         keymap({
-          'Mod-b': toggleMark(blockSchema.marks.strong!),
-          'Mod-i': toggleMark(blockSchema.marks.em!),
-          'Mod-`': toggleMark(blockSchema.marks.code!),
+          ...(allowRichText ? {
+            'Mod-b': toggleMark(blockSchema.marks.strong!),
+            'Mod-i': toggleMark(blockSchema.marks.em!),
+            'Mod-`': toggleMark(blockSchema.marks.code!),
+          } : {}),
           'Mod-z': undo,
           'Mod-y': redo,
           'Mod-Shift-z': redo,

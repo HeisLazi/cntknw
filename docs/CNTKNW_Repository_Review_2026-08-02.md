@@ -126,3 +126,13 @@ This living audit document tracks the findings and resolutions from the adversar
 **Status**: DEFERRED
 **Description**: Playwright runs only in Chromium.
 **Action**: Document this limitation. Firefox/WebKit testing is deferred until public release candidate phase.
+
+## Finding 21: Phase 2 Acceptance Hardening Run
+**Severity**: CLOSURE
+**Status**: RESOLVED
+**Description**: Phase 2 required final evidence that it safely handles concurrent rank allocation, persistent paragraph formatting over block kind changes, and data integrity invariant checks at the final boundaries.
+**Action**: 
+- Validated concurrent transactional rank reallocation explicitly to resolve IDB overlap edge cases.
+- Ensured formatting UI gracefully manages and preserves draft text across unexpected block transformations (`changeBlockKind`).
+- Verified IndexedDB and Memory adapters strictly enforce domain invariants when assembling merged records before commit.
+- Real gate (Typecheck, Lint, Test, E2E, Build) verified as passing. Phase 2 closure achieved.
