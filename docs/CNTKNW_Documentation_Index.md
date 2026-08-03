@@ -56,8 +56,8 @@ Handoff §19 places shell and routing at Phase 0B and persistence at 0C. **That 
 | 0C | **Persistence.** Dexie adapter, schema versions, migrations, v1 readers. | Complete and verified, contract and real browser |
 | 0D | **Shell, routing, providers, design tokens, UI primitives.** | Complete and verified |
 | 0E | **Editor spike, then the journal vertical slice** | Complete and verified (ADR-0004, ADR-0005) |
-| 1 | **Reliable PDF core** — import, render, exact resume | Complete and verified (Text layer added) |
-| 2 | **Infinite Journal** | In Progress (Folio margin ADR-0006 landed) |
+| 1 | **Reliable PDF core** — import, render, exact resume | Implemented, but reliability hardening still open (Findings 11–15) |
+| 2 | **Infinite Journal** | Complete and verified (Folio margin ADR-0006 landed) |
 
 Shell, routing, design tokens and UI primitives moved from 0B to **0D**. Domain and persistence, previously both at 0C, split into **0B** (contracts) and **0C** (storage).
 

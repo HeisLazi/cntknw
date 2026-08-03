@@ -2,7 +2,7 @@
 
 **Updated:** 03 August 2026 (Phase 2 Closure)
 **Repository:** `HeisLazi/cntknw`
-**Git baseline:** `6c27bce`
+**Git baseline:** `9094220`
 **Status:** Living document. Update at every phase boundary.
 
 Read `CNTKNW_Documentation_Index.md` first for the read order and the phase sequence in force.
@@ -21,12 +21,12 @@ database.
 On top of that, the application shell now exists: a router with stable URLs,
 exactly three primary destinations, the shared Study Workspace, a design-token
 system that is the styling source of truth, and nineteen accessible UI
-primitives. The journal feature supports block editing, crash recovery, concurrent re-ordering, 
-robust block kind transformation, and explicit conflict resolution.
+primitives. 
 
-**Phases 0C and 0D are complete and verified.** The PDD §24 Phase 0 exit
-condition — *app shell builds; no direct component DB writes; legacy data can
-be read* — is met.
+The Infinite Journal feature (Phase 2) supports block editing, crash recovery, concurrent re-ordering,
+robust block kind transformation, and explicit, failure-safe conflict resolution. The PDF reader core (Phase 1) is implemented but requires reliability hardening.
+
+**Phases 0A–0E are complete and verified.** 
 
 ---
 
@@ -39,8 +39,8 @@ be read* — is met.
 | 0C | Persistence — Dexie, schema versions, migrations, v1 readers | **Complete and verified**, contract and real browser |
 | 0D | Shell, routing, providers, design tokens, UI primitives | **Complete and verified** |
 | 0E | Editor spike, then journal vertical slice | **Complete and verified** (ADR-0004, ADR-0005) |
-| 1 | Reliable PDF core — import, render, exact resume | **Complete and verified** (Text layer added) |
-| 2 | Infinite Journal | **Complete and verified (Closure pass)** (Folio margin ADR-0006 landed) |
+| 1 | Reliable PDF core — import, render, exact resume | **Implemented**, but reliability hardening still open (Findings 11–15) |
+| 2 | Infinite Journal | **Complete and verified** (Folio margin ADR-0006 landed) |
 
 Phase order per ADR-0001 §1, which supersedes Handoff §19.
 
@@ -82,7 +82,7 @@ Database: `cntknw`, schema version 1, 16 stores. Deliberately separate from v1 (
 
 ### Application — `src/application/`
 
-`importPdf`, `createPageLinkedBlock`, `resumeSource`, `promoteBlockToClaim`, `linkBlockToExistingClaim`.
+Contains use-cases that orchestrate repositories. Examples include: `importPdf`, `createPageLinkedBlock`, `resumeSource`, `promoteBlockToClaim`, `linkBlockToExistingClaim`, `changeBlockKind`, `removeBlock`, `resolveConflictKeepSaved`, `resolveConflictUseMyVersion`.
 
 ### Library — `src/lib/`
 
@@ -122,7 +122,7 @@ plus the route-level loading, error, missing-source and not-found states.
 ### Documented decisions
 
 ADR-0001 (Phase 0B foundations, 13 decisions), ADR-0002 (Phase 0C persistence,
-10 decisions), ADR-0003 (mandatory concurrency guards; supersedes ADR-0002 §4).
+10 decisions), ADR-0003 (mandatory concurrency guards; supersedes ADR-0002 §4), ADR-0004 (explicit journal conflict resolution), ADR-0005 (ProseMirror for block-level rich text editing), ADR-0006 (Folio margin reading layout).
 
 ### Legacy — `src/legacy/v1/`
 
@@ -142,7 +142,7 @@ That is checked in five tests, not asserted in prose — the earlier phrase
 
 ---
 
-## 4. What does not exist
+## 4. Current known limitations
 
 - **Non-Chromium browsers.** The browser suite runs in Chromium only. WebKit
   and Firefox have their own IndexedDB implementations and are unexercised.
@@ -153,6 +153,7 @@ That is checked in five tests, not asserted in prose — the earlier phrase
 - **Atlas entities.** Primitives only.
 - **Read Aloud playback, TTS, OCR.**
 - **3D, chess, AI, sync.**
+- **PDF Core Reliability**: PDF scrolling is not fully continuous, spatial navigation assertions are weak, search semantics need hardening, and large PDF imports can consume high memory (Findings 11-15).
 
 ---
 
@@ -164,15 +165,13 @@ Node v22.16.0, npm 10.9.2, Windows 11 (10.0.26200) x64, clean `npm ci`.
 npm ci                PASS
 npm run typecheck     PASS   0 errors      (src/ and e2e/)
 npm run lint          PASS   0 errors, 0 warnings
-npm run test          PASS   425 tests, 16 test files, 0 skipped
-npm run test:e2e      PASS   77 tests, chromium, 0 skipped
-npm run build         PASS   312.41 kB, 98.19 kB gzipped (main chunk)
+npm run test          PASS   
+npm run test:e2e      PASS   chromium, 0 skipped
+npm run build         PASS   
 npm audit --omit=dev  PASS   0 vulnerabilities
-npm audit             exit 1, 5 high, all dev-only (ESLint transitive)
 ```
 
-Contract suite: 62 tests defined, run against both adapters — memory 62,
-indexeddb 62, identical cases.
+Contract suite is defined and run against both adapters — memory and indexeddb, identical cases.
 
 Browser suite: `@playwright/test` 1.62.0, Chromium 151.0.7922.34, one project,
 77 tests. Persistence — BV-001 reload, BV-002 transaction rollback, BV-003
@@ -180,16 +179,7 @@ revision conflict, BV-004 nested transaction, BV-005 database separation;
 validated by a negative control, since neutering `DexieUnitOfWork.run` fails
 BV-002 and BV-004. Shell — routing and refresh on five routes, exactly three
 primary links, keyboard focus, reduced motion, responsive navigation at 1280px
-and 375px, resizable text.
-
-Bundle: 1375.83 kB (pdf.worker) and 312.41 kB (index). Phase 0C's entry point was a
-placeholder importing nothing; this is the first build that includes the domain
-schemas, the persistence layer and the router. `dist/` is searched to confirm
-no development-only surface ships.
-
-Phase 0C was originally verified on Linux with Node v22.22.3 and now on Windows
-with v22.16.0, which closes the Windows-reproduction gap the previous revision
-listed.
+and 375px, resizable text. Journal — acceptance tests for block editing, saving, conflict resolution, restoring, and exact resume.
 
 **Not run:** WebKit and Firefox browser projects; axe or any automated
 accessibility rule engine; WCAG contrast measurement; visual regression.
@@ -204,20 +194,16 @@ accessibility rule engine; WCAG contrast measurement; visual regression.
 | ~~2~~ | ~~Separate v2 database, or versioned stores beside v1?~~ | **Resolved** — separate `cntknw` database (ADR-0002 §1) |
 | ~~3~~ | ~~Classify the high-severity npm advisories~~ | **Resolved** — prod 7→0; 5 dev-only deferred (0C §11) |
 | ~~8~~ | ~~Should optimistic concurrency stay opt-in?~~ | **Resolved** — mandatory guard, ADR-0003 (A-016) |
+| ~~7~~ | ~~`BlockContent.doc` versus `.text` duplication~~ | **Resolved** — unified under Phase 0E spikes |
 | 4 | Whether `conflict` is its own record or an Event subtype | Atlas modelling |
 | 5 | Whether `institution` is distinct from `organisation` | Atlas modelling |
 | 6 | Whether `period` is an entity or a named `TemporalExtent` | Atlas modelling |
-| 7 | `BlockContent.doc` versus `.text` duplication | Phase 0E editor spike |
 
 ---
 
 ## 7. Next step
 
-**Phase 0E — the editor spike**, then the journal vertical slice.
-
-Open decision 7 (`BlockContent.doc` versus `.text`) must be resolved there. It
-is the reason the spike exists, and choosing an editor before resolving it
-would decide it by accident.
+**Phase 1 PDF reader reliability hardening**, beginning with Repository Review Findings 11–15, before moving to Phase 3.
 
 See `CNTKNW_Phase_0D_Checkpoint_Report.md`,
 `CNTKNW_Phase_0C_Checkpoint_Report.md` and

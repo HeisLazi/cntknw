@@ -105,9 +105,9 @@ This living audit document tracks the findings and resolutions from the adversar
 
 ## Finding 17: Documentation Requires a Complete Reconciliation
 **Severity**: HIGH
-**Status**: TO DO
+**Status**: RESOLVED
 **Description**: `CNTKNW_Current_Implementation_Status.md` contains contradictory/outdated state.
-**Action**: Completely rewrite this document to match current capabilities.
+**Action**: Completely rewritten to match Phase 2 closure state, identifying Phase 1 PDF reader hardening as the next milestone.
 
 ## Finding 18: README Must Match the Actual Architecture
 **Severity**: MEDIUM
@@ -135,4 +135,5 @@ This living audit document tracks the findings and resolutions from the adversar
 - Validated concurrent transactional rank reallocation explicitly to resolve IDB overlap edge cases.
 - Ensured formatting UI gracefully manages and preserves draft text across unexpected block transformations (`changeBlockKind`).
 - Verified IndexedDB and Memory adapters strictly enforce domain invariants when assembling merged records before commit.
+- Final failure-safe conflict resolution implemented at `9094220`. Retains local truth (draft, edits, conflict UI) safely without discarding it before remote fetching succeeds.
 - Real gate (Typecheck, Lint, Test, E2E, Build) verified as passing. Phase 2 closure achieved.

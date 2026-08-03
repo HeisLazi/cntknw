@@ -8,8 +8,8 @@ You import a PDF or artwork. You read it. You write notes in a margin-driven, co
 Everything stays on your machine. Data is stored durably in IndexedDB, with real transactions, schema versioning, and no arbitrary cloud sync.
 
 ## Project State
-**Currently in Phase 2:** Infinite Journal and Reading Polish.
-The reliable PDF core (Phase 1) is landed. The structural foundation (strict TS, Zod domain, repository layer with Dexie, React Router, design tokens) is mature and tested.
+**Currently in Phase 1:** Reliable PDF core (Hardening).
+Phase 2 (Infinite Journal) has been completed and verified. The structural foundation (strict TS, Zod domain, repository layer with Dexie, React Router, design tokens) is mature and tested.
 
 ## Development
 
@@ -37,7 +37,7 @@ npm audit --omit=dev
 
 ### Architecture Constraints
 - **Domain logic is pure:** Zod schemas are authoritative. See `src/domain/`.
-- **UI doesn't write to DB:** Components call the `application` layer use-cases, which orchestrate the `repositories`.
+- **UI directly orchestrates use cases or repositories:** Components may call the `application` layer use-cases or interact with `repositories` directly, provided domain constraints are satisfied.
 - **Mandatory Concurrency:** Every repository mutation requires a `ConcurrencyGuard`. Last-write-wins is a compile error (ADR-0003).
 - **No CDN dependencies:** Everything (fonts, PDF workers) is bundled locally.
 - **The Folio Margin (ADR-0006):** Page provenance is spatial. No page selection dropdowns. Empty pages create no sections. 
