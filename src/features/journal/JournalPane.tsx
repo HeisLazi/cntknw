@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRepositories } from '@app/providers/RepositoryProvider';
+import { resolveConflictKeepSaved, resolveConflictUseMyVersion } from './resolution';
 import { expectedRevision } from '@data/repositories/concurrency';
 import { RevisionConflictError } from '@data/errors';
 import { createPageLinkedBlock } from '@application/create-block';
 import { groupBlocksByLocation } from '@domain/journals/grouping';
 import type { JournalGroup } from '@domain/journals/grouping';
-import type { EntityId, JournalBlock, SourceLocation, ParagraphContent, BlockKind, BlockContentInput, BlockContent } from '@domain/index';
-import { canChangeKind, textOfContent, textOfEditableContent, withEditedText, contentForKind } from '@domain/journals/transform';
-import { rankAfter, rankBetween } from '@lib/rank';
+import type { EntityId, JournalBlock, SourceLocation, BlockKind, BlockContent } from '@domain/index';
+import { textOfEditableContent, withEditedText, contentForKind } from '@domain/journals/transform';
 import { movePageLinkedBlock } from '@application/index';
 import { JournalBlockView } from './JournalBlockView';
 import { clearDraft, recoverDrafts, stashDraft } from './draftBuffer';
@@ -99,6 +99,7 @@ export function JournalPane({
 
   const [conflictData, setConflictData] = useState<Map<EntityId, { remoteText: string, localText: string }>>(new Map());
   const [failedWrites, setFailedWrites] = useState<Set<EntityId>>(new Set());
+  const [resolutionErrors, setResolutionErrors] = useState<Set<EntityId>>(new Set());
   const [resetKeys, setResetKeys] = useState<Map<EntityId, number>>(new Map());
   const [focusBlockId, setFocusBlockId] = useState<EntityId | null>(null);
 
@@ -337,6 +338,11 @@ export function JournalPane({
         next.delete(blockId);
         return next;
       });
+      setResolutionErrors(curr => {
+        const next = new Set(curr);
+        next.delete(blockId);
+        return next;
+      });
       setFocusBlockId(curr => curr === blockId ? null : curr);
     },
     [journals],
@@ -517,7 +523,7 @@ export function JournalPane({
                     </div>
                   ) : (
                     <ol className="cn-run__blocks">
-                      {run.blocks.map((block) => (
+                      {run.blocks.map((block: JournalBlock) => (
                         <li key={`${block.id}-${resetKeys.get(block.id) || 0}`}>
                             <JournalBlockView
                               block={block}
@@ -550,6 +556,11 @@ export function JournalPane({
                                   {conflictData.has(block.id) ? (
                               <div className="cn-journal__conflict" role="alert">
                                 <strong>Conflict:</strong> This block was changed in another window.
+                                {resolutionErrors.has(block.id) ? (
+                                  <p className="cn-journal__error" style={{marginTop: '0.5rem', marginBottom: '0.5rem'}}>
+                                    Failed to resolve conflict. Please try again.
+                                  </p>
+                                ) : null}
                                 <div className="cn-journal__conflict-diff">
                                   <p><strong>Saved version:</strong> {conflictData.get(block.id)?.remoteText || 'Loading...'}</p>
                                   <p><strong>Your unsaved version:</strong> {conflictData.get(block.id)?.localText || 'Loading...'}</p>
@@ -559,17 +570,18 @@ export function JournalPane({
                                     type="button"
                                     className="cn-journal__reload"
                                     onClick={async () => {
-                                      clearDraft(block.id);
-                                      pending.current.delete(block.id);
-                                      
-                                      const remote = await journals.getBlockById(block.id);
-                                      if (remote) {
-                                        setBlocks(current => (current || []).map(b => b.id === block.id ? remote : b));
-                                        revisions.current.set(block.id, remote.revision);
-                                      }
-
-                                      setConflictData(curr => { const n = new Map(curr); n.delete(block.id); return n; });
-                                      setResetKeys(curr => new Map(curr).set(block.id, (curr.get(block.id) || 0) + 1));
+                                      await resolveConflictKeepSaved(
+                                        block.id,
+                                        repositories,
+                                        clearDraft,
+                                        pending.current,
+                                        timers.current,
+                                        revisions.current,
+                                        setBlocks,
+                                        setConflictData,
+                                        setResetKeys,
+                                        setResolutionErrors
+                                      );
                                     }}
                                   >
                                     Keep saved
@@ -578,25 +590,18 @@ export function JournalPane({
                                     type="button"
                                     className="cn-journal__reload"
                                       onClick={async () => {
-                                        const remote = await journals.getBlockById(block.id);
-                                        if (remote) {
-                                          const edit = pending.current.get(block.id);
-                                          if (edit) {
-                                            const newContent = withEditedText(remote.content, edit) as BlockContent;
-
-                                            try {
-                                              const saved = await journals.updateBlock({ id: block.id, content: newContent }, expectedRevision(remote.revision));
-                                              revisions.current.set(block.id, saved.revision);
-                                              setBlocks(current => (current || []).map(b => b.id === block.id ? saved : b));
-                                              pending.current.delete(block.id);
-                                              clearDraft(block.id);
-                                              setResetKeys(curr => new Map(curr).set(block.id, (curr.get(block.id) || 0) + 1));
-                                            } catch (err) {
-                                              console.error("Conflict resolution failed", err);
-                                            }
-                                          }
-                                        }
-                                        setConflictData(curr => { const n = new Map(curr); n.delete(block.id); return n; });
+                                        await resolveConflictUseMyVersion(
+                                          block.id,
+                                          repositories,
+                                          clearDraft,
+                                          pending.current,
+                                          timers.current,
+                                          revisions.current,
+                                          setBlocks,
+                                          setConflictData,
+                                          setResetKeys,
+                                          setResolutionErrors
+                                        );
                                       }}
                                   >
                                     Use my version
