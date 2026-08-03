@@ -1,8 +1,8 @@
 # CNTKNW Current Implementation Status
 
 **Updated:** 03 August 2026 (Phase 2 Closure)
-**Repository:** `philosophy-journal-complete`
-**Git baseline:** `4494f24`, tag `phase-0c-impl` — the tree as Phase 0C left it
+**Repository:** `HeisLazi/cntknw`
+**Git baseline:** `6c27bce`
 **Status:** Living document. Update at every phase boundary.
 
 Read `CNTKNW_Documentation_Index.md` first for the read order and the phase sequence in force.
@@ -21,7 +21,8 @@ database.
 On top of that, the application shell now exists: a router with stable URLs,
 exactly three primary destinations, the shared Study Workspace, a design-token
 system that is the styling source of truth, and nineteen accessible UI
-primitives.
+primitives. The journal feature supports block editing, crash recovery, concurrent re-ordering, 
+robust block kind transformation, and explicit conflict resolution.
 
 **Phases 0C and 0D are complete and verified.** The PDD §24 Phase 0 exit
 condition — *app shell builds; no direct component DB writes; legacy data can
@@ -148,7 +149,6 @@ That is checked in five tests, not asserted in prose — the earlier phrase
 - **`applyMigration`.** Dry run only — deliberately no destructive path exists.
 - **Soft deletion beyond blocks and claims.** Every other entity hard-deletes; NFR-008 partial.
 - **`appState` migration.** Needs a settings store.
-- **Document outline, thumbnails, page-number entry, search within a source.**
 - **Annotation UI, editor, dictionary, cross-source search, maps.**
 - **Atlas entities.** Primitives only.
 - **Read Aloud playback, TTS, OCR.**
@@ -156,7 +156,7 @@ That is checked in five tests, not asserted in prose — the earlier phrase
 
 ---
 
-## 5. Verification, last run 26 July 2026
+## 5. Verification, last run 03 August 2026
 
 Node v22.16.0, npm 10.9.2, Windows 11 (10.0.26200) x64, clean `npm ci`.
 
@@ -165,8 +165,8 @@ npm ci                PASS
 npm run typecheck     PASS   0 errors      (src/ and e2e/)
 npm run lint          PASS   0 errors, 0 warnings
 npm run test          PASS   425 tests, 16 test files, 0 skipped
-npm run test:e2e      PASS   43 tests, chromium, 0 skipped
-npm run build         PASS   491.60 kB, 149.33 kB gzipped (main chunk)
+npm run test:e2e      PASS   77 tests, chromium, 0 skipped
+npm run build         PASS   312.41 kB, 98.19 kB gzipped (main chunk)
 npm audit --omit=dev  PASS   0 vulnerabilities
 npm audit             exit 1, 5 high, all dev-only (ESLint transitive)
 ```
@@ -175,14 +175,14 @@ Contract suite: 62 tests defined, run against both adapters — memory 62,
 indexeddb 62, identical cases.
 
 Browser suite: `@playwright/test` 1.62.0, Chromium 151.0.7922.34, one project,
-34 tests. Persistence — BV-001 reload, BV-002 transaction rollback, BV-003
+77 tests. Persistence — BV-001 reload, BV-002 transaction rollback, BV-003
 revision conflict, BV-004 nested transaction, BV-005 database separation;
 validated by a negative control, since neutering `DexieUnitOfWork.run` fails
 BV-002 and BV-004. Shell — routing and refresh on five routes, exactly three
 primary links, keyboard focus, reduced motion, responsive navigation at 1280px
 and 375px, resizable text.
 
-Bundle: 489.87 kB, up from 190.89 kB at Phase 0C. Phase 0C's entry point was a
+Bundle: 1375.83 kB (pdf.worker) and 312.41 kB (index). Phase 0C's entry point was a
 placeholder importing nothing; this is the first build that includes the domain
 schemas, the persistence layer and the router. `dist/` is searched to confirm
 no development-only surface ships.

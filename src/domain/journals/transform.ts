@@ -67,6 +67,50 @@ export function textOfContent(content: BlockContent): string {
   }
 }
 
+/**
+ * Extracts the editable text from a textual block kind.
+ * Returns undefined if the kind is not considered one of the editable textual kinds.
+ */
+export function textOfEditableContent(content: BlockContent): string | undefined {
+  if (content.type === 'quote') return content.quote;
+  if (
+    content.type === 'paragraph' ||
+    content.type === 'heading' ||
+    content.type === 'question' ||
+    content.type === 'claim' ||
+    content.type === 'evidence' ||
+    content.type === 'objection' ||
+    content.type === 'callout'
+  ) {
+    return content.text;
+  }
+  return undefined;
+}
+
+/**
+ * Applies an edited string (and optional doc) to a BlockContent,
+ * preserving all kind-specific metadata.
+ */
+export function withEditedText(content: BlockContentInput, edit: { text: string; doc?: unknown }): BlockContentInput {
+  if (content.type === 'quote') {
+    return { ...content, quote: edit.text };
+  }
+  if (content.type === 'paragraph') {
+    return { ...content, text: edit.text, doc: (edit.doc as Record<string, unknown>) ?? content.doc };
+  }
+  if (
+    content.type === 'heading' ||
+    content.type === 'question' ||
+    content.type === 'claim' ||
+    content.type === 'evidence' ||
+    content.type === 'objection' ||
+    content.type === 'callout'
+  ) {
+    return { ...content, text: edit.text };
+  }
+  return content;
+}
+
 export interface KindChangeRefusal {
   ok: false;
   /** Shown to the user. Says what would be lost, not "invalid". */

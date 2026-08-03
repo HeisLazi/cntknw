@@ -179,12 +179,10 @@ describe('IndexedDB Concurrent Operations', () => {
     });
 
     await Promise.all([
-      movePageLinkedBlock(connA, { blockId: block1.id, direction: 'down' }).catch(e => e),
-      movePageLinkedBlock(connB, { blockId: block4.id, direction: 'up' }).catch(e => e)
+      movePageLinkedBlock(connA, { blockId: block1.id, direction: 'down' }),
+      movePageLinkedBlock(connB, { blockId: block4.id, direction: 'up' })
     ]);
 
-    // One must fail with RevisionConflictError on the journal, or both succeed because they serialize 
-    // and read the updated sibling ranks!
     // Since movePageLinkedBlock uses journal transaction, they should both succeed, 
     // but the ranks they generate must be distinct and well-ordered.
     const finalBlocks = await connC.journals.listBlocks(journalA.id);
@@ -192,9 +190,23 @@ describe('IndexedDB Concurrent Operations', () => {
     // Sort by actual rank
     finalBlocks.sort((a, b) => a.rank.localeCompare(b.rank));
     
+    const block1Final = finalBlocks.find(b => b.id === block1.id)!;
+    const block4Final = finalBlocks.find(b => b.id === block4.id)!;
+
+    // Assert block1 actually moved
+    expect(block1Final.rank).not.toBe(block1.rank);
+    // Assert block4 actually moved
+    expect(block4Final.rank).not.toBe(block4.rank);
+
     // They must all have different ranks
     const ranks = finalBlocks.map(b => b.rank);
     const uniqueRanks = new Set(ranks);
     expect(uniqueRanks.size).toBe(4);
+
+    // Intended relative ordering changed
+    const finalOrder = finalBlocks.map(b => b.content.type === 'paragraph' && b.content.text);
+    expect(finalOrder).not.toEqual(['1', '2', '3', '4']);
+    expect(finalOrder.indexOf('1')).toBeGreaterThan(finalOrder.indexOf('2'));
+    expect(finalOrder.indexOf('4')).toBeLessThan(finalOrder.indexOf('3'));
   });
 });

@@ -6,7 +6,7 @@ import { createPageLinkedBlock } from '@application/create-block';
 import { groupBlocksByLocation } from '@domain/journals/grouping';
 import type { JournalGroup } from '@domain/journals/grouping';
 import type { EntityId, JournalBlock, SourceLocation, ParagraphContent, BlockKind, BlockContentInput, BlockContent } from '@domain/index';
-import { contentForKind } from '@domain/journals/transform';
+import { canChangeKind, textOfContent, textOfEditableContent, withEditedText, contentForKind } from '@domain/journals/transform';
 import { rankAfter, rankBetween } from '@lib/rank';
 import { movePageLinkedBlock } from '@application/index';
 import { JournalBlockView } from './JournalBlockView';
@@ -97,7 +97,6 @@ export function JournalPane({
   }
   const loading = blocks === null && readError === null;
 
-  const [conflicted, setConflicted] = useState<EntityId | null>(null);
   const [conflictData, setConflictData] = useState<Map<EntityId, { remoteText: string, localText: string }>>(new Map());
   const [failedWrites, setFailedWrites] = useState<Set<EntityId>>(new Set());
   const [resetKeys, setResetKeys] = useState<Map<EntityId, number>>(new Map());
@@ -132,12 +131,8 @@ export function JournalPane({
         const restored = found.map((block) => {
           const draft = drafts.get(block.id);
           if (!draft) return block;
-          let storedText = '';
-          if (block.content.type === 'paragraph' || block.content.type === 'question' || block.content.type === 'claim' || block.content.type === 'heading') {
-            storedText = block.content.text;
-          } else if (block.content.type === 'quote') {
-            storedText = block.content.quote;
-          }
+          const storedText = textOfEditableContent(block.content);
+          if (storedText === undefined) return block;
 
           if (draft.text === storedText) {
             clearDraft(block.id);
@@ -145,16 +140,7 @@ export function JournalPane({
           }
           pending.current.set(block.id, { doc: draft.doc, text: draft.text });
           
-          let newContent = block.content;
-          if (block.content.type === 'paragraph') {
-            newContent = { ...block.content, doc: draft.doc as Record<string, unknown>, text: draft.text };
-          } else if (block.content.type === 'quote') {
-            newContent = { ...block.content, quote: draft.text };
-          } else if (block.content.type === 'question' || block.content.type === 'claim' || block.content.type === 'heading') {
-            newContent = { ...block.content, text: draft.text } as BlockContent;
-          }
-          
-          return { ...block, content: newContent };
+          return { ...block, content: withEditedText(block.content, draft) as BlockContent };
         });
 
         setBlocks(restored);
@@ -192,24 +178,7 @@ export function JournalPane({
         const currentBlock = blocks?.find((b) => b.id === blockId);
         if (!currentBlock) return;
 
-        let mergedContent: BlockContentInput;
-        if (currentBlock.content.type === 'paragraph') {
-          mergedContent = {
-            ...currentBlock.content,
-            doc: edit.doc as Record<string, unknown>,
-            text: edit.text,
-          };
-        } else if (currentBlock.content.type === 'quote') {
-          mergedContent = {
-            ...currentBlock.content,
-            quote: edit.text,
-          };
-        } else {
-          mergedContent = {
-            ...currentBlock.content,
-            text: edit.text,
-          } as BlockContentInput;
-        }
+        const mergedContent = withEditedText(currentBlock.content, edit);
 
         const saved = await journals.updateBlock(
           {
@@ -224,7 +193,12 @@ export function JournalPane({
         }
         revisions.current.set(blockId, saved.revision);
         setBlocks(current => current?.map(b => b.id === blockId ? saved : b) ?? null);
-        setConflicted((current) => (current === blockId ? null : current));
+        setConflictData(curr => {
+          if (!curr.has(blockId)) return curr;
+          const next = new Map(curr);
+          next.delete(blockId);
+          return next;
+        });
         setFailedWrites((current) => {
           if (!current.has(blockId)) return current;
           const next = new Set(current);
@@ -237,15 +211,9 @@ export function JournalPane({
           // re-asserted by the window in use; a sentence cannot,
           // because the other version is somebody's writing too
           // (ADR-0004 §6).
-          setConflicted(blockId);
           journals.getBlockById(blockId).then(remoteBlock => {
             if (remoteBlock) {
-              let remoteText = '';
-              if (remoteBlock.content.type === 'paragraph' || remoteBlock.content.type === 'question' || remoteBlock.content.type === 'claim' || remoteBlock.content.type === 'heading') {
-                remoteText = remoteBlock.content.text;
-              } else if (remoteBlock.content.type === 'quote') {
-                remoteText = remoteBlock.content.quote;
-              }
+              const remoteText = textOfEditableContent(remoteBlock.content);
 
               if (remoteText !== undefined) {
                 setConflictData(curr => new Map(curr).set(blockId, { 
@@ -351,7 +319,25 @@ export function JournalPane({
       setBlocks((current) => (current ?? []).filter((b) => b.id !== blockId));
       setDeletedBlocks(current => [...current, saved]);
       revisions.current.delete(blockId);
+      
+      const existingTimer = timers.current.get(blockId);
+      if (existingTimer) clearTimeout(existingTimer);
+      timers.current.delete(blockId);
+      
+      pending.current.delete(blockId);
       clearDraft(blockId);
+      
+      setConflictData(curr => {
+        const next = new Map(curr);
+        next.delete(blockId);
+        return next;
+      });
+      setFailedWrites(curr => {
+        const next = new Set(curr);
+        next.delete(blockId);
+        return next;
+      });
+      setFocusBlockId(curr => curr === blockId ? null : curr);
     },
     [journals],
   );
@@ -385,7 +371,7 @@ export function JournalPane({
 
       try {
         const edit = pending.current.get(blockId);
-        const baseContent = edit ? { ...block.content, text: edit.text } : block.content;
+        const baseContent = edit ? withEditedText(block.content, edit) : block.content;
         const newContent = contentForKind(baseContent as BlockContent, to);
         
         const saved = await journals.updateBlock(
@@ -549,7 +535,7 @@ export function JournalPane({
                               onChangeKind={(to) => void changeBlockKind(block.id, to)}
                               footer={
                                 <>
-                                  {failedWrites.has(block.id) && conflicted !== block.id ? (
+                                  {failedWrites.has(block.id) && !conflictData.has(block.id) ? (
                                     <p className="cn-journal__error" role="alert">
                                       Failed to save your changes. Your draft is kept safe locally.
                                       <button
@@ -561,7 +547,7 @@ export function JournalPane({
                                       </button>
                                     </p>
                                   ) : null}
-                                  {conflicted === block.id ? (
+                                  {conflictData.has(block.id) ? (
                               <div className="cn-journal__conflict" role="alert">
                                 <strong>Conflict:</strong> This block was changed in another window.
                                 <div className="cn-journal__conflict-diff">
@@ -582,7 +568,6 @@ export function JournalPane({
                                         revisions.current.set(block.id, remote.revision);
                                       }
 
-                                      setConflicted(null);
                                       setConflictData(curr => { const n = new Map(curr); n.delete(block.id); return n; });
                                       setResetKeys(curr => new Map(curr).set(block.id, (curr.get(block.id) || 0) + 1));
                                     }}
@@ -597,10 +582,7 @@ export function JournalPane({
                                         if (remote) {
                                           const edit = pending.current.get(block.id);
                                           if (edit) {
-                                            let newContent = remote.content;
-                                            if (remote.content.type === 'paragraph') newContent = { ...remote.content, doc: edit.doc as Record<string, unknown>, text: edit.text };
-                                            else if (remote.content.type === 'quote') newContent = { ...remote.content, quote: edit.text };
-                                            else if (remote.content.type === 'question' || remote.content.type === 'claim' || remote.content.type === 'heading') newContent = { ...remote.content, text: edit.text } as BlockContent;
+                                            const newContent = withEditedText(remote.content, edit) as BlockContent;
 
                                             try {
                                               const saved = await journals.updateBlock({ id: block.id, content: newContent }, expectedRevision(remote.revision));
@@ -614,7 +596,6 @@ export function JournalPane({
                                             }
                                           }
                                         }
-                                        setConflicted(null);
                                         setConflictData(curr => { const n = new Map(curr); n.delete(block.id); return n; });
                                       }}
                                   >
@@ -645,9 +626,7 @@ export function JournalPane({
                   <div className="cn-journal__trash-content">
                     <span className="cn-journal__trash-kind">{block.kind}</span>
                     <span className="cn-journal__trash-text">
-                      {block.content.type === 'paragraph' ? block.content.text : 
-                       block.content.type === 'quote' ? block.content.quote : 
-                       'text' in block.content ? (block.content as {text?: string}).text : '...'}
+                      {textOfEditableContent(block.content) ?? '...'}
                     </span>
                   </div>
                   <button type="button" onClick={() => void restoreBlock(block.id)}>Restore</button>

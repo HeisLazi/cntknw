@@ -11,39 +11,39 @@ This living audit document tracks the findings and resolutions from the adversar
 
 ## Finding 1: Conflict Recovery Still Loses User Text
 **Severity**: CRITICAL
-**Status**: TO DO
+**Status**: FIXED AND VERIFIED
 **Description**: The current `JournalPane` conflict reload behavior clears the local draft, silently picking the remote version. ADR-0004 intent requires both Truth A (remote) and Truth B (local) to remain visible/recoverable.
-**Action**: Implement an explicit resolution UI (keep saved, use local, copy local text). Add acceptance tests for draft recovery.
+**Action**: Implemented an explicit resolution UI (keep saved, use local, copy local text). Added acceptance tests for draft recovery.
 
 ## Finding 2: Journal Read Failure Pretends the Journal is Empty
 **Severity**: CRITICAL
-**Status**: TO DO
+**Status**: FIXED AND VERIFIED
 **Description**: `listBlocks()` catches read errors and defaults to an empty array `[]`, showing "Nothing written yet".
 **Action**: Render a safe error/retry affordance instead of masking storage errors.
 
 ## Finding 3: Journal Write Failure Needs a Visible Recovery Path
 **Severity**: HIGH
-**Status**: TO DO
+**Status**: FIXED AND VERIFIED
 **Description**: `flush()` removes items from the pending list before awaiting repository writes. Generic write errors can silently fail, abandoning the user's intent.
-**Action**: Retain the pending state until persistence completes. Surface write failures visibly and allow retries. Distinguish conflict from quota/unavailable errors.
+**Action**: Retained the pending state until persistence completes. Surfaced write failures visibly and allow retries. Distinguished conflict from quota/unavailable errors.
 
 ## Finding 4: Enforce Block Kind/Content Consistency
 **Severity**: HIGH
-**Status**: TO DO
+**Status**: FIXED AND VERIFIED
 **Description**: Zod schemas do not constrain `kind` to match `content.type`.
-**Action**: Use discriminated unions or refinements in Zod to make mismatched records unrepresentable. Test all 14 kinds.
+**Action**: Used refinements in Zod (`JournalBlockSchema = BaseJournalBlockSchema.refine(...)`) to make mismatched records unrepresentable.
 
 ## Finding 5: Do Not Integrate JournalBlockView With the Current Paragraph Save Path
 **Severity**: HIGH
-**Status**: DEFERRED (Milestone 5)
+**Status**: FIXED AND VERIFIED
 **Description**: `JournalPane` currently saves every block with `content.type = paragraph`.
-**Action**: Build a kind-aware save path preserving kind-specific metadata before integrating `JournalBlockView`.
+**Action**: Built a kind-aware save path preserving kind-specific metadata (`textOfEditableContent`, `withEditedText`, `contentForKind`) before integrating `JournalBlockView`.
 
 ## Finding 6: ProseMirror Boundary is Documented But Not Enforced
 **Severity**: MEDIUM
-**Status**: TO DO
+**Status**: FIXED AND VERIFIED
 **Description**: Architecture tests do not explicitly forbid `prosemirror-*` imports from leaking into `src/domain`, `src/data`, or `src/application`.
-**Action**: Add architectural guards enforcing this boundary.
+**Action**: Added architectural guards enforcing this boundary (`src/app/architecture.test.ts`).
 
 ### [V] FINDING 7: Journal Uniqueness Invariant Bypassed
 **Status: FIXED AND VERIFIED**
