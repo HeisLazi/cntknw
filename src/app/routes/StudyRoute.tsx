@@ -176,6 +176,10 @@ function StudyWorkspace({ context }: { context: ResumedSourceContext }) {
     // used to cost.
     commit({
       activeLocation: location,
+      // A discrete page navigation invalidates the previous page's
+      // absolute scroll offset. PdfReader will report the new physical
+      // offset after it reveals the requested page.
+      sourceView: { ...state.sourceView, scrollOffset: 0 },
       // Furthest only ever moves forward — it records how far the
       // reader has been, not where they are.
       furthestLocation: next > furthest ? location : state.furthestLocation,

@@ -69,15 +69,15 @@ This living audit document tracks the findings and resolutions from the adversar
 
 ## Finding 11: Make PDF Scrolling Actually Continuous
 **Severity**: HIGH PRODUCT/UX
-**Status**: TO DO
-**Description**: PDF scrolling only tracks `scrollTop` and does not auto-advance the page window, breaking the continuous scrolling requirement (NFR-003).
-**Action**: Implement visible-page tracking through Intersection Observers to move the bounded window forward/backward smoothly.
+**Status**: RESOLVED — Milestone 3A
+**Description**: PDF scrolling previously only tracked `scrollTop` and did not auto-advance the page window, breaking the continuous scrolling requirement (NFR-003).
+**Action**: Implemented viewport visibility tracking with IntersectionObserver-backed geometry selection, a bounded five-page window, stable virtual spacers, and first/last-page boundary handling. Playwright proves forward and backward natural scrolling plus the 500-page mount bound.
 
 ## Finding 12: Direct Page Navigation Must Move the Reader, Not Only State
 **Severity**: MEDIUM
-**Status**: TO DO
-**Description**: Tests for direct page, outline, and search navigation do not assert the spatial consequence of the navigation.
-**Action**: Strengthen tests to ensure the physical page mounts and is visible in the viewport.
+**Status**: RESOLVED — Milestone 3A
+**Description**: Tests for direct page, outline, and search navigation previously did not assert the spatial consequence of the navigation.
+**Action**: Navigation now requests the target window, waits for its measured page element, scrolls the bounded reader to it, and verifies viewport intersection. Playwright covers direct page entry, outline destinations, and source-search results.
 
 ## Finding 13: Search Semantics Need Hardening
 **Severity**: MEDIUM
@@ -87,9 +87,9 @@ This living audit document tracks the findings and resolutions from the adversar
 
 ## Finding 14: PDF Outline Needs Failure Handling
 **Severity**: LOW/MEDIUM
-**Status**: TO DO
-**Description**: `PdfOutline` lacks an error path for `getOutline()` rejection.
-**Action**: Implement explicit quiet failure paths.
+**Status**: RESOLVED — Milestone 3A
+**Description**: `PdfOutline` previously lacked an error path for `getOutline()` rejection.
+**Action**: Added explicit loading, no-outline, and outline-unavailable states. Rejected extraction is quiet and honest, exposes retry, and is covered by unit tests; valid PDFs with no outline remain distinct.
 
 ## Finding 15: Large PDF Import Memory
 **Severity**: PERFORMANCE

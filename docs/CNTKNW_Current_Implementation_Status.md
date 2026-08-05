@@ -1,8 +1,8 @@
 # CNTKNW Current Implementation Status
 
-**Updated:** 03 August 2026 (Phase 2 Closure)
+**Updated:** 06 August 2026 (Milestone 3A PDF Spatial Reliability)
 **Repository:** `HeisLazi/cntknw`
-**Git baseline:** `9094220`
+**Git baseline:** `23960ef`
 **Status:** Living document. Update at every phase boundary.
 
 Read `CNTKNW_Documentation_Index.md` first for the read order and the phase sequence in force.
@@ -24,7 +24,7 @@ system that is the styling source of truth, and nineteen accessible UI
 primitives. 
 
 The Infinite Journal feature (Phase 2) supports block editing, crash recovery, concurrent re-ordering,
-robust block kind transformation, and explicit, failure-safe conflict resolution. The PDF reader core (Phase 1) is implemented but requires reliability hardening.
+robust block kind transformation, and explicit, failure-safe conflict resolution. Milestone 3A now hardens the PDF reader with bounded continuous scrolling, viewport-truth navigation, exact resume coverage, and honest outline failure handling.
 
 **Phases 0A–0E are complete and verified.** 
 
@@ -39,7 +39,7 @@ robust block kind transformation, and explicit, failure-safe conflict resolution
 | 0C | Persistence — Dexie, schema versions, migrations, v1 readers | **Complete and verified**, contract and real browser |
 | 0D | Shell, routing, providers, design tokens, UI primitives | **Complete and verified** |
 | 0E | Editor spike, then journal vertical slice | **Complete and verified** (ADR-0004, ADR-0005) |
-| 1 | Reliable PDF core — import, render, exact resume | **Implemented**, but reliability hardening still open (Findings 11–15) |
+| 1 | Reliable PDF core — import, render, exact resume | **Milestone 3A complete and verified** (Findings 11, 12 and 14 resolved; 13 and 15 remain open) |
 | 2 | Infinite Journal | **Complete and verified** (Folio margin ADR-0006 landed) |
 
 Phase order per ADR-0001 §1, which supersedes Handoff §19.
@@ -153,16 +153,15 @@ That is checked in five tests, not asserted in prose — the earlier phrase
 - **Atlas entities.** Primitives only.
 - **Read Aloud playback, TTS, OCR.**
 - **3D, chess, AI, sync.**
-- **PDF Core Reliability**: PDF scrolling is not fully continuous, spatial navigation assertions are weak, search semantics need hardening, and large PDF imports can consume high memory (Findings 11-15).
+- **PDF Core Reliability**: Search semantics still need hardening and large PDF imports can consume high memory (Findings 13 and 15). Findings 11, 12 and 14 were resolved by Milestone 3A.
 
 ---
 
-## 5. Verification, last run 03 August 2026
+## 5. Verification, last run 06 August 2026
 
-Node v22.16.0, npm 10.9.2, Windows 11 (10.0.26200) x64, clean `npm ci`.
+Node/npm and platform are supplied by the current Linux development environment; the required full gate is recorded after the Milestone 3A verification run.
 
 ```text
-npm ci                PASS
 npm run typecheck     PASS   0 errors      (src/ and e2e/)
 npm run lint          PASS   0 errors, 0 warnings
 npm run test          PASS   
@@ -173,8 +172,7 @@ npm audit --omit=dev  PASS   0 vulnerabilities
 
 Contract suite is defined and run against both adapters — memory and indexeddb, identical cases.
 
-Browser suite: `@playwright/test` 1.62.0, Chromium 151.0.7922.34, one project,
-77 tests. Persistence — BV-001 reload, BV-002 transaction rollback, BV-003
+Browser suite: one Chromium project, 87 tests. Persistence — BV-001 reload, BV-002 transaction rollback, BV-003
 revision conflict, BV-004 nested transaction, BV-005 database separation;
 validated by a negative control, since neutering `DexieUnitOfWork.run` fails
 BV-002 and BV-004. Shell — routing and refresh on five routes, exactly three
@@ -203,7 +201,7 @@ accessibility rule engine; WCAG contrast measurement; visual regression.
 
 ## 7. Next step
 
-**Phase 1 PDF reader reliability hardening**, beginning with Repository Review Findings 11–15, before moving to Phase 3.
+**Phase 1 PDF reader reliability hardening is complete for Milestone 3A.** Findings 13 and 15 remain before annotation work or the next PDF milestone; annotations are not part of this milestone.
 
 See `CNTKNW_Phase_0D_Checkpoint_Report.md`,
 `CNTKNW_Phase_0C_Checkpoint_Report.md` and

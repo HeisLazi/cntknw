@@ -16,22 +16,31 @@ export interface PdfOutlineItem {
 
 export function PdfOutline({ document, onNavigate, onClose }: PdfOutlineProps) {
   const [outline, setOutline] = useState<PdfOutlineItem[] | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let active = true;
-    document.getOutline().then((result) => {
-      if (active) {
-        setOutline(result as PdfOutlineItem[]);
-        setLoading(false);
-      }
-    });
+    document.getOutline().then(
+      (result) => {
+        if (active) {
+          setOutline(result as PdfOutlineItem[] | null);
+          setStatus('ready');
+        }
+      },
+      () => {
+        // Outline extraction is optional document metadata. Failure
+        // is handled here rather than leaking an unhandled rejection
+        // or pretending the PDF genuinely contains no outline.
+        if (active) setStatus('error');
+      },
+    );
     return () => {
       active = false;
     };
-  }, [document]);
+  }, [attempt, document]);
 
-  if (loading) {
+  if (status === 'loading') {
     return (
       <div className="cn-outline">
         <div className="cn-outline__header">
@@ -40,6 +49,30 @@ export function PdfOutline({ document, onNavigate, onClose }: PdfOutlineProps) {
         </div>
         <div className="cn-outline__body">
           <p className="cn-outline__hint">Loading outline…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === 'error') {
+    return (
+      <div className="cn-outline">
+        <div className="cn-outline__header">
+          <h2 className="cn-outline__title">Contents</h2>
+          <IconButton icon="×" label="Close contents" onClick={onClose} size="sm" />
+        </div>
+        <div className="cn-outline__body">
+          <p className="cn-outline__hint" role="status">Outline unavailable.</p>
+          <button
+            type="button"
+            className="cn-outline__retry"
+            onClick={() => {
+              setStatus('loading');
+              setAttempt((current) => current + 1);
+            }}
+          >
+            Retry outline
+          </button>
         </div>
       </div>
     );

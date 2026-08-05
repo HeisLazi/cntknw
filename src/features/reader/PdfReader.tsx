@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
 import { IconButton } from '@components/primitives';
 import { PdfPage } from './PdfPage';
 import { PdfOutline } from './PdfOutline';
@@ -19,6 +19,21 @@ export interface PdfReaderProps {
 
 const ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3] as const;
 const PAGE_WINDOW = 2;
+const DEFAULT_PAGE_HEIGHT = 792;
+
+function clampPage(page: number, pageCount: number): number {
+  return Math.min(Math.max(page, 1), pageCount);
+}
+
+/** Keep a stable five-page window, including at the document boundaries. */
+function pagesAround(anchor: number, pageCount: number): number[] {
+  const windowSize = Math.min(pageCount, PAGE_WINDOW * 2 + 1);
+  const first = Math.max(
+    1,
+    Math.min(anchor - PAGE_WINDOW, pageCount - windowSize + 1),
+  );
+  return Array.from({ length: windowSize }, (_, index) => first + index);
+}
 
 function nextZoom(current: number, direction: 1 | -1): number {
   const index = ZOOM_STEPS.findIndex((step) => step >= current - 0.001);
@@ -29,12 +44,13 @@ function nextZoom(current: number, direction: 1 | -1): number {
 /**
  * The source pane.
  *
- * Continuous scrolling with a **windowed** page list: only pages
- * within `PAGE_WINDOW` of the current one are mounted. A 400-page
- * book rendered in full would allocate 400 canvases and exhaust
- * memory before it finished — NFR-003 asks that large PDFs are not
- * fully loaded, and this is where that promise is either kept or
- * quietly broken.
+ * Continuous scrolling with a **virtual, windowed** page list. Five
+ * nearby pages are mounted; height-preserving spacers stand in for
+ * the rest. IntersectionObserver chooses the current page from real
+ * viewport overlap, while scroll-position estimates only move the
+ * render window when someone drags rapidly across an unmounted span.
+ * The estimate never becomes reading position — only a visible page
+ * can call `onPageChange`.
  *
  * Scroll position and the current page are **reported upward, not
  * stored here.** They belong to `WorkspaceState` in the repository,
@@ -51,85 +67,227 @@ export function PdfReader({
   onScroll,
 }: PdfReaderProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const restoredFor = useRef<number | null>(null);
-  const [pageHeight, setPageHeight] = useState(0);
+  const currentPageRef = useRef(page);
+  const positioning = useRef(true);
+  const navigationTargetRef = useRef<number | null>(null);
+  const [windowAnchor, setWindowAnchor] = useState(page);
+  const [navigationTarget, setNavigationTarget] = useState<number | null>(null);
+  const [measuredPages, setMeasuredPages] = useState<ReadonlyMap<number, number>>(
+    () => new Map(),
+  );
+  const [pageGap, setPageGap] = useState(0);
+  const restored = useRef(false);
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
   const [pageInput, setPageInput] = useState(String(page));
-  const [prevPage, setPrevPage] = useState(page);
-  
-  if (page !== prevPage) {
-    setPrevPage(page);
+  const [previousPage, setPreviousPage] = useState(page);
+
+  if (page !== previousPage) {
+    setPreviousPage(page);
     setPageInput(String(page));
+    setWindowAnchor(page);
   }
 
-  const handlePageSubmit = (e: React.FormEvent | React.FocusEvent) => {
-    e.preventDefault();
-    const parsed = parseInt(pageInput, 10);
-    if (!isNaN(parsed) && parsed >= 1 && parsed <= document.pageCount) {
-      if (parsed !== page) {
-        onPageChange(parsed);
-      }
-    } else {
-      setPageInput(String(page)); // Reset on invalid input
-    }
-  };
-
-  const visiblePages = useMemo(() => {
-    const first = Math.max(1, page - PAGE_WINDOW);
-    const last = Math.min(document.pageCount, page + PAGE_WINDOW);
-    const pages: number[] = [];
-    for (let n = first; n <= last; n += 1) pages.push(n);
-    return pages;
-  }, [document.pageCount, page]);
-
-  // Restore the saved scroll offset once per source, after the first
-  // page has a measured height. Doing it on every render would fight
-  // the user for control of the scrollbar.
-  useEffect(() => {
-    if (pageHeight === 0) return;
-    if (restoredFor.current === document.pageCount) return;
-    restoredFor.current = document.pageCount;
-    const element = scrollRef.current;
-    if (element && scrollOffset > 0) element.scrollTop = scrollOffset;
-  }, [pageHeight, scrollOffset, document.pageCount]);
-
-  const handleScroll = useCallback(() => {
-    const element = scrollRef.current;
-    if (element) onScroll(element.scrollTop);
-  }, [onScroll]);
-
-  const goTo = useCallback(
-    (target: number) => {
-      const clamped = Math.min(Math.max(target, 1), document.pageCount);
-      if (clamped !== page) onPageChange(clamped);
-    },
-    [document.pageCount, page, onPageChange],
+  const visiblePages = useMemo(
+    () => pagesAround(windowAnchor, document.pageCount),
+    [document.pageCount, windowAnchor],
   );
 
-  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    switch (event.key) {
-      case 'PageDown':
-        event.preventDefault();
-        goTo(page + 1);
-        break;
-      case 'PageUp':
-        event.preventDefault();
-        goTo(page - 1);
-        break;
-      case 'Home':
-        event.preventDefault();
-        goTo(1);
-        break;
-      case 'End':
-        event.preventDefault();
-        goTo(document.pageCount);
-        break;
-      default:
-        break;
+  const estimatedPageHeight = useMemo(() => {
+    const heights = [...measuredPages.values()];
+    if (heights.length === 0) return DEFAULT_PAGE_HEIGHT * zoom;
+    return heights.reduce((sum, height) => sum + height, 0) / heights.length;
+  }, [measuredPages, zoom]);
+
+  const firstMountedPage = visiblePages[0] ?? 1;
+  const lastMountedPage = visiblePages.at(-1) ?? document.pageCount;
+  const spacerHeight = useCallback(
+    (pageCount: number) =>
+      pageCount === 0
+        ? 0
+        : Math.max(0, pageCount * (estimatedPageHeight + pageGap) - pageGap),
+    [estimatedPageHeight, pageGap],
+  );
+
+  const beforeHeight = spacerHeight(firstMountedPage - 1);
+  const afterHeight = spacerHeight(document.pageCount - lastMountedPage);
+
+  const handleRendered = useCallback((pageNumber: number, height: number) => {
+    setMeasuredPages((current) => {
+      if (current.get(pageNumber) === height) return current;
+      const next = new Map(current);
+      next.set(pageNumber, height);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (!element) return;
+    const measuredGap = parseFloat(getComputedStyle(element).rowGap);
+    if (Number.isFinite(measuredGap)) setPageGap(measuredGap);
+  }, []);
+
+  // Restore once, after the saved page has real geometry. The offset
+  // is absolute within the virtual document, so it survives window
+  // shifts rather than being reinterpreted inside a five-page slice.
+  useEffect(() => {
+    if (
+      restored.current ||
+      !visiblePages.every((pageNumber) => measuredPages.has(pageNumber))
+    ) return;
+    const element = scrollRef.current;
+    if (!element) return;
+    restored.current = true;
+
+    requestAnimationFrame(() => {
+      if (scrollOffset > 0) {
+        positioning.current = true;
+        element.scrollTop = scrollOffset;
+        requestAnimationFrame(() => {
+          element.scrollTop = scrollOffset;
+          positioning.current = false;
+        });
+      } else {
+        navigationTargetRef.current = page;
+        setNavigationTarget(page);
+      }
+    });
+  }, [measuredPages, page, scrollOffset, visiblePages]);
+
+  const requestNavigation = useCallback(
+    (target: number) => {
+      const clamped = clampPage(target, document.pageCount);
+      positioning.current = true;
+      navigationTargetRef.current = clamped;
+      setNavigationTarget(clamped);
+      setWindowAnchor(clamped);
+      if (clamped !== currentPageRef.current) {
+        currentPageRef.current = clamped;
+        onPageChange(clamped);
+      }
+    },
+    [document.pageCount, onPageChange],
+  );
+
+  const handlePageSubmit = (event: React.FormEvent | React.FocusEvent) => {
+    event.preventDefault();
+    const parsed = Number.parseInt(pageInput, 10);
+    if (Number.isInteger(parsed) && parsed >= 1 && parsed <= document.pageCount) {
+      requestNavigation(parsed);
+    } else {
+      setPageInput(String(page));
     }
   };
+
+  // A navigation claim is not fulfilled by state. Wait for the page
+  // to render, then put its actual element inside the scrollport.
+  useEffect(() => {
+    if (navigationTarget === null || !measuredPages.has(navigationTarget)) return;
+    const element = scrollRef.current;
+    const target = element?.querySelector<HTMLElement>(
+      `.cn-pdf-page[data-page="${navigationTarget}"]`,
+    );
+    if (!element || !target) return;
+
+    const viewportBox = element.getBoundingClientRect();
+    const targetBox = target.getBoundingClientRect();
+    const paddingTop = parseFloat(getComputedStyle(element).paddingTop) || 0;
+    element.scrollTop += targetBox.top - viewportBox.top - paddingTop;
+
+    requestAnimationFrame(() => {
+      const nextViewport = element.getBoundingClientRect();
+      const nextTarget = target.getBoundingClientRect();
+      if (nextTarget.bottom > nextViewport.top && nextTarget.top < nextViewport.bottom) {
+        setNavigationTarget(null);
+        positioning.current = false;
+      }
+    });
+  }, [measuredPages, navigationTarget]);
+
+  // The current page comes only from actual viewport overlap. The
+  // most-visible mounted page wins; ties favour the viewport centre.
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root || typeof IntersectionObserver === 'undefined') return;
+
+    const observed = visiblePages
+      .map((pageNumber) =>
+        root.querySelector<HTMLElement>(`.cn-pdf-page[data-page="${pageNumber}"]`),
+      )
+      .filter((element): element is HTMLElement => element !== null);
+
+    const updateVisiblePage = () => {
+      if (positioning.current) return;
+      const rootBox = root.getBoundingClientRect();
+      const rootCenter = rootBox.top + rootBox.height / 2;
+      const candidates = observed
+        .map((element) => {
+          const box = element.getBoundingClientRect();
+          const visibleHeight = Math.max(
+            0,
+            Math.min(box.bottom, rootBox.bottom) - Math.max(box.top, rootBox.top),
+          );
+          return {
+            page: Number(element.dataset.page),
+            visibleHeight,
+            centerDistance: Math.abs(box.top + box.height / 2 - rootCenter),
+          };
+        })
+        .filter((candidate) => candidate.visibleHeight > 0)
+        .sort(
+          (left, right) =>
+            right.visibleHeight - left.visibleHeight ||
+            left.centerDistance - right.centerDistance,
+        );
+      const next = candidates[0]?.page;
+      if (next === undefined || next === currentPageRef.current) return;
+      const current = candidates.find((candidate) => candidate.page === currentPageRef.current);
+      if (current && candidates[0].visibleHeight <= current.visibleHeight + 64) return;
+
+      currentPageRef.current = next;
+      setWindowAnchor(next);
+      onPageChange(next);
+    };
+
+    const observer = new IntersectionObserver(updateVisiblePage, {
+      root,
+      threshold: [0, 0.01, 0.25, 0.5, 0.75, 1],
+    });
+    observed.forEach((element) => observer.observe(element));
+    updateVisiblePage();
+    return () => observer.disconnect();
+  }, [onPageChange, visiblePages]);
+
+  const handleScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
+    const element = scrollRef.current;
+    if (!element) return;
+    if (event.nativeEvent.isTrusted) navigationTargetRef.current = null;
+    onScroll(element.scrollTop);
+
+    // A scrollbar thumb can cross hundreds of virtual pages without
+    // intersecting the old five-page window. Move only that window
+    // from the estimate; IntersectionObserver remains the authority
+    // that turns a mounted, visible page into reading position.
+    if (!positioning.current && navigationTargetRef.current === null) {
+      const extent = estimatedPageHeight + pageGap;
+      const estimated = clampPage(
+        Math.floor((element.scrollTop + element.clientHeight / 2) / extent) + 1,
+        document.pageCount,
+      );
+      if (estimated < firstMountedPage + 1 || estimated > lastMountedPage - 1) {
+        setWindowAnchor(estimated);
+      }
+    }
+  }, [
+    document.pageCount,
+    estimatedPageHeight,
+    firstMountedPage,
+    lastMountedPage,
+    onScroll,
+    pageGap,
+  ]);
 
   return (
     <div className="cn-reader">
@@ -148,7 +306,7 @@ export function PdfReader({
             icon="‹"
             size="sm"
             disabled={page <= 1}
-            onClick={() => goTo(page - 1)}
+            onClick={() => requestNavigation(page - 1)}
           />
           {/*
             A live region, so a screen reader hears the page change.
@@ -180,7 +338,7 @@ export function PdfReader({
             icon="›"
             size="sm"
             disabled={page >= document.pageCount}
-            onClick={() => goTo(page + 1)}
+            onClick={() => requestNavigation(page + 1)}
           />
         </div>
 
@@ -214,9 +372,7 @@ export function PdfReader({
       {searchOpen && (
         <PdfSearch
           document={document}
-          onNavigate={(p) => {
-            onPageChange(p);
-          }}
+          onNavigate={requestNavigation}
           onClose={() => setSearchOpen(false)}
         />
       )}
@@ -225,32 +381,46 @@ export function PdfReader({
         {outlineOpen && (
           <PdfOutline
             document={document}
-            onNavigate={(p) => {
-              onPageChange(p);
-            }}
+            onNavigate={requestNavigation}
             onClose={() => setOutlineOpen(false)}
           />
         )}
         <div
           ref={scrollRef}
           className="cn-reader__scroll cn-scroll-area"
+          onKeyDown={(event) => {
+            if (['PageDown', 'PageUp', 'Home', 'End', 'ArrowDown', 'ArrowUp'].includes(event.key)) {
+              navigationTargetRef.current = null;
+            }
+          }}
           onScroll={handleScroll}
-          onKeyDown={onKeyDown}
           tabIndex={0}
           role="region"
           aria-label="Source pages"
         >
+          {beforeHeight > 0 ? (
+            <div
+              className="cn-reader__spacer"
+              style={{ height: beforeHeight }}
+              aria-hidden="true"
+            />
+          ) : null}
           {visiblePages.map((pageNumber) => (
             <PdfPage
               key={pageNumber}
               document={document}
               pageNumber={pageNumber}
               zoom={zoom}
-              onRendered={
-                pageNumber === page ? (size) => setPageHeight(size.height) : undefined
-              }
+              onRendered={(size) => handleRendered(pageNumber, size.height)}
             />
           ))}
+          {afterHeight > 0 ? (
+            <div
+              className="cn-reader__spacer"
+              style={{ height: afterHeight }}
+              aria-hidden="true"
+            />
+          ) : null}
         </div>
       </div>
     </div>

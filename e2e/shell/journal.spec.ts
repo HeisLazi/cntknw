@@ -36,6 +36,7 @@ async function writeHere(page: Page, text: string) {
   await page.getByRole('button', { name: /Start writing/ }).click();
   const editor = page.locator('.cn-block-editor__content').last();
   await expect(editor).toBeVisible();
+  await editor.click();
   await editor.pressSequentially(text, { delay: 15 });
   // Past the journal debounce.
   await page.waitForTimeout(700);
@@ -52,6 +53,7 @@ const turnTo = async (page: Page, target: number) => {
       .click();
   }
   await expect(label).toHaveValue(String(target));
+  await expect(page.locator('.cn-run--active .cn-run__folio')).toHaveText(`p.${target}`);
 };
 
 test.describe('AC-003 — page context is inherited, never asked for', () => {

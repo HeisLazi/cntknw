@@ -1,7 +1,8 @@
 .cn-reader {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: 100vh;
+  height: 100dvh;
   min-height: 0;
   background-color: var(--cn-surface-sunken);
 }
@@ -85,6 +86,16 @@
   flex-direction: column;
   align-items: center;
   gap: var(--cn-space-lg);
+  /* Virtual page spacers deliberately change height as real pages are
+   * measured. The durable absolute scroll offset, not browser scroll
+   * anchoring, must remain the source of truth during that correction. */
+  overflow-anchor: none;
+}
+
+.cn-reader__spacer {
+  width: 1px;
+  flex: 0 0 auto;
+  pointer-events: none;
 }
 
 .cn-pdf-page {
@@ -383,6 +394,22 @@
 .cn-outline__hint {
   font-size: var(--cn-text-sm);
   color: var(--cn-ink-muted);
+}
+
+.cn-outline__retry {
+  margin-top: var(--cn-space-sm);
+  padding: var(--cn-space-2xs) var(--cn-space-sm);
+  border: var(--cn-border-width) solid var(--cn-border);
+  border-radius: var(--cn-radius-sm);
+  background: var(--cn-surface-raised);
+  color: var(--cn-ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.cn-outline__retry:focus-visible {
+  outline: var(--cn-focus-width) solid var(--cn-focus-ring);
+  outline-offset: var(--cn-focus-offset);
 }
 
 /*

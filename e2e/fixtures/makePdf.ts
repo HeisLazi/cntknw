@@ -18,7 +18,20 @@ export interface GeneratedPdf {
   pageCount: number;
 }
 
-export function makePdf(pageCount = 3, title = 'CNTKNW test document'): GeneratedPdf {
+export interface PdfOutlineFixtureItem {
+  title: string;
+  page: number;
+}
+
+export interface MakePdfOptions {
+  outline?: PdfOutlineFixtureItem[];
+}
+
+export function makePdf(
+  pageCount = 3,
+  title = 'CNTKNW test document',
+  options: MakePdfOptions = {},
+): GeneratedPdf {
   const objects: string[] = [];
   const pageObjectNumbers: number[] = [];
 
@@ -28,7 +41,11 @@ export function makePdf(pageCount = 3, title = 'CNTKNW test document'): Generate
     pageObjectNumbers.push(firstPageObject + i * 2);
   }
 
-  objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+  const outlineRootObject = firstPageObject + pageCount * 2;
+  const outline = options.outline ?? [];
+  objects[1] = outline.length > 0
+    ? `<< /Type /Catalog /Pages 2 0 R /Outlines ${outlineRootObject} 0 R /PageMode /UseOutlines >>`
+    : '<< /Type /Catalog /Pages 2 0 R >>';
   objects[2] =
     `<< /Type /Pages /Kids [${pageObjectNumbers
       .map((n) => `${n} 0 R`)
@@ -49,6 +66,25 @@ export function makePdf(pageCount = 3, title = 'CNTKNW test document'): Generate
       `/Resources << /Font << /F1 3 0 R >> >> /Contents ${contentObject} 0 R >>`;
     objects[contentObject] =
       `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`;
+  }
+
+  if (outline.length > 0) {
+    const firstItemObject = outlineRootObject + 1;
+    const lastItemObject = firstItemObject + outline.length - 1;
+    objects[outlineRootObject] =
+      `<< /Type /Outlines /First ${firstItemObject} 0 R ` +
+      `/Last ${lastItemObject} 0 R /Count ${outline.length} >>`;
+    outline.forEach((item, index) => {
+      if (item.page < 1 || item.page > pageCount) {
+        throw new Error(`Outline page ${item.page} is outside 1-${pageCount}`);
+      }
+      const objectNumber = firstItemObject + index;
+      const previous = index > 0 ? `/Prev ${objectNumber - 1} 0 R ` : '';
+      const next = index < outline.length - 1 ? `/Next ${objectNumber + 1} 0 R ` : '';
+      objects[objectNumber] =
+        `<< /Title (${item.title}) /Parent ${outlineRootObject} 0 R ` +
+        `${previous}${next}/Dest [${pageObjectNumbers[item.page - 1]} 0 R /Fit] >>`;
+    });
   }
 
   const objectCount = objects.length;
