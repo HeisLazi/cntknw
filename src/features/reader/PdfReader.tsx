@@ -1,8 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type UIEvent,
+} from 'react';
 import { IconButton } from '@components/primitives';
 import type { AnnotationTool, EntityId } from '@domain/index';
 import { PdfPage } from './PdfPage';
-import { PdfOutline } from './PdfOutline';
 import { PdfSearch } from './PdfSearch';
 import { clearDraftIntentsForSource } from './pendingAnnotationIntent';
 import type { LoadedDocument } from './pdfjs';
@@ -21,6 +29,11 @@ export interface PdfReaderProps {
   onScroll: (offset: number) => void;
   annotationTool: AnnotationTool;
   onAnnotationToolChange: (tool: AnnotationTool) => void;
+}
+
+export interface PdfReaderHandle {
+  /** Physically reveal a page requested by chrome outside the reader. */
+  navigateTo: (page: number) => void;
 }
 
 const ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3] as const;
@@ -63,7 +76,7 @@ function nextZoom(current: number, direction: 1 | -1): number {
  * because AC-002 requires them to survive closing the app. Keeping
  * a second copy in component state is how the two drift apart.
  */
-export function PdfReader({
+export const PdfReader = forwardRef<PdfReaderHandle, PdfReaderProps>(function PdfReader({
   document,
   sourceId,
   assetId,
@@ -75,7 +88,7 @@ export function PdfReader({
   onScroll,
   annotationTool,
   onAnnotationToolChange,
-}: PdfReaderProps) {
+}: PdfReaderProps, ref) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const currentPageRef = useRef(page);
   const positioning = useRef(true);
@@ -87,7 +100,6 @@ export function PdfReader({
   );
   const [pageGap, setPageGap] = useState(0);
   const restored = useRef(false);
-  const [outlineOpen, setOutlineOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
   const [pageInput, setPageInput] = useState(String(page));
@@ -173,19 +185,33 @@ export function PdfReader({
     });
   }, [measuredPages, page, scrollOffset, visiblePages]);
 
-  const requestNavigation = useCallback(
+  const revealPage = useCallback(
     (target: number) => {
       const clamped = clampPage(target, document.pageCount);
       positioning.current = true;
       navigationTargetRef.current = clamped;
       setNavigationTarget(clamped);
       setWindowAnchor(clamped);
+      return clamped;
+    },
+    [document.pageCount],
+  );
+
+  useImperativeHandle(ref, () => ({
+    navigateTo: (target: number) => {
+      currentPageRef.current = revealPage(target);
+    },
+  }), [revealPage]);
+
+  const requestNavigation = useCallback(
+    (target: number) => {
+      const clamped = revealPage(target);
       if (clamped !== currentPageRef.current) {
         currentPageRef.current = clamped;
         onPageChange(clamped);
       }
     },
-    [document.pageCount, onPageChange],
+    [onPageChange, revealPage],
   );
 
   const handlePageSubmit = (event: React.FormEvent | React.FocusEvent) => {
@@ -319,12 +345,6 @@ export function PdfReader({
               onAnnotationToolChange(annotationTool === 'region' ? 'select' : 'region')
             }
           />
-          <IconButton
-            label="Toggle contents"
-            icon="≡"
-            size="sm"
-            onClick={() => setOutlineOpen((o) => !o)}
-          />
         </div>
         <div className="cn-reader__group" style={{ flex: 1, justifyContent: 'center' }}>
           <IconButton
@@ -404,13 +424,6 @@ export function PdfReader({
       )}
 
       <div className="cn-reader__body">
-        {outlineOpen && (
-          <PdfOutline
-            document={document}
-            onNavigate={requestNavigation}
-            onClose={() => setOutlineOpen(false)}
-          />
-        )}
         <div
           ref={scrollRef}
           className="cn-reader__scroll cn-scroll-area"
@@ -454,4 +467,4 @@ export function PdfReader({
       </div>
     </div>
   );
-}
+});

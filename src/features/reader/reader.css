@@ -104,7 +104,7 @@
   /* The page itself is white paper regardless of theme — inverting
    * a scanned document makes it unreadable, and recolouring an
    * author's figures misrepresents them. */
-  background-color: var(--cn-palette-ink-050);
+  background-color: var(--cn-pdf-paper);
   box-shadow: var(--cn-shadow-md);
   border-radius: var(--cn-radius-xs);
   overflow: hidden;
@@ -485,6 +485,13 @@
   flex-direction: column;
   overflow: hidden;
   flex-shrink: 0;
+}
+
+.cn-outline[data-embedded='true'] {
+  width: 100%;
+  height: 100%;
+  border-right: 0;
+  background-color: transparent;
 }
 
 .cn-outline__header {

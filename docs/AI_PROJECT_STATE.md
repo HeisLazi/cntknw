@@ -11,10 +11,14 @@ change when a milestone lands, and a state file that stores them
 goes stale the next commit. Git is authoritative: derive HEAD from
 `git rev-parse HEAD` / `origin/main` at session start.
 
-**Last completed product milestone:** Phase 3C — Editable Freehand
-Pen/Drawing Authoring + Drawing Journal Blocks (commits on `main`; see
-`git log` for exact SHAs). This completes Phase 3 (Annotation & Drawing)
-in full, pending the ChatGPT milestone review of the Phase 3C acceptance.
+**Last completed product milestone:** WORKSPACE UX-1 — the Zen/Gruvbox
+study desk, infinite whiteboard and Pomodoro (committed on `main`). This is
+the study-workspace completion record pending the ChatGPT milestone review
+of the UX-1 acceptance (see the Latest milestone section).
+
+Prior milestone: Phase 3C — Editable Freehand Pen/Drawing Authoring +
+Drawing Journal Blocks (commits on `main`; see `git log` for exact SHAs).
+This completed Phase 3 (Annotation & Drawing) in full.
 
 Prior milestone: Phase 3B — Production PDF Annotation UX, closed on `main`
 by the final acceptance-corrections commits (`889e938` fix → `8158fec`
@@ -55,15 +59,46 @@ code had changed and Phase 3 had not started.
   keyboard, confirmation-based deletion), and Phase 3C editable freehand
   pen/drawing authoring + Drawing journal blocks (typed canvas-local vector
   model, SVG freehand editor, content-replacement save path) are all
-  complete, committed and verified. Phase 3 as a whole is complete pending
-  the ChatGPT milestone review of the Phase 3C acceptance.
+  complete, committed and verified. Phase 3 as a whole is complete.
+- WORKSPACE UX-1 (Zen/Gruvbox study desk + infinite whiteboard +
+  Pomodoro): complete, committed and verified (see Latest milestone).
 
 ## Latest completed milestone
 
-Phase 3C — Editable Freehand Pen/Drawing Authoring + Drawing Journal Blocks,
-committed on `main`.
+WORKSPACE UX-1 — the Zen/Gruvbox study desk, infinite whiteboard and
+Pomodoro, committed on `main`.
 
 Implemented, reviewed and verified:
+
+- design system: `src/design/tokens.css` is the single styling source of
+  truth (Zenburn/Gruvbox-inspired dark), enforced by
+  `design-tokens.test.ts` (no raw hex/durations outside tokens.css);
+- workspace layout: `WorkspaceLayoutSchema` gains `mode`
+  (split | source-focus | journal-focus | compare) and `rightWorkspace`
+  (write | whiteboard), default split 0.7, persisted; the shell + context
+  panel use a first↔last focus trap over `role="dialog"` `aria-modal`
+  containers; source-focus is a full-width projection;
+- journal blank-page composing: a source opens to a single "Write…"
+  placeholder that composes blocks on Enter; the ghost action row stays
+  mounted (`hidden` toggle) so the menu trigger node never remounts on a
+  focus re-render; the Menu primitive opens on primary `pointerdown` with
+  the follow-up click suppressed while keyboard activation (`detail === 0`)
+  still toggles — restoring mouse/keyboard parity on empty composing blocks;
+- infinite whiteboard: `rightWorkspace = whiteboard` renders the same
+  canonical journal blocks as the write pane (a projection, not a second
+  store); `DrawingData.strokes` unchanged; saves travel
+  `createPageLinkedBlock` + the `pendingEdit` revision-guarded flush, with
+  the conflict-path rule of re-reading the remote block, refreshing the
+  revision and clearing the stale pending edit on `RevisionConflictError`;
+- Pomodoro: pure reducer over an in-memory wall-clock deadline;
+  zero network writes, zero per-second persistence writes (start = 1 create,
+  0 updates; transitions only), `pagehide` flushes the snapshot (§
+  PomodoroProvider);
+- full project gate verified green on 2026-08-06 (see Verification).
+
+See `docs/CNTKNW_ADR_0008_Zen_Study_Workspace.md` for the decision record.
+
+### Previous milestone
 
 - typed vector drawing model replacing the loose `drawingData` blob
   (`DrawingDataSchema`): `version: 1`, canvas-local `width`/`height`
@@ -214,16 +249,18 @@ milestone.
 ## Verification
 
 Latest uninterrupted gate in the authoritative checkout on 2026-08-06
-(Phase 3C tree, exact candidate for commit):
+(WORKSPACE UX-1 tree, exact candidate for commit):
 
 - `npm run typecheck`: PASS
 - `npm run lint`: PASS
-- `npm run test`: PASS — 39 files, 633 passed, 1 skipped
-- `npm run test:e2e`: PASS — Chromium, 95 passed, 0 skipped
+- `npm run test`: PASS — 46 files, 684 passed, 1 skipped
+- `npm run test:e2e`: PASS — Chromium, 100 passed, 0 skipped
 - `npm run build`: PASS
 - `npm audit --omit=dev`: PASS — 0 vulnerabilities
 - production `dist/` leak scan (geometry-probe / __cntknwProbe /
   harness-client / e2e/harness): 0 matches
+- protected `docs/CNTKNW_Canonical_Documentation_Package_v0.2.zip` and
+  `install.sh` remain untracked and byte-identical (never staged).
 
 ## Orchestration files
 

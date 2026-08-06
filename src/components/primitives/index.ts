@@ -58,6 +58,9 @@ export type { TabDefinition, TabsProps } from './Tabs';
 export { ResizablePanel, SplitPane } from './SplitPane';
 export type { ResizablePanelProps, SplitPaneProps } from './SplitPane';
 
+export { ContextPanel } from './ContextPanel';
+export type { ContextPanelProps } from './ContextPanel';
+
 export { ToastProvider, useToast } from './Toast';
 export type { Toast, ToastProviderProps, ToastTone } from './Toast';
 

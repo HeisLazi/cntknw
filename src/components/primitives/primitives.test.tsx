@@ -8,8 +8,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useRef, useState } from 'react';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   Button,
+  ContextPanel,
   ConfirmDialog,
   IconButton,
   Input,
@@ -333,5 +337,134 @@ describe('SplitPane', () => {
       await userEvent.keyboard('{ArrowLeft}');
     }
     expect(separator).toHaveAttribute('aria-valuenow', '20');
+  });
+
+  it('honours a new persisted default and clamps it to custom limits', () => {
+    const { rerender } = render(
+      <SplitPane
+        label="Panes"
+        defaultRatio={0.7}
+        minRatio={0.3}
+        maxRatio={0.7}
+        start={<p>A</p>}
+        end={<p>B</p>}
+      />,
+    );
+    expect(screen.getByRole('separator')).toHaveAttribute('aria-valuenow', '70');
+
+    rerender(
+      <SplitPane
+        label="Panes"
+        defaultRatio={0.9}
+        ratio={0.9}
+        minRatio={0.3}
+        maxRatio={0.7}
+        start={<p>A</p>}
+        end={<p>B</p>}
+      />,
+    );
+    expect(screen.getByRole('separator')).toHaveAttribute('aria-valuenow', '70');
+  });
+
+  it('lets the only visible pane fill the container regardless of the saved ratio', () => {
+    const { container, rerender } = render(
+      <SplitPane
+        label="Panes"
+        ratio={0.3}
+        start={<p>A</p>}
+        end={<p>B</p>}
+        endVisible={false}
+      />,
+    );
+    const split = container.querySelector<HTMLElement>('.cn-split')!;
+    const start = container.querySelector<HTMLElement>('[data-pane="start"]')!;
+    expect(split).toHaveAttribute('data-single-pane', 'true');
+    expect(start).toBeVisible();
+    expect(getComputedStyle(start).flex).toBe('1 1 auto');
+
+    rerender(
+      <SplitPane
+        label="Panes"
+        ratio={0.7}
+        start={<p>A</p>}
+        end={<p>B</p>}
+        startVisible={false}
+      />,
+    );
+    const end = container.querySelector<HTMLElement>('[data-pane="end"]')!;
+    expect(end).toBeVisible();
+    expect(getComputedStyle(end).flex).toBe('1 1 auto');
+  });
+});
+
+function ContextPanelProbe() {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  return (
+    <>
+      <button ref={triggerRef} type="button" onClick={() => setOpen(true)}>
+        Open contents
+      </button>
+      <ContextPanel
+        open={open}
+        title="Contents"
+        onClose={() => setOpen(false)}
+        triggerRef={triggerRef}
+      >
+        <button type="button">Outline item</button>
+      </ContextPanel>
+    </>
+  );
+}
+
+describe('ContextPanel', () => {
+  it('is closed by default and removes its contents from the focus order', async () => {
+    render(<ContextPanelProbe />);
+    const panel = document.querySelector<HTMLElement>('.cn-context-panel')!;
+    expect(panel).not.toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Outline item' })).not.toBeInTheDocument();
+
+    await userEvent.tab();
+    expect(screen.getByRole('button', { name: 'Open contents' })).toHaveFocus();
+    await userEvent.tab();
+    expect(
+      panel.querySelector('button:last-of-type'),
+    ).not.toHaveFocus();
+  });
+
+  it('opens from a keyboard control, closes with Escape, and restores focus', async () => {
+    const user = userEvent.setup();
+    render(<ContextPanelProbe />);
+    const trigger = screen.getByRole('button', { name: 'Open contents' });
+    trigger.focus();
+    await user.keyboard('{Enter}');
+
+    const panel = screen.getByRole('dialog', { name: 'Contents' });
+    expect(panel).toBeVisible();
+    expect(panel).toHaveAttribute('aria-modal', 'true');
+    expect(screen.getByRole('button', { name: 'Close contents panel' })).toHaveFocus();
+    const css = readFileSync(
+      join(process.cwd(), 'src/components/primitives/primitives.css'),
+      'utf-8',
+    );
+    expect(css).toMatch(/\.cn-context-panel\s*\{[^}]*position:\s*fixed/s);
+
+    await user.keyboard('{Escape}');
+    expect(panel).not.toBeVisible();
+    expect(trigger).toHaveFocus();
+  });
+
+  it('cycles Tab and Shift+Tab within the open modal panel', async () => {
+    const user = userEvent.setup();
+    render(<ContextPanelProbe />);
+    await user.click(screen.getByRole('button', { name: 'Open contents' }));
+
+    const close = screen.getByRole('button', { name: 'Close contents panel' });
+    const item = screen.getByRole('button', { name: 'Outline item' });
+    close.focus();
+    await user.keyboard('{Shift>}{Tab}{/Shift}');
+    expect(item).toHaveFocus();
+    await user.keyboard('{Tab}');
+    expect(close).toHaveFocus();
   });
 });

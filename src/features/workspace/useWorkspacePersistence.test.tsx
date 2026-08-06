@@ -39,9 +39,11 @@ function makeState(page = 1): WorkspaceState {
       annotationTool: 'select',
     },
     journalView: { scrollOffset: 0 },
+    whiteboard: { viewport: { x: 0, y: 0, zoom: 1 }, layout: {} },
     layout: {
       mode: 'split',
       splitRatio: 0.5,
+      rightWorkspace: 'write',
       sourceCollapsed: false,
       journalCollapsed: false,
     },
@@ -61,6 +63,10 @@ function Probe({ initial }: { initial: WorkspaceState }) {
     <div>
       <span data-testid="page">{page}</span>
       <span data-testid="scroll">{state.sourceView.scrollOffset}</span>
+      <span data-testid="layout-mode">{state.layout.mode}</span>
+      <span data-testid="split-ratio">{state.layout.splitRatio}</span>
+      <span data-testid="whiteboard-zoom">{state.whiteboard.viewport.zoom}</span>
+      <span data-testid="whiteboard-layout">{Object.keys(state.whiteboard.layout).length}</span>
       <span data-testid="status">{status}</span>
       {/* Discrete — written promptly. */}
       <button type="button" onClick={() => commit({ activeLocation: at(page + 1) })}>
@@ -92,6 +98,43 @@ function Probe({ initial }: { initial: WorkspaceState }) {
         }
       >
         zoom
+      </button>
+      <button
+        type="button"
+        onClick={() => commit({ layout: { ...state.layout, mode: 'source-focus' } })}
+      >
+        source focus
+      </button>
+      <button
+        type="button"
+        onClick={() => drift({ layout: { ...state.layout, splitRatio: 0.4 } })}
+      >
+        writing-heavy split
+      </button>
+      <button
+        type="button"
+        onClick={() => drift({
+          whiteboard: {
+            ...state.whiteboard,
+            viewport: { x: -80, y: 120, zoom: 1.75 },
+          },
+        })}
+      >
+        pan whiteboard
+      </button>
+      <button
+        type="button"
+        onClick={() => commit({
+          whiteboard: {
+            ...state.whiteboard,
+            layout: {
+              ...state.whiteboard.layout,
+              '9f3d1c2b-4a5e-4b6c-8d7e-1f2a3b4c5d6f': { x: 900, y: -40 },
+            },
+          },
+        })}
+      >
+        place whiteboard object
       </button>
     </div>
   );
@@ -172,6 +215,61 @@ describe('useWorkspacePersistence', () => {
     await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
     const stored = await repositories.workspaceStates.getBySource(SOURCE_ID);
     expect(stored?.sourceView.scrollOffset).toBe(50);
+  });
+
+  it('serializes and restores discrete mode plus continuous split ratio', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const first = await renderProbe(makeState(1));
+
+    await user.click(screen.getByRole('button', { name: 'source focus' }));
+    expect(screen.getByTestId('layout-mode')).toHaveTextContent('source-focus');
+    await waitFor(async () => {
+      const stored = await repositories.workspaceStates.getBySource(SOURCE_ID);
+      expect(stored?.layout.mode).toBe('source-focus');
+    });
+
+    await user.click(screen.getByRole('button', { name: 'writing-heavy split' }));
+    expect(screen.getByTestId('split-ratio')).toHaveTextContent('0.4');
+    await act(async () => {
+      vi.advanceTimersByTime(700);
+    });
+    await waitFor(async () => {
+      const stored = await repositories.workspaceStates.getBySource(SOURCE_ID);
+      expect(stored?.layout.splitRatio).toBe(0.4);
+    });
+
+    const stored = await repositories.workspaceStates.getBySource(SOURCE_ID);
+    first.unmount();
+    await renderProbe(stored!);
+    expect(screen.getByTestId('layout-mode')).toHaveTextContent('source-focus');
+    expect(screen.getByTestId('split-ratio')).toHaveTextContent('0.4');
+  });
+
+  it('persists whiteboard viewport by drift and layout by guarded commit', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const first = await renderProbe(makeState(1));
+
+    await user.click(screen.getByRole('button', { name: 'pan whiteboard' }));
+    expect(screen.getByTestId('whiteboard-zoom')).toHaveTextContent('1.75');
+    await act(async () => { vi.advanceTimersByTime(700); });
+
+    await user.click(screen.getByRole('button', { name: 'place whiteboard object' }));
+    expect(screen.getByTestId('whiteboard-layout')).toHaveTextContent('1');
+    await waitFor(async () => {
+      const stored = await repositories.workspaceStates.getBySource(SOURCE_ID);
+      expect(stored?.whiteboard).toEqual({
+        viewport: { x: -80, y: 120, zoom: 1.75 },
+        layout: {
+          '9f3d1c2b-4a5e-4b6c-8d7e-1f2a3b4c5d6f': { x: 900, y: -40 },
+        },
+      });
+    });
+
+    const stored = await repositories.workspaceStates.getBySource(SOURCE_ID);
+    first.unmount();
+    await renderProbe(stored!);
+    expect(screen.getByTestId('whiteboard-zoom')).toHaveTextContent('1.75');
+    expect(screen.getByTestId('whiteboard-layout')).toHaveTextContent('1');
   });
 
   it('serialises writes so a burst cannot conflict with itself', async () => {

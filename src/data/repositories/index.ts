@@ -5,6 +5,7 @@ export * from './AnnotationRepository';
 export * from './ConnectionRepository';
 export * from './SessionRepository';
 export * from './WorkspaceStateRepository';
+export * from './PomodoroRepository';
 export * from './ConceptRepository';
 export * from './GlossaryRepository';
 export * from './EpistemicClaimRepository';
@@ -18,6 +19,7 @@ import type { AnnotationRepository } from './AnnotationRepository';
 import type { ConnectionRepository } from './ConnectionRepository';
 import type { SessionRepository } from './SessionRepository';
 import type { WorkspaceStateRepository } from './WorkspaceStateRepository';
+import type { PomodoroRepository } from './PomodoroRepository';
 import type { ConceptRepository } from './ConceptRepository';
 import type { GlossaryRepository } from './GlossaryRepository';
 import type { EpistemicClaimRepository } from './EpistemicClaimRepository';
@@ -46,5 +48,6 @@ export interface Repositories {
   claims: EpistemicClaimRepository;
   sessions: SessionRepository;
   workspaceStates: WorkspaceStateRepository;
+  pomodoro: PomodoroRepository;
   unitOfWork: UnitOfWork;
 }

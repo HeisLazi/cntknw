@@ -28,6 +28,7 @@ import type {
   EpistemicClaim, CreateEpistemicClaimInput, KnowledgeStatus,
   StudySession, CreateSessionInput,
   WorkspaceState,
+  PomodoroTimerRecord, PomodoroTimerState,
 } from '@domain/index';
 import {
   CreateSourceInputSchema,
@@ -45,6 +46,7 @@ import {
   CreateGlossaryEntryInputSchema,
   CreateEpistemicClaimInputSchema,
   CreateSessionInputSchema,
+  PomodoroTimerStateSchema,
   referencesMatch,
 } from '@domain/index';
 import type {
@@ -59,6 +61,7 @@ import type {
   ConceptRepository,
   GlossaryRepository,
   EpistemicClaimRepository,
+  PomodoroRepository,
   UnitOfWork,
 } from '../../repositories';
 import { assertRevision } from '../../repositories/concurrency';
@@ -850,6 +853,55 @@ export class MemoryWorkspaceStateRepository
   }
 }
 
+// ─── Pomodoro timer ──────────────────────────────────────────────
+
+const POMODORO_KEY = 'app:pomodoro-timer';
+
+export class MemoryPomodoroRepository implements PomodoroRepository {
+  /** @internal exposed for UnitOfWork snapshots */
+  readonly records = new Map<string, PomodoroTimerRecord>();
+
+  async get(): Promise<PomodoroTimerRecord | null> {
+    return this.records.get(POMODORO_KEY) ?? null;
+  }
+
+  async create(state: PomodoroTimerState): Promise<PomodoroTimerRecord> {
+    if (this.records.has(POMODORO_KEY)) {
+      throw new RecordAlreadyExistsError('PomodoroTimer', POMODORO_KEY);
+    }
+    const parsed = PomodoroTimerStateSchema.parse(state);
+    const timestamp = now();
+    const created: PomodoroTimerRecord = {
+      ...parsed,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      revision: 0,
+    };
+    this.records.set(POMODORO_KEY, created);
+    return created;
+  }
+
+  async update(
+    state: PomodoroTimerState,
+    guard: ConcurrencyGuard,
+  ): Promise<PomodoroTimerRecord> {
+    const existing = this.records.get(POMODORO_KEY);
+    if (!existing) {
+      throw new RecordNotFoundError('PomodoroTimer', POMODORO_KEY);
+    }
+    assertRevision('PomodoroTimer', POMODORO_KEY, existing.revision, guard);
+    const parsed = PomodoroTimerStateSchema.parse(state);
+    const updated: PomodoroTimerRecord = {
+      ...parsed,
+      createdAt: existing.createdAt,
+      updatedAt: now(),
+      revision: existing.revision + 1,
+    };
+    this.records.set(POMODORO_KEY, updated);
+    return updated;
+  }
+}
+
 // ─── Unit of Work ────────────────────────────────────────────────
 
 /**
@@ -914,6 +966,7 @@ export function createMemoryRepositories() {
   const claims = new MemoryEpistemicClaimRepository();
   const sessions = new MemorySessionRepository();
   const workspaceStates = new MemoryWorkspaceStateRepository();
+  const pomodoro = new MemoryPomodoroRepository();
 
   const allStores = (): ReadonlyArray<Map<string, unknown>> =>
     [
@@ -927,11 +980,12 @@ export function createMemoryRepositories() {
       claims.claims,
       sessions.sessions,
       workspaceStates.states,
+      pomodoro.records,
     ] as unknown as ReadonlyArray<Map<string, unknown>>;
 
   return {
     sources, journals, assets, annotations, connections,
-    concepts, glossary, claims, sessions, workspaceStates,
+    concepts, glossary, claims, sessions, workspaceStates, pomodoro,
     unitOfWork: new MemoryUnitOfWork(allStores),
   };
 }

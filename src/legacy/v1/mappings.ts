@@ -149,9 +149,11 @@ export function mapBook(
         annotationTool: 'select',
       },
       journalView: { scrollOffset: 0 },
+      whiteboard: { viewport: { x: 0, y: 0, zoom: 1 }, layout: {} },
       layout: {
         mode: 'split',
-        splitRatio: 0.5,
+        splitRatio: 0.7,
+        rightWorkspace: 'write',
         sourceCollapsed: false,
         journalCollapsed: false,
       },

@@ -79,8 +79,13 @@ test.describe('keyboard access', () => {
   test('every primary destination is reachable by keyboard alone', async ({ page }) => {
     await page.goto('/library');
 
-    // Tab past the skip link to the first nav link, then walk.
+    // Tab past the skip link to the always-reachable overlay trigger.
     await startTabbingFromTop(page);
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('button', { name: /Open navigation/ })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('button', { name: 'Close navigation' })).toBeFocused();
+
     await page.keyboard.press('Tab');
     await expect(page.getByRole('link', { name: 'Library' })).toBeFocused();
 
@@ -90,11 +95,25 @@ test.describe('keyboard access', () => {
     await expect(page.getByRole('heading', { name: 'Gallery', level: 1 })).toBeVisible();
   });
 
+  test('the navigation shortcut closes the overlay and returns focus to its trigger', async ({
+    page,
+  }) => {
+    await page.goto('/library');
+    const trigger = page.getByRole('button', { name: /Open navigation/ });
+    await trigger.focus();
+    await page.keyboard.press('Control+Shift+M');
+    await expect(page.getByRole('dialog', { name: 'Navigation' })).toBeVisible();
+    await page.keyboard.press('Control+Shift+M');
+    await expect(page.getByRole('dialog', { name: 'Navigation' })).toBeHidden();
+    await expect(trigger).toBeFocused();
+  });
+
   test('focus moves to main after a client-side navigation', async ({ page }) => {
     // Without this, a single-page navigation leaves focus on the link
     // and announces nothing — the keyboard user has to tab through
     // the whole nav again after every move.
     await page.goto('/library');
+    await page.getByRole('button', { name: /Open navigation/ }).click();
     await page.getByRole('link', { name: 'Notes' }).click();
     await expect(page.getByRole('heading', { name: 'Notes', level: 1 })).toBeVisible();
     await expect(page.locator('#cn-main')).toBeFocused();
@@ -112,7 +131,7 @@ test.describe('landmarks and headings', () => {
 
   test('names the primary navigation landmark', async ({ page }) => {
     await page.goto('/library');
-    await expect(page.getByRole('navigation', { name: 'Primary' })).toHaveCount(1);
+    await expect(page.locator('nav[aria-label="Primary"]')).toHaveCount(1);
   });
 });
 
@@ -169,11 +188,12 @@ test.describe('motion is present when not suppressed', () => {
 });
 
 test.describe('responsive navigation', () => {
-  test('desktop keeps a full-width rail with all three destinations', async ({
+  test('desktop overlay keeps all three destinations', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/library');
+    await page.getByRole('button', { name: /Open navigation/ }).click();
 
     const nav = page.getByRole('navigation', { name: 'Primary' });
     await expect(nav.locator('.cn-nav__primary').getByRole('link')).toHaveCount(3);
@@ -185,6 +205,7 @@ test.describe('responsive navigation', () => {
     // workspace — but it never drops a destination to make room.
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto('/library');
+    await page.getByRole('button', { name: /Open navigation/ }).click();
 
     const nav = page.getByRole('navigation', { name: 'Primary' });
     const links = nav.locator('.cn-nav__primary').getByRole('link');
@@ -201,6 +222,7 @@ test.describe('responsive navigation', () => {
   test('the page does not scroll sideways on a phone', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto('/library');
+    await page.getByRole('button', { name: /Open navigation/ }).click();
     const overflows = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
     );
@@ -212,6 +234,7 @@ test.describe('responsive navigation', () => {
   }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto('/library');
+    await page.getByRole('button', { name: /Open navigation/ }).click();
 
     const nav = page.getByRole('navigation', { name: 'Primary' });
     const links = nav.locator('.cn-nav__primary').getByRole('link');
@@ -234,6 +257,7 @@ test.describe('resizable text', () => {
     // Emulates the user raising their browser's default font size —
     // which is why nothing in base.css overrides html { font-size }.
     await page.addStyleTag({ content: 'html { font-size: 24px; }' });
+    await page.getByRole('button', { name: /Open navigation/ }).click();
 
     await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Library', level: 1 })).toBeVisible();

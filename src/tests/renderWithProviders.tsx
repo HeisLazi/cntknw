@@ -7,6 +7,8 @@ import type { MemoryRepositories } from '@data/adapters/memory';
 import type { Repositories } from '@data/repositories';
 import { RepositoryProvider } from '@app/providers/RepositoryProvider';
 import { ToastProvider } from '@components/primitives';
+import { PomodoroProvider } from '@features/pomodoro/PomodoroProvider';
+import { DEFAULT_POMODORO_STATE } from '@features/pomodoro/pomodoroState';
 
 export interface ProviderOptions {
   repositories?: Repositories;
@@ -41,9 +43,11 @@ export function renderWithProviders(
   const result = render(
     <RepositoryProvider repositories={repositories}>
       <ToastProvider>
-        <MemoryRouter initialEntries={options.initialEntries ?? ['/']}>
-          {ui}
-        </MemoryRouter>
+        <PomodoroProvider initialState={DEFAULT_POMODORO_STATE}>
+          <MemoryRouter initialEntries={options.initialEntries ?? ['/']}>
+            {ui}
+          </MemoryRouter>
+        </PomodoroProvider>
       </ToastProvider>
     </RepositoryProvider>,
   );

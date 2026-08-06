@@ -237,6 +237,41 @@ for (const adapter of adapters) {
         expect(restored?.deletedAt).toBeUndefined();
       });
 
+      it('re-reads after a revision conflict before delete and restore', async () => {
+        const journal = await repos.journals.getOrCreateJournalForSource(id(), 'J');
+        const block = await repos.journals.createBlock({
+          journalId: journal.id,
+          kind: 'paragraph',
+          rank: 'a',
+          content: { type: 'paragraph', text: 'original' },
+        });
+        await repos.journals.updateBlock(
+          { id: block.id, content: { type: 'paragraph', text: 'remote truth' } },
+          expectedRevision(block.revision),
+        );
+
+        await expect(repos.journals.updateBlock(
+          { id: block.id, content: { type: 'paragraph', text: 'stale local edit' } },
+          expectedRevision(block.revision),
+        )).rejects.toBeInstanceOf(RevisionConflictError);
+
+        const current = await repos.journals.getBlockById(block.id);
+        expect(current).toMatchObject({ revision: 1, content: { text: 'remote truth' } });
+        const deleted = await repos.journals.softDeleteBlock(
+          block.id,
+          expectedRevision(current!.revision),
+        );
+        const restored = await repos.journals.restoreBlock(
+          block.id,
+          expectedRevision(deleted.revision),
+        );
+        expect(restored).toMatchObject({
+          revision: 3,
+          content: { text: 'remote truth' },
+        });
+        expect(restored.deletedAt).toBeUndefined();
+      });
+
       it('clears parentBlockId when explicitly set to null', async () => {
         const journal = await repos.journals.getOrCreateJournalForSource(id(), 'J');
         const parent = await repos.journals.createBlock({
@@ -683,9 +718,11 @@ for (const adapter of adapters) {
           annotationTool: 'select' as const,
         },
         journalView: { scrollOffset: 0 },
+        whiteboard: { viewport: { x: 0, y: 0, zoom: 1 }, layout: {} },
         layout: {
           mode: 'split' as const,
           splitRatio: 0.5,
+          rightWorkspace: 'write' as const,
           sourceCollapsed: false,
           journalCollapsed: false,
         },
@@ -743,6 +780,40 @@ for (const adapter of adapters) {
         expect(reloaded?.activeLocation.pdf?.page).toBe(67);
         expect(reloaded?.listenLocation?.pdf?.page).toBe(82);
         expect(saved.sourceId).toBe(sourceId);
+      });
+    });
+
+    // ─── Pomodoro timer ──────────────────────────────────────────
+
+    describe('PomodoroRepository', () => {
+      const ready = {
+        mode: 'focus' as const,
+        status: 'idle' as const,
+        durations: { focus: 25, shortBreak: 5, longBreak: 15 },
+        remainingSeconds: 1500,
+        deadlineAt: null,
+      };
+
+      it('creates and restores the singleton timer record', async () => {
+        const created = await repos.pomodoro.create(ready);
+        expect(created.revision).toBe(0);
+        expect(await repos.pomodoro.get()).toEqual(created);
+        await expect(repos.pomodoro.create(ready))
+          .rejects.toBeInstanceOf(RecordAlreadyExistsError);
+      });
+
+      it('requires the revision it actually read for every update', async () => {
+        const created = await repos.pomodoro.create(ready);
+        const running = await repos.pomodoro.update({
+          ...ready,
+          status: 'running',
+          deadlineAt: Date.now() + 1_500_000,
+        }, expectedRevision(created.revision));
+        expect(running.revision).toBe(1);
+
+        await expect(repos.pomodoro.update(ready, expectedRevision(0)))
+          .rejects.toBeInstanceOf(RevisionConflictError);
+        expect((await repos.pomodoro.get())?.status).toBe('running');
       });
     });
 
@@ -1006,9 +1077,11 @@ for (const adapter of adapters) {
             annotationTool: 'select' as const,
           },
           journalView: { scrollOffset: 0 },
+          whiteboard: { viewport: { x: 0, y: 0, zoom: 1 }, layout: {} },
           layout: {
             mode: 'split' as const,
             splitRatio: 0.5,
+            rightWorkspace: 'write' as const,
             sourceCollapsed: false,
             journalCollapsed: false,
           },

@@ -4,6 +4,7 @@ import type { Repositories } from '@data/repositories';
 import { ErrorBoundary } from './providers/ErrorBoundary';
 import { RepositoryProvider } from './providers/RepositoryProvider';
 import { ToastProvider } from '@components/primitives';
+import { PomodoroProvider } from '@features/pomodoro/PomodoroProvider';
 import { createRoutes } from './routes';
 import '@design/tokens.css';
 import '@design/base.css';
@@ -45,7 +46,9 @@ export function App({
     <ErrorBoundary>
       <RepositoryProvider repositories={repositories}>
         <ToastProvider>
-          <RouterProvider router={router} />
+          <PomodoroProvider>
+            <RouterProvider router={router} />
+          </PomodoroProvider>
         </ToastProvider>
       </RepositoryProvider>
     </ErrorBoundary>

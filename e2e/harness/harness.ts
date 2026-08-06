@@ -315,6 +315,33 @@ const api = {
     return journal?.id;
   },
 
+  /** Read-only S3 acceptance inspection through repository boundaries. */
+  async inspectWhiteboard(sourceId: EntityId) {
+    const { repos } = active();
+    const journal = await repos.journals.getJournalForSource(sourceId);
+    const workspace = await repos.workspaceStates.getBySource(sourceId);
+    const blocks = journal ? await repos.journals.listBlocks(journal.id) : [];
+    return {
+      workspace: workspace ? {
+        rightWorkspace: workspace.layout.rightWorkspace,
+        viewport: workspace.whiteboard.viewport,
+        layout: workspace.whiteboard.layout,
+      } : null,
+      blocks: blocks.map((block) => ({
+        id: block.id,
+        kind: block.kind,
+        page: block.sourceLocation?.pdf?.page,
+        contentType: block.content.type,
+        text: block.content.type === 'paragraph' ? block.content.text : undefined,
+        drawing: block.content.type === 'drawing' ? {
+          version: block.content.drawingData.version,
+          strokeCount: block.content.drawingData.strokes.length,
+          tool: block.content.whiteboardStyle?.tool,
+        } : undefined,
+      })),
+    };
+  },
+
   /** BV-001 — move the reading position, so there is state to resume. */
   async moveReadingPosition(
     sourceId: EntityId,

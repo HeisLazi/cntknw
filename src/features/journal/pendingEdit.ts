@@ -3,7 +3,8 @@ import { textOfEditableContent, withEditedText } from '@domain/journals/transfor
 
 export interface PendingTextEdit {
   kind: 'text';
-  doc: unknown;
+  /** Present only when BlockEditor authored the rich document. */
+  doc?: unknown;
   text: string;
 }
 
@@ -18,9 +19,16 @@ export function applyPendingEdit(
   current: BlockContent,
   edit: PendingJournalEdit,
 ): BlockContent {
-  return edit.kind === 'content'
-    ? edit.content
-    : withEditedText(current, edit) as BlockContent;
+  if (edit.kind === 'content') return edit.content;
+  if (current.type === 'paragraph' && edit.doc === undefined) {
+    // Text-only projections such as Whiteboard must not fabricate a
+    // ProseMirror document or retain one whose text is now stale.
+    // BlockEditor is the sole producer of `doc`; it reconstructs from
+    // this plain text the next time the block opens in the journal.
+    const { doc: _staleDoc, ...withoutDoc } = current;
+    return { ...withoutDoc, text: edit.text };
+  }
+  return withEditedText(current, edit) as BlockContent;
 }
 
 export function drawingSummary(content: BlockContent): string {

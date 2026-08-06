@@ -80,6 +80,11 @@ export const ParagraphContentSchema = z.object({
   type: z.literal('paragraph'),
   doc: RichDocSchema.optional(),
   text: z.string().default(''),
+  /** Canonical styling used when this paragraph is projected on a whiteboard. */
+  whiteboardStyle: z.object({
+    color: z.string().min(1),
+    fontSize: z.number().finite().min(10).max(96),
+  }).optional(),
 });
 export type ParagraphContent = z.infer<typeof ParagraphContentSchema>;
 
@@ -198,6 +203,19 @@ export const DrawingContentSchema = z.object({
   /** Editable vector strokes are authoritative; a preview is disposable. */
   drawingData: DrawingDataSchema,
   previewDataUrl: z.string().optional(),
+  /** Shape semantics and fill remain canonical block content, never board layout. */
+  whiteboardStyle: z.object({
+    tool: z.enum([
+      'pen',
+      'pencil',
+      'highlighter',
+      'line',
+      'arrow',
+      'rectangle',
+      'ellipse',
+    ]),
+    fill: z.string().min(1).optional(),
+  }).optional(),
 });
 export type DrawingContent = z.infer<typeof DrawingContentSchema>;
 

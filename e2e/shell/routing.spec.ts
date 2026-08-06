@@ -11,9 +11,15 @@ import { seedApplicationSource } from '../browser/harness-client';
 
 const PRIMARY = ['Library', 'Gallery', 'Notes'] as const;
 
+async function openNavigation(page: import('@playwright/test').Page) {
+  await page.getByRole('button', { name: /Open navigation/ }).click();
+  await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible();
+}
+
 test.describe('primary destinations', () => {
   test('shows exactly three, and only the three', async ({ page }) => {
     await page.goto('/library');
+    await openNavigation(page);
 
     const nav = page.getByRole('navigation', { name: 'Primary' });
     const primaryLinks = nav.locator('.cn-nav__primary').getByRole('link');
@@ -26,6 +32,7 @@ test.describe('primary destinations', () => {
     page,
   }) => {
     await page.goto('/library');
+    await openNavigation(page);
 
     const primary = page
       .getByRole('navigation', { name: 'Primary' })
@@ -43,6 +50,7 @@ test.describe('primary destinations', () => {
 
   test('marks the current destination for assistive technology', async ({ page }) => {
     await page.goto('/gallery');
+    await openNavigation(page);
     await expect(page.locator('[aria-current="page"]')).toHaveText('Gallery');
   });
 });

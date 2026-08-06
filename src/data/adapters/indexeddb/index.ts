@@ -31,6 +31,7 @@ import type {
   EpistemicClaim, CreateEpistemicClaimInput, KnowledgeStatus,
   StudySession, CreateSessionInput,
   WorkspaceState,
+  PomodoroTimerRecord, PomodoroTimerState,
 } from '@domain/index';
 import {
   CreateSourceInputSchema,
@@ -48,13 +49,14 @@ import {
   CreateGlossaryEntryInputSchema,
   CreateEpistemicClaimInputSchema,
   CreateSessionInputSchema,
+  PomodoroTimerStateSchema,
   referenceKey,
 } from '@domain/index';
 import type {
   SourceRepository, JournalRepository, AssetRepository,
   AnnotationRepository, ConnectionRepository, SessionRepository,
   WorkspaceStateRepository, ConceptRepository, GlossaryRepository,
-  EpistemicClaimRepository, UnitOfWork, ConcurrencyGuard,
+  EpistemicClaimRepository, PomodoroRepository, UnitOfWork, ConcurrencyGuard,
 } from '../../repositories';
 import { assertRevision } from '../../repositories/concurrency';
 import {
@@ -82,6 +84,7 @@ import {
   epistemicClaimToStorage, epistemicClaimFromStorage,
   studySessionToStorage, studySessionFromStorage,
   workspaceStateToStorage, workspaceStateFromStorage,
+  POMODORO_META_KEY, pomodoroTimerToStorage, pomodoroTimerFromStorage,
 } from '../../db/storageRecords';
 
 const now = () => new Date().toISOString();
@@ -1043,6 +1046,70 @@ export class DexieWorkspaceStateRepository implements WorkspaceStateRepository {
   }
 }
 
+// ─── Pomodoro timer ──────────────────────────────────────────────
+
+export class DexiePomodoroRepository implements PomodoroRepository {
+  constructor(private readonly db: CntknwDatabase) {}
+
+  async get(): Promise<PomodoroTimerRecord | null> {
+    const record = await guarded('Reading the focus timer', () =>
+      this.db.meta.get(POMODORO_META_KEY),
+    );
+    return record ? pomodoroTimerFromStorage(record) : null;
+  }
+
+  async create(state: PomodoroTimerState): Promise<PomodoroTimerRecord> {
+    const parsed = PomodoroTimerStateSchema.parse(state);
+    return guarded('Saving the focus timer', () =>
+      this.db.transaction('rw', this.db.meta, async () => {
+        const existing = await this.db.meta.get(POMODORO_META_KEY);
+        if (existing) {
+          throw new RecordAlreadyExistsError('PomodoroTimer', POMODORO_META_KEY);
+        }
+        const timestamp = now();
+        const created: PomodoroTimerRecord = {
+          ...parsed,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          revision: 0,
+        };
+        await this.db.meta.add(pomodoroTimerToStorage(created));
+        return created;
+      }),
+    );
+  }
+
+  async update(
+    state: PomodoroTimerState,
+    guard: ConcurrencyGuard,
+  ): Promise<PomodoroTimerRecord> {
+    const parsed = PomodoroTimerStateSchema.parse(state);
+    return guarded('Saving the focus timer', () =>
+      this.db.transaction('rw', this.db.meta, async () => {
+        const record = await this.db.meta.get(POMODORO_META_KEY);
+        if (!record) {
+          throw new RecordNotFoundError('PomodoroTimer', POMODORO_META_KEY);
+        }
+        const existing = pomodoroTimerFromStorage(record);
+        assertRevision(
+          'PomodoroTimer',
+          POMODORO_META_KEY,
+          existing.revision,
+          guard,
+        );
+        const updated: PomodoroTimerRecord = {
+          ...parsed,
+          createdAt: existing.createdAt,
+          updatedAt: now(),
+          revision: existing.revision + 1,
+        };
+        await this.db.meta.put(pomodoroTimerToStorage(updated));
+        return updated;
+      }),
+    );
+  }
+}
+
 // ─── Unit of work ────────────────────────────────────────────────
 
 /**
@@ -1085,6 +1152,7 @@ export function createIndexedDbRepositories(db: CntknwDatabase = getDatabase()) 
     claims: new DexieEpistemicClaimRepository(db),
     sessions: new DexieSessionRepository(db),
     workspaceStates: new DexieWorkspaceStateRepository(db),
+    pomodoro: new DexiePomodoroRepository(db),
     unitOfWork: new DexieUnitOfWork(db),
   };
 }

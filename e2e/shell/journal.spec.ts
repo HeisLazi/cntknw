@@ -10,7 +10,7 @@
  * position, not by metadata**. If a page-picker ever appears, the
  * first test here should be the thing that objects.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import { makePdf } from '../fixtures/makePdf';
 import { resetApplicationStorage } from '../browser/harness-client';
 
@@ -55,6 +55,26 @@ const turnTo = async (page: Page, target: number) => {
   await expect(label).toHaveValue(String(target));
   await expect(page.locator('.cn-run--active .cn-run__folio')).toHaveText(`p.${target}`);
 };
+
+async function expectNoCardChrome(locator: Locator) {
+  const chrome = await locator.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      backgroundColor: style.backgroundColor,
+      borderWidths: [
+        style.borderTopWidth,
+        style.borderRightWidth,
+        style.borderBottomWidth,
+        style.borderLeftWidth,
+      ],
+      boxShadow: style.boxShadow,
+    };
+  });
+
+  expect(chrome.backgroundColor).toBe('rgba(0, 0, 0, 0)');
+  expect(chrome.borderWidths).toEqual(['0px', '0px', '0px', '0px']);
+  expect(chrome.boxShadow).toBe('none');
+}
 
 test.describe('AC-003 — page context is inherited, never asked for', () => {
   test('the reader is never offered a way to choose a page', async ({ page }) => {
@@ -177,6 +197,23 @@ test.describe('AC-004 / INV-005 — empty pages create no section', () => {
   });
 });
 
+test.describe('journal block type menu', () => {
+  test('a mouse click opens the menu on an empty block composed with Enter', async ({
+    page,
+  }) => {
+    await openReader(page);
+    await writeHere(page, 'First block.');
+
+    await page.locator('.cn-block-editor__content').last().press('Enter');
+    await expect(page.locator('.cn-block')).toHaveCount(2);
+
+    await page.locator('.cn-block').last().locator('.cn-block__mark-button').click();
+    const menu = page.getByRole('menu');
+    await expect(menu.getByRole('menuitem', { name: 'Evidence' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Objection' })).toBeVisible();
+  });
+});
+
 test.describe('INV-003 — one continuous journal', () => {
   test('notes from several pages are all present in one scroll', async ({ page }) => {
     // Not a notebook per page. Turning a page changes which run is
@@ -198,10 +235,19 @@ test.describe('INV-003 — one continuous journal', () => {
 
   test('the whole journal survives a reload, in order', async ({ page }) => {
     await openReader(page);
+
+    // The empty composition is ordinary text on opaque paper, not a
+    // bordered prompt or card.
+    await expectNoCardChrome(page.getByRole('button', { name: 'Start writing.' }));
+
     await turnTo(page, 2);
     await writeHere(page, 'Durable note on two.');
     await turnTo(page, 5);
     await writeHere(page, 'Durable note on five.');
+
+    const firstBlock = page.locator('.cn-block').first();
+    await expectNoCardChrome(firstBlock);
+    await expectNoCardChrome(firstBlock.locator('.cn-block-editor__content'));
 
     await page.reload();
     await expect(page.locator('.cn-pdf-page[data-page="5"]')).toBeVisible({
@@ -212,5 +258,19 @@ test.describe('INV-003 — one continuous journal', () => {
     await expect(page.getByText('Durable note on five.')).toBeVisible();
     const folios = await page.locator('.cn-run__folio').allTextContents();
     expect(folios).toEqual(['p.2', 'p.5']);
+
+    // Reload reconstructs the same flat projection while the folio
+    // containment continues to carry canonical page provenance.
+    const reloadedBlock = page.locator('.cn-block').first();
+    await expectNoCardChrome(reloadedBlock);
+    await expectNoCardChrome(reloadedBlock.locator('.cn-block-editor__content'));
+    const runTwo = page.locator('.cn-run', {
+      has: page.locator('.cn-run__folio', { hasText: 'p.2' }),
+    });
+    const runFive = page.locator('.cn-run', {
+      has: page.locator('.cn-run__folio', { hasText: 'p.5' }),
+    });
+    await expect(runTwo).toContainText('Durable note on two.');
+    await expect(runFive).toContainText('Durable note on five.');
   });
 });

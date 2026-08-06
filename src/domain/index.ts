@@ -27,3 +27,4 @@ export * from './connections/connection.schemas';
 export * from './concepts/concept.schemas';
 export * from './sessions/session.schemas';
 export * from './workspace/workspace.schemas';
+export * from './pomodoro/pomodoro.schemas';

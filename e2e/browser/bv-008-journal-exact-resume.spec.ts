@@ -56,6 +56,7 @@ test.describe('Journal Exact Resume', () => {
     expect(scrollPos).toBeGreaterThan(0);
 
     // 4. Navigate away (to library)
+    await page.getByRole('button', { name: /Open navigation/ }).click();
     await page.getByRole('link', { name: 'Library' }).click();
     await expect(page.locator('h1', { hasText: 'Library' })).toBeVisible();
 

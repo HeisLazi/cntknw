@@ -8,8 +8,7 @@
  */
 
 .cn-shell {
-  display: grid;
-  grid-template-columns: var(--cn-nav-width) 1fr;
+  position: relative;
   min-height: 100vh;
   min-height: 100dvh;
 }
@@ -41,12 +40,62 @@
 /* ── Primary navigation ─────────────────────────────────────────── */
 
 .cn-nav {
+  position: fixed;
+  inset-block: var(--cn-space-lg);
+  inset-inline-start: var(--cn-space-lg);
+  z-index: var(--cn-z-overlay);
   display: flex;
   flex-direction: column;
   gap: var(--cn-space-xl);
+  width: min(var(--cn-nav-width), calc(100vw - var(--cn-space-2xl)));
   padding: var(--cn-space-xl) var(--cn-space-lg);
-  background-color: var(--cn-surface);
-  border-right: var(--cn-border-width) solid var(--cn-border-subtle);
+  background: var(--cn-glass-bg);
+  border: var(--cn-border-width) solid var(--cn-glass-border);
+  border-radius: var(--cn-radius-lg);
+  box-shadow: var(--cn-shadow-lg);
+  -webkit-backdrop-filter: var(--cn-glass-blur);
+  backdrop-filter: var(--cn-glass-blur);
+}
+
+.cn-nav[hidden],
+.cn-study__controls[hidden],
+.cn-study__right-projection[hidden] {
+  display: none;
+}
+
+.cn-nav-trigger {
+  position: fixed;
+  inset-block-start: 50%;
+  inset-inline-start: 0;
+  z-index: var(--cn-z-nav);
+  width: var(--cn-chrome-control-size);
+  min-height: var(--cn-target-min);
+  padding: 0;
+  border: var(--cn-border-width) solid var(--cn-glass-border);
+  border-inline-start: none;
+  border-radius: 0 var(--cn-radius-md) var(--cn-radius-md) 0;
+  background: var(--cn-glass-bg);
+  color: var(--cn-ink-muted);
+  cursor: pointer;
+  transform: translateY(-50%);
+  -webkit-backdrop-filter: var(--cn-glass-blur);
+  backdrop-filter: var(--cn-glass-blur);
+  transition:
+    color var(--cn-duration-fast) var(--cn-ease-standard),
+    background-color var(--cn-duration-fast) var(--cn-ease-standard);
+}
+
+.cn-nav-trigger:hover,
+.cn-nav-trigger:focus-visible,
+.cn-nav-trigger[aria-expanded='true'] {
+  color: var(--cn-ink-strong);
+  background: var(--cn-surface-raised);
+}
+
+.cn-nav__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .cn-nav__brand {
@@ -97,13 +146,12 @@
   box-shadow: inset var(--cn-border-width-thick) 0 0 var(--cn-accent);
 }
 
-.cn-nav__secondary {
+.cn-nav__focus {
   margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--cn-space-3xs);
   padding-top: var(--cn-space-lg);
-  border-top: var(--cn-border-width) solid var(--cn-border-subtle);
+  border-top: var(--cn-border-width) solid var(--cn-glass-border);
+  color: var(--cn-ink-muted);
+  font-size: var(--cn-text-xs);
 }
 
 /* ── Main region ────────────────────────────────────────────────── */
@@ -113,6 +161,8 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .cn-main__inner {
@@ -174,30 +224,167 @@
 /* ── Study workspace ────────────────────────────────────────────── */
 
 .cn-study {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1;
+  height: 100vh;
+  height: 100dvh;
   min-height: 0;
+  overflow: hidden;
 }
 
-.cn-study__bar {
+.cn-study__chrome {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  z-index: var(--cn-z-overlay);
+  pointer-events: none;
+}
+
+.cn-study__chrome-strip {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--cn-space-lg);
+  justify-content: center;
+  gap: var(--cn-space-md);
+  min-height: var(--cn-topbar-collapsed-height);
+  background: var(--cn-glass-bg);
+  border-bottom: var(--cn-border-width) solid var(--cn-glass-border);
+  -webkit-backdrop-filter: var(--cn-glass-blur);
+  backdrop-filter: var(--cn-glass-blur);
+  transition: min-height var(--cn-duration-fast) var(--cn-ease-standard);
+  pointer-events: auto;
+}
+
+.cn-study__chrome[data-expanded='true'] .cn-study__chrome-strip {
   min-height: var(--cn-topbar-height);
   padding-inline: var(--cn-space-xl);
-  border-bottom: var(--cn-border-width) solid var(--cn-border-subtle);
+}
+
+.cn-study__chrome-reveal {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 50%;
+  display: grid;
+  place-items: center;
+  width: var(--cn-chrome-control-size);
+  height: var(--cn-chrome-control-size);
+  padding: 0;
+  border: var(--cn-border-width) solid var(--cn-glass-border);
+  border-top: 0;
+  border-radius: 0 0 var(--cn-radius-md) var(--cn-radius-md);
+  background: var(--cn-glass-bg);
+  color: var(--cn-ink-muted);
+  cursor: pointer;
+  transform: translateX(-50%);
+  -webkit-backdrop-filter: var(--cn-glass-blur);
+  backdrop-filter: var(--cn-glass-blur);
+}
+
+.cn-study__chrome-reveal:hover,
+.cn-study__chrome-reveal:focus-visible {
+  color: var(--cn-ink-strong);
 }
 
 .cn-study__title {
+  position: absolute;
+  inset-inline-start: var(--cn-space-xl);
   font-size: var(--cn-text-base);
   font-weight: var(--cn-weight-medium);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--cn-duration-fast) var(--cn-ease-standard);
+}
+
+.cn-study__save {
+  position: absolute;
+  inset-inline-end: calc(
+    var(--cn-space-xl) + var(--cn-nav-width-collapsed) + var(--cn-space-lg)
+  );
+  color: var(--cn-ink-muted);
+  font-size: var(--cn-text-xs);
+  opacity: 0;
+  transition: opacity var(--cn-duration-fast) var(--cn-ease-standard);
+}
+
+.cn-study__chrome[data-expanded='true'] :is(.cn-study__title, .cn-study__save) {
+  opacity: 1;
+}
+
+.cn-study__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--cn-space-sm);
+  padding: var(--cn-space-sm) var(--cn-space-xl);
+  background: var(--cn-glass-bg);
+  border-bottom: var(--cn-border-width) solid var(--cn-glass-border);
+  box-shadow: var(--cn-shadow-md);
+  -webkit-backdrop-filter: var(--cn-glass-blur);
+  backdrop-filter: var(--cn-glass-blur);
+  pointer-events: auto;
+}
+
+.cn-study__control-group {
+  display: flex;
+  gap: var(--cn-space-3xs);
+}
+
+.cn-study__mode,
+.cn-study__settings,
+.cn-study__preset select,
+.cn-study__narrow-toggle button {
+  min-height: var(--cn-chrome-control-size);
+  padding-inline: var(--cn-space-sm);
+  border: var(--cn-border-width) solid var(--cn-glass-border);
+  border-radius: var(--cn-radius-sm);
+  background: transparent;
+  color: var(--cn-ink-muted);
+  font-size: var(--cn-text-xs);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.cn-study__mode:hover,
+.cn-study__settings:hover,
+.cn-study__narrow-toggle button:hover,
+.cn-study__mode[aria-pressed='true'] {
+  background: var(--cn-surface-hover);
+  color: var(--cn-ink-strong);
+}
+
+.cn-study__mode[aria-pressed='true'] {
+  border-color: var(--cn-accent);
+  font-weight: var(--cn-weight-semibold);
+}
+
+.cn-study__mode:disabled {
+  color: var(--cn-disabled-ink);
+  cursor: not-allowed;
+}
+
+.cn-study__preset {
+  display: flex;
+  align-items: center;
+  gap: var(--cn-space-xs);
+  color: var(--cn-ink-muted);
+  font-size: var(--cn-text-xs);
+}
+
+.cn-study__preset select {
+  background-color: var(--cn-surface-raised);
+}
+
+.cn-study__narrow-toggle {
+  display: none;
 }
 
 .cn-study__panes {
   flex: 1;
   min-height: 0;
+  background-color: var(--cn-canvas);
 }
 
 .cn-study__pane {
@@ -211,6 +398,12 @@
 
 .cn-study__pane--journal {
   background-color: var(--cn-paper);
+}
+
+.cn-study__right,
+.cn-study__right-projection {
+  height: 100%;
+  min-height: 0;
 }
 
 .cn-study__reading {
@@ -283,81 +476,51 @@
 
 /* ── Responsive ─────────────────────────────────────────────────────
  *
- * Tablet: the rail narrows to icons-with-labels-below and the shell
- * stays two-column. Phone: navigation moves to a bottom bar, because
- * a 15rem sidebar on a 375px screen leaves no room for content.
+ * Overlay navigation keeps the work area full-width at every size.
+ * Narrow screens reduce route padding without creating a permanent
+ * bar that competes with the workspace.
  */
 
 @media (max-width: 60rem) {
-  .cn-shell {
-    grid-template-columns: var(--cn-nav-width-collapsed) 1fr;
-  }
-
-  .cn-nav {
-    padding-inline: var(--cn-space-2xs);
-    align-items: center;
-  }
-
-  .cn-nav__brand {
-    font-size: var(--cn-text-sm);
-  }
-
-  .cn-nav__link {
-    flex-direction: column;
-    gap: 0;
-    justify-content: center;
-    padding-inline: var(--cn-space-2xs);
-    font-size: var(--cn-text-2xs);
-    text-align: center;
-  }
-
   .cn-main__inner {
     padding: var(--cn-space-xl);
   }
 }
 
-@media (max-width: 40rem) {
-  .cn-shell {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr auto;
-  }
-
-  .cn-nav {
-    grid-row: 2;
-    flex-direction: row;
-    align-items: stretch;
-    gap: var(--cn-space-2xs);
-    min-height: var(--cn-nav-height-compact);
-    padding: var(--cn-space-2xs);
-    border-right: none;
-    border-top: var(--cn-border-width) solid var(--cn-border-subtle);
-    /* Above content, below any overlay. */
-    position: sticky;
-    bottom: 0;
-    z-index: var(--cn-z-nav);
-  }
-
-  /* The wordmark and the secondary links leave the phone bar. They
-   * are still reachable — Settings has its own route — but they do
-   * not compete with the three primary destinations for the only
-   * horizontal space there is. */
-  .cn-nav__brand,
-  .cn-nav__secondary {
+@media (max-width: 56.25rem) {
+  .cn-study__panes[data-layout-mode='split'] .cn-split__pane[data-pane='end'],
+  .cn-study__panes[data-layout-mode='split'] .cn-split__handle {
     display: none;
   }
 
-  .cn-nav__primary {
-    flex: 1;
-    flex-direction: row;
+  .cn-study__panes[data-layout-mode='split'] .cn-split__pane[data-pane='start'] {
+    flex: 1 1 auto !important;
   }
 
-  .cn-nav__link {
-    flex: 1;
-    justify-content: center;
+  .cn-study__narrow-toggle {
+    position: fixed;
+    inset-block-end: var(--cn-space-lg);
+    inset-inline-start: 50%;
+    z-index: var(--cn-z-overlay);
+    display: flex;
+    gap: var(--cn-space-2xs);
+    padding: var(--cn-space-2xs);
+    border: var(--cn-border-width) solid var(--cn-glass-border);
+    border-radius: var(--cn-radius-md);
+    background: var(--cn-glass-bg);
+    box-shadow: var(--cn-shadow-md);
+    transform: translateX(-50%);
+    -webkit-backdrop-filter: var(--cn-glass-blur);
+    backdrop-filter: var(--cn-glass-blur);
+    pointer-events: auto;
   }
+}
 
-  .cn-nav__link[aria-current='page'] {
-    box-shadow: inset 0 var(--cn-border-width-thick) 0 var(--cn-accent);
+@media (max-width: 40rem) {
+  .cn-nav {
+    inset-block: var(--cn-space-sm);
+    inset-inline: var(--cn-space-sm);
+    width: auto;
   }
 
   .cn-main__inner {
@@ -368,17 +531,4 @@
     font-size: var(--cn-text-2xl);
   }
 
-  /* Below this width the split workspace stacks. Two panes of ~180px
-   * each would make both unusable. */
-  .cn-study__panes .cn-split {
-    flex-direction: column;
-  }
-
-  .cn-study__panes .cn-split__handle {
-    display: none;
-  }
-
-  .cn-study__panes .cn-split__pane {
-    flex: 1 1 auto !important;
-  }
 }

@@ -120,7 +120,8 @@ export interface MenuProps {
     'aria-expanded': boolean;
     'aria-controls': string;
     'aria-haspopup': 'menu';
-    onClick: () => void;
+    onPointerDown: (event: React.PointerEvent) => void;
+    onClick: (event: React.MouseEvent) => void;
   }) => ReactNode;
   align?: 'start' | 'end';
 }
@@ -139,6 +140,7 @@ export function Menu({ label, items, trigger, align = 'start' }: MenuProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const [pointerActivated, setPointerActivated] = useState(false);
   const id = useId();
 
   const close = useCallback(() => setOpen(false), []);
@@ -192,6 +194,37 @@ export function Menu({ label, items, trigger, align = 'start' }: MenuProps) {
     }
   };
 
+  const toggle = useCallback(() => {
+    setActiveIndex(enabledIndexes[0] ?? 0);
+    setOpen(!open);
+  }, [enabledIndexes, open, setOpen]);
+
+  const onTriggerPointerDown = useCallback(
+    (event: React.PointerEvent) => {
+      if (!event.isPrimary) return;
+      // Prevent the native pointer focus from retaking focus after the
+      // menu effect moves it to the first item.
+      event.preventDefault();
+      setPointerActivated(true);
+      setTimeout(() => {
+        setPointerActivated(false);
+      }, 0);
+      toggle();
+    },
+    [toggle],
+  );
+
+  const onTriggerClick = useCallback(
+    (event: React.MouseEvent) => {
+      if (pointerActivated) {
+        setPointerActivated(false);
+        return;
+      }
+      if (event.detail === 0) toggle();
+    },
+    [pointerActivated, toggle],
+  );
+
   return (
     <div
       className="cn-popover-root"
@@ -208,10 +241,12 @@ export function Menu({ label, items, trigger, align = 'start' }: MenuProps) {
           'aria-expanded': open,
           'aria-controls': id,
           'aria-haspopup': 'menu',
-          onClick: () => {
-            setActiveIndex(enabledIndexes[0] ?? 0);
-            setOpen(!open);
-          },
+          // A focused ancestor can re-render a trigger between pointerdown
+          // and click. Pointer activation must therefore not depend on the
+          // later click reaching the same DOM node; keyboard activation still
+          // arrives as a detail-0 click.
+          onPointerDown: onTriggerPointerDown,
+          onClick: onTriggerClick,
         })}
       </span>
       {open ? (

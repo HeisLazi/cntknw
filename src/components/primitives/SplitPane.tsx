@@ -6,6 +6,8 @@ export interface SplitPaneProps {
   orientation?: 'horizontal' | 'vertical';
   /** Fraction of the container given to the first pane, 0–1. */
   defaultRatio?: number;
+  /** Controlled ratio, used when persistence owns the current value. */
+  ratio?: number;
   minRatio?: number;
   maxRatio?: number;
   /** Accessible name for the separator, e.g. "Source and journal". */
@@ -13,6 +15,9 @@ export interface SplitPaneProps {
   start: ReactNode;
   end: ReactNode;
   onRatioChange?: (ratio: number) => void;
+  /** Projection visibility. Hidden panes remain mounted. */
+  startVisible?: boolean;
+  endVisible?: boolean;
 }
 
 const clamp = (value: number, min: number, max: number): number =>
@@ -34,16 +39,22 @@ const clamp = (value: number, min: number, max: number): number =>
 export function SplitPane({
   orientation = 'horizontal',
   defaultRatio = 0.5,
+  ratio: controlledRatio,
   minRatio = 0.2,
   maxRatio = 0.8,
   label,
   start,
   end,
   onRatioChange,
+  startVisible = true,
+  endVisible = true,
 }: SplitPaneProps) {
   const [ratio, setRatio] = useState(clamp(defaultRatio, minRatio, maxRatio));
   const containerRef = useRef<HTMLDivElement>(null);
   const id = useId();
+  const currentRatio = controlledRatio === undefined
+    ? ratio
+    : clamp(controlledRatio, minRatio, maxRatio);
 
   const apply = useCallback(
     (next: number) => {
@@ -83,11 +94,11 @@ export function SplitPane({
     switch (event.key) {
       case decrease:
         event.preventDefault();
-        apply(ratio - step);
+        apply(currentRatio - step);
         break;
       case increase:
         event.preventDefault();
-        apply(ratio + step);
+        apply(currentRatio + step);
         break;
       case 'Home':
         event.preventDefault();
@@ -102,15 +113,22 @@ export function SplitPane({
     }
   };
 
-  const percent = Math.round(ratio * 100);
+  const percent = Math.round(currentRatio * 100);
+  const singlePane = !startVisible || !endVisible;
 
   return (
     <div
       ref={containerRef}
       className={`cn-split cn-split--${orientation}`}
       id={id}
+      data-single-pane={singlePane ? 'true' : 'false'}
     >
-      <div className="cn-split__pane" style={{ flex: `0 0 ${percent}%` }}>
+      <div
+        className="cn-split__pane"
+        data-pane="start"
+        style={{ flex: singlePane && startVisible ? '1 1 auto' : `0 0 ${percent}%` }}
+        hidden={!startVisible}
+      >
         {start}
       </div>
       <button
@@ -124,8 +142,14 @@ export function SplitPane({
         aria-valuemax={Math.round(maxRatio * 100)}
         onPointerDown={onPointerDown}
         onKeyDown={onKeyDown}
+        hidden={!startVisible || !endVisible}
       />
-      <div className="cn-split__pane" style={{ flex: '1 1 0' }}>
+      <div
+        className="cn-split__pane"
+        data-pane="end"
+        style={{ flex: singlePane && endVisible ? '1 1 auto' : '1 1 0' }}
+        hidden={!endVisible}
+      >
         {end}
       </div>
     </div>

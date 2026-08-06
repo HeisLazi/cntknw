@@ -125,7 +125,8 @@ test.describe('spatial navigation truth', () => {
   test('an outline destination physically reveals its page', async ({ page }) => {
     await importAndOpen(page, NAV_PDF);
 
-    await page.getByRole('button', { name: 'Toggle contents' }).click();
+    await page.getByRole('button', { name: 'Reveal workspace controls' }).click();
+    await page.getByRole('button', { name: /Open document contents/ }).click();
     await page.getByRole('link', { name: 'The distant chapter' }).click();
 
     await expectPageInViewport(page, 17);
@@ -149,7 +150,8 @@ test.describe('outline availability', () => {
   test('a valid PDF with no outline says so', async ({ page }) => {
     await importAndOpen(page);
 
-    await page.getByRole('button', { name: 'Toggle contents' }).click();
+    await page.getByRole('button', { name: 'Reveal workspace controls' }).click();
+    await page.getByRole('button', { name: /Open document contents/ }).click();
 
     await expect(page.getByText('This document has no outline.')).toBeVisible();
     await expect(page.getByText('Outline unavailable.')).toHaveCount(0);
@@ -165,6 +167,7 @@ test.describe('distant position and journal provenance', () => {
     const expectedPage = await currentPage(page);
     const expectedOffset = await scrollport(page).evaluate((node) => node.scrollTop);
 
+    await page.getByRole('button', { name: /Open navigation/ }).click();
     await page.getByRole('link', { name: 'Library' }).click();
     await page.getByRole('link', { name: 'Spatial Reader' }).click();
 

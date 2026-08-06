@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { Menu } from '@components/primitives';
 import { canChangeKind } from '@domain/journals/transform';
 import type { BlockKind, JournalBlock } from '@domain/index';
@@ -26,8 +26,9 @@ export interface JournalBlockViewProps {
  *
  * The mark lane carries the taxonomy so the prose column carries only
  * prose (ADR-0006 §2). It is also the affordance for changing the
- * kind — the mark *is* the control, so there is no hovering toolbar
- * and no second place to look.
+ * kind — the mark *is* the persistent control. The ghost action row
+ * is only a convenience projection of actions that remain available
+ * from this keyboard-reachable menu.
  *
  * **The mark button stays in the tab order.** That costs a second tab
  * stop per block, which is a real price in a long journal. The
@@ -49,29 +50,76 @@ export function JournalBlockView({
   footer,
 }: JournalBlockViewProps) {
   const vocabulary = vocabularyFor(block.kind);
+  const [hovered, setHovered] = useState(false);
+  const [focusedWithin, setFocusedWithin] = useState(false);
+  const actionsVisible = hovered || focusedWithin;
+
+  const kindAction = useCallback(
+    (kind: BlockKind) => {
+      const entry = vocabularyFor(kind);
+      const verdict = canChangeKind(block.content, kind);
+      return {
+        kind,
+        label: entry.label,
+        disabled: !verdict.ok || kind === block.kind,
+        reason: verdict.ok ? undefined : verdict.reason,
+        onSelect: () => onChangeKind(kind),
+      };
+    },
+    [block.content, block.kind, onChangeKind],
+  );
+
+  const ghostKindActions = (
+    ['quote', 'question', 'definition'] as const
+  ).map(kindAction);
 
   const items = useCallback(
     () => [
       ...CHANGEABLE_KINDS.map((entry) => {
-        const verdict = canChangeKind(block.content, entry.kind);
+        const action = kindAction(entry.kind);
         return {
           id: entry.kind,
           label: entry.label,
           // Disabled rather than absent when the change would destroy
           // content: a menu that silently omits an option teaches
           // nothing, where a disabled one shows the shape of the rule.
-          disabled: !verdict.ok || entry.kind === block.kind,
-          onSelect: () => onChangeKind(entry.kind),
+          disabled: action.disabled,
+          onSelect: action.onSelect,
         };
       }),
+      {
+        id: 'definition',
+        label: vocabularyFor('definition').label,
+        disabled: kindAction('definition').disabled,
+        onSelect: kindAction('definition').onSelect,
+      },
+      {
+        id: 'connect-later',
+        label: 'Connect — later',
+        disabled: true,
+        onSelect: () => undefined,
+      },
       { id: 'move-up', label: 'Move up', onSelect: onMoveUp },
       { id: 'move-down', label: 'Move down', onSelect: onMoveDown },
+      { id: 'delete', label: 'Delete', onSelect: onRemove },
     ],
-    [block.content, block.kind, onChangeKind, onMoveUp, onMoveDown],
+    [kindAction, onMoveUp, onMoveDown, onRemove],
   );
 
   return (
-    <div className="cn-block" data-kind={block.kind}>
+    <div
+      className={`cn-block${actionsVisible ? ' cn-block--actions-visible' : ''}`}
+      data-kind={block.kind}
+      data-actions-visible={actionsVisible ? 'true' : 'false'}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocusCapture={() => setFocusedWithin(true)}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setFocusedWithin(false);
+        }
+      }}
+    >
       <div className="cn-block__mark">
         <Menu
           label={`Change block type from ${vocabulary.label}`}
@@ -124,6 +172,52 @@ export function JournalBlockView({
         )}
         {footer}
       </div>
+
+      {actionsVisible ? (
+        <div
+          className="cn-block__actions"
+          role="toolbar"
+          aria-label="Block actions"
+        >
+        {ghostKindActions.map((action) => (
+          <button
+            key={action.kind}
+            type="button"
+            className="cn-block__action"
+            title={action.reason}
+            disabled={action.disabled}
+            onClick={action.onSelect}
+          >
+            {action.label}
+          </button>
+        ))}
+        <span className="cn-block__move" role="group" aria-label="Move block">
+          <button
+            type="button"
+            className="cn-block__action"
+            aria-label="Move up"
+            onClick={onMoveUp}
+          >
+            Move ↑
+          </button>
+          <button
+            type="button"
+            className="cn-block__action"
+            aria-label="Move down"
+            onClick={onMoveDown}
+          >
+            Move ↓
+          </button>
+        </span>
+        <button
+          type="button"
+          className="cn-block__action cn-block__action--danger"
+          onClick={onRemove}
+        >
+          Delete
+        </button>
+        </div>
+      ) : null}
     </div>
   );
 }

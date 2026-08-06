@@ -316,7 +316,67 @@ describe('WorkspaceStateSchema', () => {
       expect(result.data.sourceView.mode).toBe('continuous');
       expect(result.data.sourceView.zoom).toBe(1);
       expect(result.data.layout.mode).toBe('split');
-      expect(result.data.layout.splitRatio).toBe(0.5);
+      expect(result.data.layout.splitRatio).toBe(0.7);
+      expect(result.data.layout.rightWorkspace).toBe('write');
+      expect(result.data.whiteboard).toEqual({
+        viewport: { x: 0, y: 0, zoom: 1 },
+        layout: {},
+      });
     }
+  });
+
+  it('decodes legacy and current workspace layout shapes without losing projections', () => {
+    const sourceId = id();
+    const legacy = WorkspaceStateSchema.parse({
+      ...baseFields(),
+      sourceId,
+      activeLocation: {
+        sourceType: 'book',
+        sourceId,
+        pdf: { page: 7 },
+      },
+      layout: { mode: 'split', splitRatio: 0.35 },
+    });
+    expect(legacy.layout).toMatchObject({
+      mode: 'split',
+      splitRatio: 0.35,
+      rightWorkspace: 'write',
+    });
+
+    const restored = WorkspaceStateSchema.parse({
+      ...legacy,
+      layout: {
+        ...legacy.layout,
+        mode: 'journal-focus',
+        splitRatio: 0.4,
+        rightWorkspace: 'whiteboard',
+      },
+    });
+    expect(restored.layout).toMatchObject({
+      mode: 'journal-focus',
+      splitRatio: 0.4,
+      rightWorkspace: 'whiteboard',
+    });
+  });
+
+  it('serializes and restores whiteboard viewport plus block layout without content', () => {
+    const sourceId = id();
+    const blockId = id();
+    const restored = WorkspaceStateSchema.parse(JSON.parse(JSON.stringify(
+      WorkspaceStateSchema.parse({
+        ...baseFields(),
+        sourceId,
+        activeLocation: { sourceType: 'book', sourceId, pdf: { page: 12 } },
+        whiteboard: {
+          viewport: { x: -240, y: 95, zoom: 2.25 },
+          layout: { [blockId]: { x: 1800, y: -700 } },
+        },
+      }),
+    )));
+
+    expect(restored.whiteboard.viewport).toEqual({ x: -240, y: 95, zoom: 2.25 });
+    expect(restored.whiteboard.layout[blockId]).toEqual({ x: 1800, y: -700 });
+    expect(restored.whiteboard).not.toHaveProperty('blocks');
+    expect(restored.whiteboard).not.toHaveProperty('content');
   });
 });

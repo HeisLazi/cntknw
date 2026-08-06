@@ -32,6 +32,7 @@ import type {
   EpistemicClaim,
   StudySession,
   WorkspaceState,
+  PomodoroTimerRecord,
 } from '@domain/index';
 import {
   SourceSchema,
@@ -48,6 +49,7 @@ import {
   EpistemicClaimSchema,
   StudySessionSchema,
   WorkspaceStateSchema,
+  PomodoroTimerRecordSchema,
   referenceKey,
 } from '@domain/index';
 import { MalformedRecordError } from '../errors';
@@ -103,6 +105,8 @@ export type StoredEpistemicClaim = Omit<EpistemicClaim, 'deletedAt'> & {
 export type StoredStudySession = StudySession;
 export type StoredWorkspaceState = WorkspaceState;
 export type StoredMeta = { key: string; value: unknown };
+
+export const POMODORO_META_KEY = 'app:pomodoro-timer';
 
 /** Page number used when a block has no PDF location. Never a real page (1-based). */
 export const NO_PAGE = 0;
@@ -288,3 +292,19 @@ export const workspaceStateFromStorage = (r: unknown): WorkspaceState =>
     'workspaceStates',
     (r as WorkspaceState)?.sourceId,
   );
+
+export function pomodoroTimerToStorage(
+  timer: PomodoroTimerRecord,
+): StoredMeta {
+  return { key: POMODORO_META_KEY, value: timer };
+}
+
+export function pomodoroTimerFromStorage(record: unknown): PomodoroTimerRecord {
+  const raw = record as StoredMeta;
+  return parseStored(
+    PomodoroTimerRecordSchema,
+    raw?.value,
+    'meta',
+    POMODORO_META_KEY,
+  );
+}

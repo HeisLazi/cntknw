@@ -89,6 +89,12 @@ describe('design tokens', () => {
       '--cn-focus-ring-width',
       '--cn-focus-ring-offset',
       '--cn-target-min',
+      '--cn-work-surface',
+      '--cn-pdf-paper',
+      '--cn-whiteboard-surface',
+      '--cn-glass-bg',
+      '--cn-glass-border',
+      '--cn-glass-blur',
     ];
     const missing = required.filter(
       (token) => !new RegExp(`${token}\\s*:`).test(tokenSource),
@@ -129,6 +135,17 @@ describe('design tokens', () => {
         if (/\d+m?s\b/.test(withoutVars)) {
           offenders.push(`${relative(SRC, file)}: ${declaration.trim()}`);
         }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('keeps backdrop filtering out of readable feature surfaces', () => {
+    const offenders: string[] = [];
+    for (const file of allStylesheets(join(SRC, 'features'))) {
+      const css = withoutComments(readFileSync(file, 'utf-8'));
+      if (/backdrop-filter\s*:/i.test(css)) {
+        offenders.push(relative(SRC, file));
       }
     }
     expect(offenders).toEqual([]);

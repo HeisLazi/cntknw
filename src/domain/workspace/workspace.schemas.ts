@@ -40,6 +40,31 @@ export const JournalViewSchema = z.object({
 });
 export type JournalView = z.infer<typeof JournalViewSchema>;
 
+// ─── Whiteboard Projection ─────────────────────────────────────
+
+export const WhiteboardViewportSchema = z.object({
+  x: z.number().finite().default(0),
+  y: z.number().finite().default(0),
+  zoom: z.number().finite().min(0.1).max(4).default(1),
+});
+export type WhiteboardViewport = z.infer<typeof WhiteboardViewportSchema>;
+
+export const WhiteboardPositionSchema = z.object({
+  x: z.number().finite(),
+  y: z.number().finite(),
+});
+export type WhiteboardPosition = z.infer<typeof WhiteboardPositionSchema>;
+
+/**
+ * Presentation-only board state. Keys are canonical journal block ids;
+ * content remains owned by those blocks and is never copied here.
+ */
+export const WhiteboardStateSchema = z.object({
+  viewport: WhiteboardViewportSchema.default({}),
+  layout: z.record(EntityIdSchema, WhiteboardPositionSchema).default({}),
+});
+export type WhiteboardState = z.infer<typeof WhiteboardStateSchema>;
+
 // ─── Layout ──────────────────────────────────────────────────────
 
 /**
@@ -60,9 +85,13 @@ export const LayoutModeSchema = z.enum([
 ]);
 export type LayoutMode = z.infer<typeof LayoutModeSchema>;
 
+export const RightWorkspaceSchema = z.enum(['write', 'whiteboard']);
+export type RightWorkspace = z.infer<typeof RightWorkspaceSchema>;
+
 export const WorkspaceLayoutSchema = z.object({
   mode: LayoutModeSchema.default('split'),
-  splitRatio: z.number().min(0).max(1).default(0.5),
+  splitRatio: z.number().min(0).max(1).default(0.7),
+  rightWorkspace: RightWorkspaceSchema.default('write'),
   sourceCollapsed: z.boolean().default(false),
   journalCollapsed: z.boolean().default(false),
   /** Layout to restore when leaving `listen`. */
@@ -142,6 +171,7 @@ export const WorkspaceStateSchema = BaseEntityFieldsSchema.extend({
   sourceView: SourceViewSchema.default({}),
   journalView: JournalViewSchema.default({}),
   layout: WorkspaceLayoutSchema.default({}),
+  whiteboard: WhiteboardStateSchema.default({}),
   openPanel: OpenPanelSchema,
 
   /** Playback continues while the workspace is unfocused. */

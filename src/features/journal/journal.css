@@ -21,7 +21,7 @@
   background-color: var(--cn-paper);
 }
 
-/* A running head, not a status bar. */
+/* A quiet running head, not a status bar. */
 .cn-journal__header {
   display: flex;
   align-items: baseline;
@@ -31,7 +31,6 @@
   /* Aligned to the prose column's left edge, not the pane edge — the
    * margin runs the full height of the leaf, including past the head. */
   padding-inline-start: calc(var(--cn-space-xl) + var(--cn-gutter));
-  border-bottom: var(--cn-border-width) solid var(--cn-rule-paper);
   background-color: var(--cn-paper);
   position: sticky;
   top: 0;
@@ -39,11 +38,10 @@
 }
 
 .cn-journal__runninghead {
-  font-family: var(--cn-font-sans);
-  font-size: var(--cn-text-2xs);
-  text-transform: uppercase;
-  letter-spacing: var(--cn-tracking-caps);
-  color: var(--cn-ink-muted);
+  font-family: var(--cn-font-serif);
+  font-size: var(--cn-text-xs);
+  letter-spacing: var(--cn-tracking-wide);
+  color: var(--cn-ink-subtle);
 }
 
 .cn-journal__body {
@@ -74,9 +72,21 @@
 }
 
 .cn-run {
+  position: relative;
   display: grid;
   grid-template-columns: var(--cn-gutter-folio) 1fr;
   --cn-run-gap: var(--cn-run-gap-adjacent);
+}
+
+/* The one structural rule the leaf keeps: the folio gutter. */
+.cn-run::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: var(--cn-gutter-folio);
+  width: var(--cn-border-width);
+  background-color: var(--cn-rule-paper);
+  pointer-events: none;
 }
 
 /*
@@ -127,7 +137,7 @@
   line-height: var(--cn-leading-tight);
   letter-spacing: var(--cn-tracking-wide);
   font-variant-numeric: tabular-nums;
-  color: var(--cn-ink-subtle);
+  color: var(--cn-disabled-ink);
 }
 
 .cn-run__folio-mark {
@@ -146,12 +156,13 @@
   grid-area: 1 / 1;
   justify-self: end;
   align-self: stretch;
-  width: var(--cn-border-width-thick);
+  width: var(--cn-border-width);
   background-color: var(--cn-accent);
+  opacity: 0.6;
 }
 
 .cn-run--active > .cn-run__folio {
-  color: var(--cn-ink-strong);
+  color: var(--cn-ink-muted);
   font-weight: var(--cn-weight-medium);
 }
 
@@ -189,7 +200,6 @@
   padding: var(--cn-space-2xs) 0;
   background: none;
   border: 0;
-  border-bottom: var(--cn-border-width) solid var(--cn-rule-paper);
   color: var(--cn-ink-subtle);
   font-family: var(--cn-font-serif);
   font-size: var(--cn-journal-body-size);
@@ -210,7 +220,6 @@
   min-height: var(--cn-target-min);
   padding: var(--cn-space-sm) var(--cn-space-md);
   border: 0;
-  border-bottom: var(--cn-border-width) solid var(--cn-rule-paper-strong);
   background: none;
   color: var(--cn-ink-muted);
   font-family: var(--cn-font-sans);
@@ -222,7 +231,6 @@
 
 .cn-run__draw:hover {
   color: var(--cn-ink-strong);
-  background-color: var(--cn-paper-hover);
 }
 
 .cn-run__draw:focus-visible,
@@ -234,12 +242,117 @@
 /* ── Blocks ─────────────────────────────────────────────────────── */
 
 .cn-block {
+  position: relative;
   display: grid;
   grid-template-columns: var(--cn-gutter-mark) minmax(0, var(--cn-measure));
+  padding-block-end: 0;
+}
+
+.cn-block--actions-visible {
+  padding-block-end: calc(var(--cn-chrome-control-size) + var(--cn-space-md));
+}
+
+.cn-block__mark {
+  grid-column: 1;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.cn-block__mark-button {
+  display: grid;
+  place-items: center;
+  width: var(--cn-target-min);
+  min-height: var(--cn-target-min);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--cn-ink-subtle);
+  cursor: pointer;
+}
+
+.cn-block__mark-button:hover,
+.cn-block__mark-button:focus-visible,
+.cn-block__mark-button[aria-expanded='true'] {
+  color: var(--cn-ink-muted);
+  background-color: var(--cn-paper-hover);
+}
+
+.cn-block__mark-button[data-style='word'] {
+  font-family: var(--cn-font-sans);
+  font-size: var(--cn-text-2xs);
+  line-height: var(--cn-leading-tight);
+  letter-spacing: var(--cn-tracking-wide);
+  text-transform: lowercase;
+}
+
+.cn-block__mark-button[data-style='glyph'] {
+  font-family: var(--cn-font-serif);
+  font-size: var(--cn-text-base);
+}
+
+.cn-block[data-kind='quote'] .cn-block__mark-button::before {
+  content: '';
+  width: var(--cn-border-width-thick);
+  height: var(--cn-space-lg);
+  background-color: var(--cn-rule-paper-strong);
 }
 
 .cn-block__body {
   grid-column: 2;
+  min-width: 0;
+}
+
+/*
+ * Secondary block actions live in the whitespace after the prose.
+ * The persistent marginal menu remains the first keyboard affordance;
+ * focusing it (or the prose) reveals this convenience row and makes
+ * its buttons the next tab stops.
+ */
+.cn-block__actions {
+  position: absolute;
+  inset-block-end: var(--cn-space-2xs);
+  inset-inline: var(--cn-gutter-mark) 0;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--cn-space-3xs);
+  max-width: var(--cn-measure);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.cn-block__move {
+  display: inline-flex;
+  gap: var(--cn-space-3xs);
+}
+
+.cn-block__action {
+  flex: 0 0 auto;
+  min-height: var(--cn-chrome-control-size);
+  padding: var(--cn-space-2xs) var(--cn-space-xs);
+  border: 0;
+  border-radius: var(--cn-radius-xs);
+  background: transparent;
+  color: var(--cn-ink-subtle);
+  font-family: var(--cn-font-sans);
+  font-size: var(--cn-text-2xs);
+  cursor: pointer;
+}
+
+.cn-block__action:hover:not(:disabled),
+.cn-block__action:focus-visible {
+  background-color: var(--cn-paper-hover);
+  color: var(--cn-ink-strong);
+}
+
+.cn-block__action:disabled {
+  color: var(--cn-disabled-ink);
+  cursor: not-allowed;
+}
+
+.cn-block__action--danger:not(:disabled) {
+  color: var(--cn-danger);
 }
 
 /* ── The editor ─────────────────────────────────────────────────── */
@@ -256,20 +369,13 @@
   font-size: calc(var(--cn-journal-body-size) * var(--cn-journal-zoom));
   line-height: var(--cn-leading-relaxed);
   color: var(--cn-ink);
-  padding: var(--cn-space-2xs) var(--cn-space-sm);
-  margin-inline: calc(var(--cn-space-sm) * -1);
-  border-radius: var(--cn-radius-sm);
+  padding: var(--cn-space-2xs) 0;
   outline: none;
-  transition: background-color var(--cn-duration-fast) var(--cn-ease-standard);
-}
-
-.cn-block-editor__content:hover {
-  background-color: var(--cn-paper-hover);
+  transition: color var(--cn-duration-fast) var(--cn-ease-standard);
 }
 
 .cn-block-editor__content:focus-visible,
 .cn-block-editor__content:focus {
-  background-color: var(--cn-paper-active);
   outline: var(--cn-focus-ring-width) solid var(--cn-focus-ring);
   outline-offset: var(--cn-focus-ring-offset);
 }
@@ -302,6 +408,46 @@
   pointer-events: none;
   float: left;
   height: 0;
+}
+
+/* Kind differences remain marginal or typographic, never card chrome. */
+.cn-block[data-kind='heading'] .cn-block-editor__content {
+  color: var(--cn-ink-strong);
+  font-size: calc(var(--cn-text-xl) * var(--cn-journal-zoom));
+  font-weight: var(--cn-weight-semibold);
+  line-height: var(--cn-leading-snug);
+}
+
+.cn-block[data-kind='quote'] .cn-block-editor__content {
+  padding-inline-start: var(--cn-space-lg);
+}
+
+.cn-block__divider {
+  margin-block: var(--cn-space-lg);
+  border: 0;
+  border-top: var(--cn-border-width) solid var(--cn-rule-paper-strong);
+}
+
+.cn-block__definition {
+  display: grid;
+  gap: var(--cn-space-2xs);
+  font-family: var(--cn-font-serif);
+  line-height: var(--cn-leading-relaxed);
+}
+
+.cn-block__definition dt {
+  color: var(--cn-ink-strong);
+  font-weight: var(--cn-weight-semibold);
+}
+
+.cn-block__definition dd,
+.cn-block__pending {
+  color: var(--cn-ink-muted);
+}
+
+.cn-block__pending {
+  font-family: var(--cn-font-serif);
+  line-height: var(--cn-leading-relaxed);
 }
 
 /* ── Drawing blocks ───────────────────────────────────────────────
@@ -468,6 +614,15 @@
 
   .cn-block {
     grid-template-columns: 0 minmax(0, var(--cn-measure));
+  }
+
+  .cn-block__mark {
+    position: relative;
+    inset-inline-start: calc(var(--cn-gutter-mark) * -1);
+  }
+
+  .cn-block__actions {
+    inset-inline-start: 0;
   }
 
   .cn-journal__header {

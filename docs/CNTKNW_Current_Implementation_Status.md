@@ -1,6 +1,6 @@
 # CNTKNW Current Implementation Status
 
-**Updated:** 06 August 2026 (Phase 3C Editable Freehand Pen/Drawing Authoring + Drawing Journal Blocks — closed; Phase 3 complete pending review)
+**Updated:** 06 August 2026 (WORKSPACE UX-1 — Zen/Gruvbox study desk + infinite whiteboard + Pomodoro — closed; Phase 3C closed; Phase 3 complete)
 **Repository:** `HeisLazi/cntknw`
 **Git baseline:** Phase 3C (Editable Freehand Pen/Drawing Authoring + Drawing Journal Blocks) is committed and verified on `main`. Per
 AI_PROJECT_STATE policy, no volatile live-HEAD SHA is recorded here; derive
@@ -48,8 +48,16 @@ Phase 3C adds editable freehand pen/drawing authoring: drawing blocks carry a
 typed canvas-local vector model, render and edit through a plain-SVG freehand
 editor, inherit the active page automatically, and save through the same
 debounced, revision-guarded path as text. **Phase 3 (Annotation & Drawing)
-is now complete in full, pending the ChatGPT milestone review of the Phase 3C
-acceptance.**
+is now complete in full.**
+
+WORKSPACE UX-1 turns the pre-Phase-4 study desk into the calibrated Zen
+workspace: a design-token system (Zenburn/Gruvbox, `design-tokens.test.ts`
+guards raw values), a persisted four-mode layout
+(`split`/`source-focus`/`journal-focus`/`compare`) with a
+`write`/`whiteboard` projection, focus-trapped dialogs, blank-page composing,
+an infinite whiteboard that is a projection over the canonical journal (no
+second store), and a fully local Pomodoro (zero network, no per-second
+writes, in-memory wall-clock deadline). See `CNTKNW_ADR_0008_Zen_Study_Workspace.md`.
 
 **Phases 0A–0E are complete and verified.** 
 

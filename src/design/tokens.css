@@ -25,6 +25,20 @@
    * software; the reading planes need to feel like paper under a
    * lamp. Hues stay between 30° and 45°, chroma stays low.
    */
+  --cn-palette-gruvbox-canvas: #282828;
+  --cn-palette-gruvbox-soft: #32302f;
+  --cn-palette-gruvbox-raised: #3c3836;
+  --cn-palette-gruvbox-selection: #504945;
+  --cn-palette-gruvbox-text: #ebdbb2;
+  --cn-palette-gruvbox-muted: #a89984;
+  --cn-palette-gruvbox-red: #cc241d;
+  --cn-palette-gruvbox-green: #98971a;
+  --cn-palette-gruvbox-yellow: #d79921;
+  --cn-palette-gruvbox-blue: #458588;
+  --cn-palette-gruvbox-purple: #b16286;
+  --cn-palette-gruvbox-aqua: #689d6a;
+  --cn-palette-gruvbox-orange: #d65d0e;
+
   --cn-palette-ink-950: #0e0d0b;
   --cn-palette-ink-900: #141310;
   --cn-palette-ink-850: #1a1815;
@@ -182,6 +196,9 @@
   --cn-nav-width-collapsed: 3.5rem;
   --cn-nav-height-compact: 3.5rem;
   --cn-topbar-height: 3rem;
+  --cn-topbar-collapsed-height: 0.375rem;
+  --cn-chrome-control-size: 2rem;
+  --cn-context-panel-width: min(24rem, calc(100vw - var(--cn-space-2xl)));
   --cn-reading-width: 46rem;
   --cn-content-max: 78rem;
 
@@ -247,40 +264,49 @@
   --cn-focus-ring-offset: 2px;
 
   /* ── Semantic roles — dark first (PDD §9.4) ─────────────────── */
-  --cn-canvas: var(--cn-palette-ink-950);
-  --cn-surface: var(--cn-palette-ink-900);
-  --cn-surface-raised: var(--cn-palette-ink-850);
-  --cn-surface-sunken: var(--cn-palette-ink-950);
-  --cn-surface-hover: var(--cn-palette-ink-800);
-  --cn-surface-active: var(--cn-palette-ink-750);
-  --cn-paper: var(--cn-palette-paper-dark);
+  --cn-canvas: var(--cn-palette-gruvbox-canvas);
+  --cn-surface: var(--cn-palette-gruvbox-soft);
+  --cn-surface-raised: var(--cn-palette-gruvbox-raised);
+  --cn-surface-sunken: var(--cn-palette-gruvbox-canvas);
+  --cn-surface-hover: var(--cn-palette-gruvbox-raised);
+  --cn-surface-active: var(--cn-palette-gruvbox-selection);
+  --cn-paper: var(--cn-palette-gruvbox-soft);
+  --cn-work-surface: var(--cn-palette-gruvbox-soft);
+  --cn-pdf-paper: var(--cn-palette-ink-050);
+  --cn-whiteboard-surface: var(--cn-palette-gruvbox-soft);
 
-  --cn-ink: var(--cn-palette-ink-100);
+  --cn-ink: var(--cn-palette-gruvbox-text);
   --cn-ink-strong: var(--cn-palette-ink-050);
-  --cn-ink-muted: var(--cn-palette-ink-400);
-  --cn-ink-subtle: var(--cn-palette-ink-500);
-  --cn-ink-inverse: var(--cn-palette-ink-950);
+  --cn-ink-muted: var(--cn-palette-gruvbox-muted);
+  --cn-ink-subtle: var(--cn-palette-ink-400);
+  --cn-ink-inverse: var(--cn-palette-gruvbox-canvas);
 
-  --cn-border: var(--cn-palette-ink-750);
-  --cn-border-strong: var(--cn-palette-ink-600);
-  --cn-border-subtle: var(--cn-palette-ink-800);
+  --cn-border: var(--cn-palette-gruvbox-selection);
+  --cn-border-strong: var(--cn-palette-gruvbox-muted);
+  --cn-border-subtle: var(--cn-palette-gruvbox-raised);
 
-  --cn-accent: var(--cn-palette-accent-400);
+  --cn-accent: var(--cn-palette-gruvbox-aqua);
   --cn-accent-hover: var(--cn-palette-accent-300);
   --cn-accent-active: var(--cn-palette-accent-500);
-  --cn-accent-contrast: var(--cn-palette-ink-950);
-  --cn-accent-quiet: color-mix(in srgb, var(--cn-palette-accent-400) 16%, transparent);
+  --cn-accent-contrast: var(--cn-palette-gruvbox-canvas);
+  --cn-accent-quiet: color-mix(in srgb, var(--cn-palette-gruvbox-aqua) 18%, transparent);
 
-  --cn-success: var(--cn-palette-success-300);
-  --cn-success-quiet: color-mix(in srgb, var(--cn-palette-success-500) 20%, transparent);
-  --cn-warning: var(--cn-palette-warning-300);
-  --cn-warning-quiet: color-mix(in srgb, var(--cn-palette-warning-500) 20%, transparent);
-  --cn-danger: var(--cn-palette-danger-300);
-  --cn-danger-quiet: color-mix(in srgb, var(--cn-palette-danger-500) 20%, transparent);
+  --cn-success: var(--cn-palette-gruvbox-green);
+  --cn-success-quiet: color-mix(in srgb, var(--cn-palette-gruvbox-green) 20%, transparent);
+  --cn-warning: var(--cn-palette-gruvbox-yellow);
+  --cn-warning-quiet: color-mix(in srgb, var(--cn-palette-gruvbox-yellow) 20%, transparent);
+  --cn-danger: var(--cn-palette-gruvbox-red);
+  --cn-danger-quiet: color-mix(in srgb, var(--cn-palette-gruvbox-red) 20%, transparent);
 
-  --cn-focus-ring: var(--cn-palette-accent-300);
-  --cn-selection: color-mix(in srgb, var(--cn-palette-accent-400) 30%, transparent);
+  --cn-focus-ring: var(--cn-palette-gruvbox-yellow);
+  --cn-selection: var(--cn-palette-gruvbox-selection);
   --cn-scrim: rgb(0 0 0 / 0.6);
+
+  /* Translucency belongs to app chrome only. Work surfaces above
+   * remain fully opaque semantic colours. */
+  --cn-glass-bg: color-mix(in srgb, var(--cn-surface-raised) 78%, transparent);
+  --cn-glass-border: color-mix(in srgb, var(--cn-ink-muted) 34%, transparent);
+  --cn-glass-blur: blur(1rem);
 
   --cn-disabled-ink: var(--cn-palette-ink-500);
   --cn-disabled-surface: var(--cn-palette-ink-850);
@@ -302,6 +328,9 @@
   --cn-surface-hover: var(--cn-palette-ink-100);
   --cn-surface-active: var(--cn-palette-ink-200);
   --cn-paper: var(--cn-palette-paper-light);
+  --cn-work-surface: var(--cn-palette-paper-light);
+  --cn-pdf-paper: var(--cn-palette-ink-050);
+  --cn-whiteboard-surface: var(--cn-palette-paper-light);
 
   --cn-ink: var(--cn-palette-ink-900);
   --cn-ink-strong: var(--cn-palette-ink-950);
@@ -324,6 +353,8 @@
 
   --cn-focus-ring: var(--cn-palette-accent-600);
   --cn-scrim: rgb(20 19 16 / 0.4);
+  --cn-glass-bg: color-mix(in srgb, var(--cn-surface-raised) 82%, transparent);
+  --cn-glass-border: color-mix(in srgb, var(--cn-ink-muted) 28%, transparent);
 
   --cn-shadow-sm: 0 1px 2px rgb(20 19 16 / 0.08);
   --cn-shadow-md: 0 4px 12px rgb(20 19 16 / 0.1);
@@ -331,6 +362,14 @@
 
   --cn-disabled-ink: var(--cn-palette-ink-400);
   --cn-disabled-surface: var(--cn-palette-ink-100);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --cn-glass-bg: color-mix(in srgb, var(--cn-surface-raised) 96%, transparent);
+    --cn-glass-border: var(--cn-border-strong);
+    --cn-glass-blur: none;
+  }
 }
 
 /*

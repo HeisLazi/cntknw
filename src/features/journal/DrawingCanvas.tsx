@@ -76,9 +76,9 @@ export function DrawingCanvas({
     (next: DrawingData, message: string) => {
       setDrawing(next);
       setAnnouncement(`${message} ${strokeCountText(next.strokes.length)}.`);
-      onChange({ type: 'drawing', drawingData: next, previewDataUrl });
+      onChange({ ...content, drawingData: next, previewDataUrl });
     },
-    [onChange, previewDataUrl],
+    [content, onChange, previewDataUrl],
   );
 
   const exitEdit = useCallback(() => {

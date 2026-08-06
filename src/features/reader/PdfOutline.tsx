@@ -6,6 +6,7 @@ export interface PdfOutlineProps {
   document: LoadedDocument;
   onNavigate: (page: number) => void;
   onClose: () => void;
+  showHeader?: boolean;
 }
 
 export interface PdfOutlineItem {
@@ -14,7 +15,12 @@ export interface PdfOutlineItem {
   items?: PdfOutlineItem[];
 }
 
-export function PdfOutline({ document, onNavigate, onClose }: PdfOutlineProps) {
+export function PdfOutline({
+  document,
+  onNavigate,
+  onClose,
+  showHeader = true,
+}: PdfOutlineProps) {
   const [outline, setOutline] = useState<PdfOutlineItem[] | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [attempt, setAttempt] = useState(0);
@@ -40,13 +46,17 @@ export function PdfOutline({ document, onNavigate, onClose }: PdfOutlineProps) {
     };
   }, [attempt, document]);
 
+  const header = showHeader ? (
+    <div className="cn-outline__header">
+      <h2 className="cn-outline__title">Contents</h2>
+      <IconButton icon="×" label="Close contents" onClick={onClose} size="sm" />
+    </div>
+  ) : null;
+
   if (status === 'loading') {
     return (
-      <div className="cn-outline">
-        <div className="cn-outline__header">
-          <h2 className="cn-outline__title">Contents</h2>
-          <IconButton icon="×" label="Close contents" onClick={onClose} size="sm" />
-        </div>
+      <div className="cn-outline" data-embedded={!showHeader}>
+        {header}
         <div className="cn-outline__body">
           <p className="cn-outline__hint">Loading outline…</p>
         </div>
@@ -56,11 +66,8 @@ export function PdfOutline({ document, onNavigate, onClose }: PdfOutlineProps) {
 
   if (status === 'error') {
     return (
-      <div className="cn-outline">
-        <div className="cn-outline__header">
-          <h2 className="cn-outline__title">Contents</h2>
-          <IconButton icon="×" label="Close contents" onClick={onClose} size="sm" />
-        </div>
+      <div className="cn-outline" data-embedded={!showHeader}>
+        {header}
         <div className="cn-outline__body">
           <p className="cn-outline__hint" role="status">Outline unavailable.</p>
           <button
@@ -80,11 +87,8 @@ export function PdfOutline({ document, onNavigate, onClose }: PdfOutlineProps) {
 
   if (!outline || outline.length === 0) {
     return (
-      <div className="cn-outline">
-        <div className="cn-outline__header">
-          <h2 className="cn-outline__title">Contents</h2>
-          <IconButton icon="×" label="Close contents" onClick={onClose} size="sm" />
-        </div>
+      <div className="cn-outline" data-embedded={!showHeader}>
+        {header}
         <div className="cn-outline__body">
           <p className="cn-outline__hint">This document has no outline.</p>
         </div>
@@ -93,11 +97,8 @@ export function PdfOutline({ document, onNavigate, onClose }: PdfOutlineProps) {
   }
 
   return (
-    <div className="cn-outline">
-      <div className="cn-outline__header">
-        <h2 className="cn-outline__title">Contents</h2>
-        <IconButton icon="×" label="Close contents" onClick={onClose} size="sm" />
-      </div>
+    <div className="cn-outline" data-embedded={!showHeader}>
+      {header}
       <div className="cn-outline__body">
         <OutlineList items={outline} document={document} onNavigate={onNavigate} />
       </div>

@@ -13,6 +13,8 @@ import { createMemoryRepositories } from '@data/adapters/memory';
 import type { MemoryRepositories } from '@data/adapters/memory';
 import { RepositoryProvider } from '@app/providers/RepositoryProvider';
 import { ToastProvider } from '@components/primitives';
+import { PomodoroProvider } from '@features/pomodoro/PomodoroProvider';
+import { DEFAULT_POMODORO_STATE } from '@features/pomodoro/pomodoroState';
 import { createRoutes } from './index';
 
 /** Mount the real route table at a path. */
@@ -22,7 +24,9 @@ async function mount(path: string, repositories?: MemoryRepositories) {
   const result = render(
     <RepositoryProvider repositories={repos}>
       <ToastProvider>
-        <RouterProvider router={router} />
+        <PomodoroProvider initialState={DEFAULT_POMODORO_STATE}>
+          <RouterProvider router={router} />
+        </PomodoroProvider>
       </ToastProvider>
     </RepositoryProvider>,
   );
@@ -72,7 +76,7 @@ describe('routing', () => {
     expect(
       await screen.findByRole('heading', { name: 'Settings', level: 1 }),
     ).toBeInTheDocument();
-    const nav = screen.getByRole('navigation', { name: 'Primary' });
+    const nav = document.getElementById('cn-primary-navigation')!;
     const primary = nav.querySelector('.cn-nav__primary');
     expect(primary?.textContent).toBe('LibraryGalleryNotes');
   });
@@ -219,9 +223,11 @@ describe('Study workspace', () => {
         annotationTool: 'select',
       },
       journalView: { scrollOffset: 0 },
+      whiteboard: { viewport: { x: 0, y: 0, zoom: 1 }, layout: {} },
       layout: {
         mode: 'split',
         splitRatio: 0.35,
+        rightWorkspace: 'write',
         sourceCollapsed: false,
         journalCollapsed: false,
       },

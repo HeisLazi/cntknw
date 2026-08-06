@@ -25,6 +25,10 @@ import {
   type PendingJournalEdit,
 } from './pendingEdit';
 import './journal.css';
+import {
+  announceJournalProjectionChange,
+  listenForJournalProjectionChanges,
+} from '@features/whiteboard/journalProjectionEvents';
 
 export interface JournalPaneProps {
   sourceId: EntityId;
@@ -121,6 +125,20 @@ export function JournalPane({
   const scrollport = useRef<HTMLDivElement>(null);
   const [initialScrollSet, setInitialScrollSet] = useState(false);
 
+  useEffect(
+    () => listenForJournalProjectionChanges(journalId, (change) => {
+      if (change.source !== 'whiteboard') return;
+      if (change.blockId && !pending.current.has(change.blockId)) {
+        setResetKeys((current) => new Map(current).set(
+          change.blockId!,
+          (current.get(change.blockId!) ?? 0) + 1,
+        ));
+      }
+      setReloadTrigger((value) => value + 1);
+    }),
+    [journalId],
+  );
+
   // ── Load the whole journal, not one page of it ─────────────────
   useEffect(() => {
     let cancelled = false;
@@ -208,6 +226,7 @@ export function JournalPane({
         }
         revisions.current.set(blockId, saved.revision);
         setBlocks(current => current?.map(b => b.id === blockId ? saved : b) ?? null);
+        announceJournalProjectionChange({ journalId, blockId, source: 'journal' });
         setConflictData(curr => {
           if (!curr.has(blockId)) return curr;
           const next = new Map(curr);
@@ -253,7 +272,7 @@ export function JournalPane({
         });
       }
     },
-    [journals, blocks],
+    [journals, blocks, journalId],
   );
 
   const syncFlushRef = useCallback(() => {
@@ -331,8 +350,9 @@ export function JournalPane({
       revisions.current.set(block.id, block.revision);
       setBlocks((current) => [...(current ?? []), block]);
       setFocusBlockId(block.id);
+      announceJournalProjectionChange({ journalId, blockId: block.id, source: 'journal' });
     },
-    [repositories, sourceId],
+    [repositories, sourceId, journalId],
   );
 
   const removeBlock = useCallback(
@@ -390,8 +410,9 @@ export function JournalPane({
         return next;
       });
       setFocusBlockId(curr => curr === blockId ? null : curr);
+      announceJournalProjectionChange({ journalId, blockId, source: 'journal' });
     },
-    [flush, journals],
+    [flush, journals, journalId],
   );
 
   const restoreBlock = useCallback(
@@ -409,8 +430,9 @@ export function JournalPane({
         return next;
       });
       revisions.current.set(blockId, restored.revision);
+      announceJournalProjectionChange({ journalId, blockId, source: 'journal' });
     },
-    [journals, deletedBlocks],
+    [journals, deletedBlocks, journalId],
   );
 
   const changeBlockKind = useCallback(
@@ -443,11 +465,12 @@ export function JournalPane({
         
         revisions.current.set(blockId, saved.revision);
         setBlocks((current) => (current ?? []).map((b) => b.id === blockId ? saved : b));
+        announceJournalProjectionChange({ journalId, blockId, source: 'journal' });
       } catch (err) {
         console.error("Failed to change block kind", err);
       }
     },
-    [blocks, journals]
+    [blocks, journals, journalId]
   );
 
   const moveBlock = useCallback(

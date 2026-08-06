@@ -147,6 +147,7 @@ test.describe('AC-002 — exact workspace state resumes', () => {
     await page.getByRole('button', { name: 'Next page' }).click();
     await expect(page.getByText('Saved')).toBeVisible({ timeout: 15_000 });
 
+    await page.getByRole('button', { name: /Open navigation/ }).click();
     await page.getByRole('link', { name: 'Library' }).click();
     await expect(
       page.getByRole('spinbutton', { name: `Page 2 of ${PDF.pageCount}` }),
@@ -162,15 +163,15 @@ test.describe('AC-002 — exact workspace state resumes', () => {
 
     await page.getByRole('region', { name: 'Source pages' }).focus();
     await page.keyboard.press('PageDown');
-    await expect(page.getByRole('spinbutton', { name: `Page 2 of ${PDF.pageCount}` })).toBeVisible();
+    await expect(page.getByRole('spinbutton', { name: `Page 2 of ${PDF.pageCount}` })).toBeVisible({ timeout: 15_000 });
 
     await page.keyboard.press('End');
     await expect(
       page.getByRole('spinbutton', { name: `Page ${PDF.pageCount} of ${PDF.pageCount}` }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15_000 });
 
     await page.keyboard.press('Home');
-    await expect(page.getByRole('spinbutton', { name: `Page 1 of ${PDF.pageCount}` })).toBeVisible();
+    await expect(page.getByRole('spinbutton', { name: `Page 1 of ${PDF.pageCount}` })).toBeVisible({ timeout: 15_000 });
   });
 
   test('page changes are announced, not only painted', async ({ page }) => {

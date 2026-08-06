@@ -493,26 +493,94 @@
   overflow: hidden;
 }
 
+.cn-split[data-single-pane='true'] > .cn-split__pane:not([hidden]) {
+  flex: 1 1 auto !important;
+}
+
+.cn-split__pane[hidden],
+.cn-split__handle[hidden],
+.cn-context-panel[hidden] {
+  display: none;
+}
+
 .cn-split__handle {
+  position: relative;
   flex: 0 0 auto;
   border: none;
   padding: 0;
-  background-color: var(--cn-border-subtle);
+  background-color: transparent;
   cursor: col-resize;
+}
+
+.cn-split__handle::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  background-color: var(--cn-border-subtle);
   transition: background-color var(--cn-duration-fast) var(--cn-ease-standard);
+}
+
+/* ── ContextPanel ─────────────────────────────────────────────── */
+
+.cn-context-panel {
+  position: fixed;
+  inset-block: var(--cn-space-lg);
+  inset-inline-end: var(--cn-space-lg);
+  z-index: var(--cn-z-overlay);
+  width: var(--cn-context-panel-width);
+  overflow: hidden;
+  background: var(--cn-glass-bg);
+  border: var(--cn-border-width) solid var(--cn-glass-border);
+  border-radius: var(--cn-radius-lg);
+  box-shadow: var(--cn-shadow-lg);
+  -webkit-backdrop-filter: var(--cn-glass-blur);
+  backdrop-filter: var(--cn-glass-blur);
+}
+
+.cn-context-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--cn-topbar-height);
+  padding-inline: var(--cn-space-md);
+  border-bottom: var(--cn-border-width) solid var(--cn-glass-border);
+}
+
+.cn-context-panel__title {
+  font-family: var(--cn-font-sans);
+  font-size: var(--cn-text-sm);
+  letter-spacing: var(--cn-tracking-wide);
+}
+
+.cn-context-panel__body {
+  height: calc(100% - var(--cn-topbar-height));
+  min-height: 0;
+  overflow: auto;
 }
 .cn-split__handle:hover,
 .cn-split__handle:focus-visible {
+  background-color: transparent;
+}
+
+.cn-split__handle:hover::before,
+.cn-split__handle:focus-visible::before {
   background-color: var(--cn-accent);
 }
 
 .cn-split--horizontal > .cn-split__handle {
-  width: var(--cn-space-2xs);
+  width: var(--cn-space-sm);
   cursor: col-resize;
 }
+.cn-split--horizontal > .cn-split__handle::before {
+  width: var(--cn-border-width);
+}
 .cn-split--vertical > .cn-split__handle {
-  height: var(--cn-space-2xs);
+  height: var(--cn-space-sm);
   cursor: row-resize;
+}
+.cn-split--vertical > .cn-split__handle::before {
+  height: var(--cn-border-width);
 }
 
 /* ── ScrollArea ─────────────────────────────────────────────────── */

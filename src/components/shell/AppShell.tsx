@@ -1,5 +1,8 @@
 import { NavLink, Outlet, useLocation } from 'react-router';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { IconButton } from '@components/primitives';
+import { trapFocusWithin } from '@components/primitives/focusTrap';
+import { PomodoroTimer } from '@features/pomodoro/PomodoroTimer';
 import './shell.css';
 
 /**
@@ -17,17 +20,6 @@ export const PRIMARY_DESTINATIONS = [
   { to: '/library', label: 'Library' },
   { to: '/gallery', label: 'Gallery' },
   { to: '/notes', label: 'Notes' },
-] as const;
-
-/**
- * Secondary destinations. Reachable, never permanent navigation.
- *
- * The component lab is development-only and is filtered out of the
- * production build below.
- */
-const SECONDARY_DESTINATIONS = [
-  { to: '/settings', label: 'Settings', devOnly: false },
-  { to: '/components', label: 'Components', devOnly: true },
 ] as const;
 
 function SkipLink() {
@@ -73,47 +65,111 @@ function useFocusMainOnNavigate(ref: React.RefObject<HTMLElement | null>) {
 
 export function AppShell() {
   const mainRef = useRef<HTMLElement>(null);
+  const navTriggerRef = useRef<HTMLButtonElement>(null);
+  const navCloseRef = useRef<HTMLButtonElement>(null);
+  const navDialogRef = useRef<HTMLDivElement>(null);
+  const [navOpen, setNavOpen] = useState(false);
   useFocusMainOnNavigate(mainRef);
 
-  const secondary = SECONDARY_DESTINATIONS.filter(
-    (item) => !item.devOnly || import.meta.env.DEV,
-  );
+  const openNavigation = useCallback(() => {
+    setNavOpen(true);
+  }, []);
+
+  const closeNavigation = useCallback((returnFocus = true) => {
+    setNavOpen(false);
+    if (returnFocus) {
+      queueMicrotask(() => navTriggerRef.current?.focus());
+    }
+  }, []);
+
+  useEffect(() => {
+    if (navOpen) navCloseRef.current?.focus();
+  }, [navOpen]);
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      const shortcut = (event.ctrlKey || event.metaKey) && event.shiftKey &&
+        event.key.toLowerCase() === 'm';
+      if (shortcut) {
+        event.preventDefault();
+        if (navOpen) closeNavigation();
+        else openNavigation();
+        return;
+      }
+      if (navOpen && event.key === 'Escape') {
+        event.preventDefault();
+        closeNavigation();
+      }
+    };
+    document.addEventListener('keydown', handleShortcut);
+    return () => document.removeEventListener('keydown', handleShortcut);
+  }, [closeNavigation, navOpen, openNavigation]);
 
   return (
     <div className="cn-shell">
       <SkipLink />
 
-      <nav className="cn-nav" aria-label="Primary">
-        <span className="cn-nav__brand">CNTKNW</span>
+      <button
+        ref={navTriggerRef}
+        type="button"
+        className="cn-nav-trigger"
+        aria-label="Open navigation (Ctrl+Shift+M)"
+        aria-keyshortcuts="Control+Shift+M Meta+Shift+M"
+        aria-controls="cn-primary-navigation"
+        aria-expanded={navOpen}
+        onClick={openNavigation}
+      >
+        <span aria-hidden="true">☰</span>
+      </button>
 
-        <ul className="cn-nav__primary">
-          {PRIMARY_DESTINATIONS.map((item) => (
-            <li key={item.to}>
+      <div
+        ref={navDialogRef}
+        id="cn-primary-navigation"
+        className="cn-nav"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Navigation"
+        data-state={navOpen ? 'open' : 'closed'}
+        hidden={!navOpen}
+        onKeyDown={(event) => trapFocusWithin(event, navDialogRef.current)}
+      >
+        <div className="cn-nav__header">
+          <span className="cn-nav__brand">CNTKNW</span>
+          <IconButton
+            ref={navCloseRef}
+            label="Close navigation"
+            icon="×"
+            size="sm"
+            onClick={() => closeNavigation()}
+          />
+        </div>
+
+        <nav aria-label="Primary">
+          <ul className="cn-nav__primary">
+            {PRIMARY_DESTINATIONS.map((item) => (
+              <li key={item.to}>
               {/*
                 NavLink sets aria-current="page" itself, and the
                 stylesheet selects on that attribute rather than on a
                 class — so what is announced and what is highlighted
                 cannot drift apart.
               */}
-              <NavLink to={item.to} className="cn-nav__link">
-                {item.label}
-              </NavLink>
-            </li>
-          ))}
-        </ul>
-
-        {secondary.length > 0 ? (
-          <ul className="cn-nav__secondary">
-            {secondary.map((item) => (
-              <li key={item.to}>
-                <NavLink to={item.to} className="cn-nav__link">
+                <NavLink
+                  to={item.to}
+                  className="cn-nav__link"
+                  onClick={() => closeNavigation()}
+                >
                   {item.label}
                 </NavLink>
               </li>
             ))}
           </ul>
-        ) : null}
-      </nav>
+
+          <div className="cn-nav__focus" role="group" aria-label="Focus timer">
+            <PomodoroTimer placement="nav" />
+          </div>
+        </nav>
+      </div>
 
       <main className="cn-main" id="cn-main" ref={mainRef} tabIndex={-1}>
         <Outlet />

@@ -8,7 +8,8 @@
  * These tests make the fourth one fail rather than ship.
  */
 import { describe, it, expect } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { AppShell, PRIMARY_DESTINATIONS } from '@components/shell/AppShell';
@@ -44,9 +45,8 @@ describe('primary navigation', () => {
 
   it('renders exactly three links in the primary list', () => {
     renderWithProviders(<AppShell />, { initialEntries: ['/library'] });
-    const nav = screen.getByRole('navigation', { name: 'Primary' });
-    const lists = within(nav).getAllByRole('list');
-    const primary = within(lists[0]!).getAllByRole('link');
+    const nav = document.getElementById('cn-primary-navigation')!;
+    const primary = [...nav.querySelectorAll<HTMLAnchorElement>('.cn-nav__primary a')];
     expect(primary).toHaveLength(3);
     expect(primary.map((link) => link.textContent)).toEqual([
       'Library',
@@ -57,8 +57,8 @@ describe('primary navigation', () => {
 
   it('promotes no forbidden tool to the primary list', () => {
     renderWithProviders(<AppShell />, { initialEntries: ['/library'] });
-    const nav = screen.getByRole('navigation', { name: 'Primary' });
-    const primary = within(within(nav).getAllByRole('list')[0]!).getAllByRole('link');
+    const nav = document.getElementById('cn-primary-navigation')!;
+    const primary = [...nav.querySelectorAll<HTMLAnchorElement>('.cn-nav__primary a')];
     const labels = primary.map((link) => link.textContent ?? '');
     for (const forbidden of FORBIDDEN_AS_PRIMARY) {
       expect(labels, `${forbidden} must not be a primary destination`).not.toContain(
@@ -69,20 +69,19 @@ describe('primary navigation', () => {
 
   it('marks the current destination with aria-current', () => {
     renderWithProviders(<AppShell />, { initialEntries: ['/gallery'] });
-    const current = screen.getByRole('link', { current: 'page' });
+    const current = document.querySelector<HTMLAnchorElement>('[aria-current="page"]')!;
     expect(current).toHaveTextContent('Gallery');
   });
 
-  it('keeps settings and the component lab out of primary navigation', () => {
+  it('hosts the focus timer without promoting another destination', async () => {
+    const user = userEvent.setup();
     renderWithProviders(<AppShell />, { initialEntries: ['/library'] });
-    const nav = screen.getByRole('navigation', { name: 'Primary' });
-    const lists = within(nav).getAllByRole('list');
-    // Secondary list exists and is separate from the primary one.
-    expect(lists.length).toBeGreaterThan(1);
-    const secondaryLabels = within(lists[1]!)
-      .getAllByRole('link')
-      .map((link) => link.textContent);
-    expect(secondaryLabels).toContain('Settings');
+    await user.click(screen.getByRole('button', { name: /Open navigation/ }));
+    const nav = document.getElementById('cn-primary-navigation')!;
+    expect(nav.querySelector('.cn-nav__focus')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Focus timer' })
+      .querySelector('.cn-pomodoro__summary-time')).toHaveTextContent('25:00');
+    expect(nav.querySelectorAll('.cn-nav__primary a')).toHaveLength(3);
   });
 
   it('offers a skip link before the navigation', () => {
@@ -98,6 +97,70 @@ describe('primary navigation', () => {
     // Focusable, so the skip link actually moves focus rather than
     // only moving the viewport.
     expect(main).toHaveAttribute('tabindex', '-1');
+  });
+});
+
+describe('overlay navigation behaviour', () => {
+  it('is hidden by default and its links cannot receive tab focus', async () => {
+    renderWithProviders(<AppShell />, { initialEntries: ['/library'] });
+    const trigger = screen.getByRole('button', { name: /Open navigation/ });
+    const nav = document.getElementById('cn-primary-navigation')!;
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(nav).not.toBeVisible();
+    expect(screen.queryByRole('link', { name: 'Library' })).not.toBeInTheDocument();
+
+    trigger.focus();
+    await userEvent.tab();
+    expect(
+      nav.querySelector('.cn-nav__link'),
+    ).not.toHaveFocus();
+  });
+
+  it('opens by button and shortcut, closes with Escape, and returns focus', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AppShell />, { initialEntries: ['/library'] });
+    const trigger = screen.getByRole('button', { name: /Open navigation/ });
+
+    await user.click(trigger);
+    expect(screen.getByRole('navigation', { name: 'Primary' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Close navigation' })).toHaveFocus();
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('navigation', { name: 'Primary' })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+
+    fireEvent.keyDown(document, { key: 'M', ctrlKey: true, shiftKey: true });
+    expect(screen.getByRole('navigation', { name: 'Primary' })).toBeVisible();
+    fireEvent.keyDown(document, { key: 'm', ctrlKey: true, shiftKey: true });
+    expect(screen.queryByRole('navigation', { name: 'Primary' })).not.toBeInTheDocument();
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it('traps focus in the open navigation overlay', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AppShell />, { initialEntries: ['/library'] });
+    await user.click(screen.getByRole('button', { name: /Open navigation/ }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Navigation' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    const close = screen.getByRole('button', { name: 'Close navigation' });
+    const last = dialog.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+    const lastControl = last.item(last.length - 1);
+    close.focus();
+    await user.keyboard('{Shift>}{Tab}{/Shift}');
+    expect(lastControl).toHaveFocus();
+    await user.keyboard('{Tab}');
+    expect(close).toHaveFocus();
+  });
+
+  it('closes when the active destination is selected', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AppShell />, { initialEntries: ['/library'] });
+    await user.click(screen.getByRole('button', { name: /Open navigation/ }));
+    await user.click(screen.getByRole('link', { name: 'Library' }));
+    expect(screen.queryByRole('navigation', { name: 'Primary' })).not.toBeInTheDocument();
   });
 });
 
