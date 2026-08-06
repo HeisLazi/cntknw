@@ -11,10 +11,14 @@ change when a milestone lands, and a state file that stores them
 goes stale the next commit. Git is authoritative: derive HEAD from
 `git rev-parse HEAD` / `origin/main` at session start.
 
-**Last completed product milestone:** Phase 3B — Production PDF Annotation
-UX (commits `feat(annotations): implement production PDF annotation UX` and,
-if review corrections warranted one, a second normal docs/closure commit;
-see `git log` for exact SHAs on `main`).
+**Last completed product milestone:** Phase 3C — Editable Freehand
+Pen/Drawing Authoring + Drawing Journal Blocks (commits on `main`; see
+`git log` for exact SHAs). This completes Phase 3 (Annotation & Drawing)
+in full, pending the ChatGPT milestone review of the Phase 3C acceptance.
+
+Prior milestone: Phase 3B — Production PDF Annotation UX, closed on `main`
+by the final acceptance-corrections commits (`889e938` fix → `8158fec`
+docs → `a880711` lint repair).
 
 Prior milestone: Phase 3A — Annotation Geometry Architecture, milestone
 commit `67f7061` `feat(annotations): establish canonical PDF geometry`,
@@ -46,15 +50,66 @@ code had changed and Phase 3 had not started.
 - Phase 0 foundations: complete and verified.
 - Phase 1 PDF core reliability through Milestone 3B: complete and verified.
 - Phase 2 Infinite Journal: complete and verified; do not reopen without a demonstrated regression.
-- Phase 3 annotations: Phase 3A canonical geometry and Phase 3B production
-  annotation UX (text highlight + region, exact-asset overlay, keyboard,
-  confirmation-based deletion) are complete, committed and verified. The
-  remaining Phase 3 work is Phase 3C — editable freehand ink/pen drawing
-  authoring and Drawing journal blocks (the vector model is preserved but the
-  authoring surface is not built). Phase 3 as a whole is therefore NOT fully
-  complete.
+- Phase 3 annotations & drawing: Phase 3A canonical geometry, Phase 3B
+  production annotation UX (text highlight + region, exact-asset overlay,
+  keyboard, confirmation-based deletion), and Phase 3C editable freehand
+  pen/drawing authoring + Drawing journal blocks (typed canvas-local vector
+  model, SVG freehand editor, content-replacement save path) are all
+  complete, committed and verified. Phase 3 as a whole is complete pending
+  the ChatGPT milestone review of the Phase 3C acceptance.
 
 ## Latest completed milestone
+
+Phase 3C — Editable Freehand Pen/Drawing Authoring + Drawing Journal Blocks,
+committed on `main`.
+
+Implemented, reviewed and verified:
+
+- typed vector drawing model replacing the loose `drawingData` blob
+  (`DrawingDataSchema`): `version: 1`, canvas-local `width`/`height`
+  (viewBox units, never PDF or viewport coordinates), strokes of
+  `{id, color, width, opacity?, points[]}` with min-2 finite points and a
+  `superRefine` bound check keeping every point inside the canvas; old
+  placeholder fixtures updated; no database schema/version change (block
+  content is a JSON blob);
+- `drawingCapture.ts`: DOM-boundary pointer→canvas-local conversion via
+  `getBoundingClientRect` + viewBox scaling, `isPrimary` guard,
+  `setPointerCapture`, 0.5-unit point sampling and 2-unit minimum travel so
+  degenerate drags are ignored;
+- `DrawingCanvas.tsx`: plain-SVG freehand editor — draw (pointerdown/move/up
+  commits a stroke), select a stroke, Delete/undo/clear-with-confirmation
+  (NFR-008), restrained colour (Graphite/Verdigris/Ochre) and width
+  (Fine/Regular/Broad) for the next stroke, Escape exits edit mode with focus
+  returned, Enter opens edit, `role="status"` live region announces every
+  change, honest empty/read states, no raster conversion anywhere — strokes
+  persist as vector `<path>` data (AC-008);
+- capture path: "Draw a sketch." beside "Start writing." creates a drawing
+  block through the existing `createPageLinkedBlock`, inheriting the active
+  page automatically (AC-003);
+- save path: `pendingEdit.ts` discriminates text vs whole-content edits;
+  drawing content travels the SAME debounced, revision-guarded flush as text
+  (`applyPendingEdit`), conflicts surface a textual summary ("Drawing — N
+  strokes"), failures stay visible with Retry, `flushAll` on
+  pagehide/visibility covers drawing edits — no silent stroke loss;
+- soft delete/restore unchanged for drawing blocks (NFR-008); deleting a
+  block with a pending drawing flushes the newest vector first so Restore
+  never resurrects a stale version, while a trailing blank text edit never
+  clobbers last-saved writing (regression covered);
+- keyboard/accessibility (AC-015): labelled tab-ordered controls, stroke
+  selection via Enter/Space, no colour-only meaning;
+- independent adversarial review (MiniMax M-3 via OpenCode, read-only) of
+  the Phase 3C delta: APPROVED WITH CORRECTIONS — the three required
+  corrections (H1 delete-intent feedback when a flush fails, M1
+  `previewDataUrl` preserved across edits, M5 e2e network filter no longer
+  allows `data:` URLs) were applied with regression tests; remaining
+  MEDIUM/LOW findings assessed non-blocking;
+- the manager's own full gate additionally caught and corrected one
+  regression in a pre-existing acceptance test (delete-then-restore of a
+  block whose trailing debounced edit was blank text now preserves the last
+  saved writing in the trash);
+- full project gate verified green on 2026-08-06 (see Verification).
+
+### Previous milestone
 
 Phase 3B — Production PDF Annotation UX, committed on `main`.
 
@@ -133,14 +188,14 @@ Final acceptance corrections (ChatGPT milestone review at d5da063, closed
 
 ## Current milestone
 
-Phase 3B — Production PDF Annotation UX is COMPLETE, committed, verified, and
-reviewer-ACCEPTED (both final acceptance blockers closed at the correction
-commit). The remaining Phase 3 exit work is Phase 3C: editable freehand
-pen/drawing authoring and Drawing journal blocks (AC-008 editable vector
-drawing, AC-3 source-location inheritance for Drawing blocks). Phase 3 as a
-whole is not complete until 3C lands. Phase 3C is NOT yet authorized; do not
-start it or Phase 4 without reviewer acceptance of Phase 3B's final
-acceptance corrections.
+Phase 3C — Editable Freehand Pen/Drawing Authoring + Drawing Journal Blocks is
+COMPLETE, committed, verified, gated green, and its acceptance-corrections
+applied and re-verified. This closes Phase 3 (Annotation & Drawing) in full.
+Phase 3C is awaiting the ChatGPT milestone review of its acceptance; Phase 3
+is formally complete once that review accepts. Phase 4 (connections,
+backlinks, graph/map, and the Phase 4A connection picker) has NOT been
+started and must not begin without reviewer acceptance of the Phase 3C
+milestone.
 
 ## Remaining tracked findings
 
@@ -148,20 +203,23 @@ acceptance corrections.
 - Finding 18: README architecture claim needs correction — TO DO.
 - Finding 19: GitHub CI pipeline — TO DO.
 - Finding 20: Firefox/WebKit browser coverage — DEFERRED.
-- Phase 3C remaining scope: editable freehand pen/drawing authoring and
-  Drawing journal blocks — NOT STARTED (Phase 3B intentionally deferred it).
-- The Phase 3A geometry foundation and Phase 3B production annotation UX are
-  no longer open items.
+- Phase 3C scope (editable freehand pen/drawing authoring and Drawing journal
+  blocks) — COMPLETE, committed, verified and gated green on 2026-08-06;
+  awaiting the ChatGPT milestone review of its acceptance. Phase 4A
+  (connections/backlinks/connection picker) remains not started, hard-blocked
+  on Phase 3C acceptance.
+- The Phase 3A geometry foundation, Phase 3B production annotation UX and
+  Phase 3C drawing authoring are no longer open items.
 
 ## Verification
 
 Latest uninterrupted gate in the authoritative checkout on 2026-08-06
-(Phase 3B final acceptance-corrections tree, exact candidate for commit):
+(Phase 3C tree, exact candidate for commit):
 
 - `npm run typecheck`: PASS
 - `npm run lint`: PASS
-- `npm run test`: PASS — 36 files, 605 passed, 1 skipped
-- `npm run test:e2e`: PASS — Chromium, 94 passed, 0 skipped
+- `npm run test`: PASS — 39 files, 633 passed, 1 skipped
+- `npm run test:e2e`: PASS — Chromium, 95 passed, 0 skipped
 - `npm run build`: PASS
 - `npm audit --omit=dev`: PASS — 0 vulnerabilities
 - production `dist/` leak scan (geometry-probe / __cntknwProbe /

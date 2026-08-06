@@ -1,8 +1,8 @@
 # CNTKNW Current Implementation Status
 
-**Updated:** 06 August 2026 (Phase 3B Production PDF Annotation UX — closed; final acceptance corrections applied)
+**Updated:** 06 August 2026 (Phase 3C Editable Freehand Pen/Drawing Authoring + Drawing Journal Blocks — closed; Phase 3 complete pending review)
 **Repository:** `HeisLazi/cntknw`
-**Git baseline:** Phase 3B (including its final acceptance corrections) is committed and verified on `main`. Per
+**Git baseline:** Phase 3C (Editable Freehand Pen/Drawing Authoring + Drawing Journal Blocks) is committed and verified on `main`. Per
 AI_PROJECT_STATE policy, no volatile live-HEAD SHA is recorded here; derive
 HEAD from Git at session start.
 **Status:** Living document. Update at every phase boundary.
@@ -44,8 +44,12 @@ repository-backed overlay per mounted page that stays aligned across
 zoom/resize/reload/virtualization; annotations are keyboard-reachable,
 colour-editable from restrained presets, and deletable only through
 confirmation. Migrated vector `ink` and `point` records render read-only.
-**Editable freehand pen/drawing authoring and Drawing journal blocks are not
-built; that Phase 3C work remains, so Phase 3 is not fully complete.**
+Phase 3C adds editable freehand pen/drawing authoring: drawing blocks carry a
+typed canvas-local vector model, render and edit through a plain-SVG freehand
+editor, inherit the active page automatically, and save through the same
+debounced, revision-guarded path as text. **Phase 3 (Annotation & Drawing)
+is now complete in full, pending the ChatGPT milestone review of the Phase 3C
+acceptance.**
 
 **Phases 0A–0E are complete and verified.** 
 
@@ -62,7 +66,7 @@ built; that Phase 3C work remains, so Phase 3 is not fully complete.**
 | 0E | Editor spike, then journal vertical slice | **Complete and verified** (ADR-0004, ADR-0005) |
 | 1 | Reliable PDF core — import, render, exact resume | **Milestone 3B complete and verified** (Findings 11–15 resolved; annotation UI remains out of scope) |
 | 2 | Infinite Journal | **Complete and verified** (Folio margin ADR-0006 landed) |
-| 3 | Annotations | **Phase 3A geometry architecture + Phase 3B production annotation UX complete, committed and verified** (exact-asset creation + overlay, highlight/region, keyboard, confirmation-based delete); Phase 3C pen/drawing authoring and Drawing journal blocks remain |
+| 3 | Annotations | **Phase 3A geometry architecture + Phase 3B production annotation UX + Phase 3C editable freehand pen/drawing authoring and Drawing journal blocks all complete, committed and verified** (exact-asset creation + overlay, highlight/region, keyboard, confirmation-based delete; typed canvas-local vector drawing model, SVG freehand editor, page-inherited drawing blocks). Phase 3 as a whole complete pending ChatGPT review of the Phase 3C acceptance |
 
 Phase order per ADR-0001 §1, which supersedes Handoff §19.
 
@@ -184,9 +188,9 @@ That is checked in five tests, not asserted in prose — the earlier phrase
 - **`appState` migration.** Needs a settings store.
 - **Annotation UX.** Text highlight and region annotations can be created,
   rendered, coloured and confirmation-deleted, keyboard-accessible, in the PDF
-  reader. **Editable freehand pen/drawing authoring and Drawing journal
-  blocks are not built** (Phase 3C); migrated `ink`/`point` records render
-  read-only.
+  reader. Migrated `ink`/`point` records render read-only (native and
+  converted) or as count-honest degraded notices (fallback); editable drawing
+  authoring exists as journal Drawing blocks (Phase 3C).
 - **Dictionary, cross-source search, maps.**
 - **Atlas entities.** Primitives only.
 - **Read Aloud playback, TTS, OCR.**
@@ -195,22 +199,41 @@ That is checked in five tests, not asserted in prose — the earlier phrase
 
 ---
 
-## 5. Verification, Phase 3B gate run 06 August 2026
+## 5. Verification, Phase 3C gate run 06 August 2026
 
 Node/npm and platform are supplied by the current Linux development
 environment. The implementer ran the suite during implementation; Hermes ran
-the full uninterrupted gate once on the pre-review candidate tree and again
-on the corrected final tree after the adversarial review corrections.
+the full uninterrupted gate once on the pre-review candidate tree, once after
+the adversarial review corrections, and again after the gate-caught regression
+fix — the final run below is the complete green gate:
 
 ```text
 npm run typecheck     PASS   0 errors      (src/ and e2e/)
 npm run lint          PASS   0 errors, 0 warnings
-npm run test          PASS   36 files, 605 passed, 1 skipped
-npm run test:e2e      PASS   Chromium, 94 passed, 0 skipped
+npm run test          PASS   39 files, 633 passed, 1 skipped
+npm run test:e2e      PASS   Chromium, 95 passed, 0 skipped
 npm run build         PASS   
 npm audit --omit=dev  PASS   0 vulnerabilities
 Production dist leak  PASS   0 matches (geometry-probe / __cntknwProbe / harness-client / e2e/harness)
 ```
+
+Phase 3C adds: the typed `DrawingDataSchema` (version 1, canvas-local
+viewBox width/height, strokes of `{id, color, width, opacity?, points[]}`,
+min-2 finite points, `superRefine` point-bounds — junk and out-of-canvas data
+rejected); `drawingCapture` unit suite (DOM-boundary conversion, degenerate
+drags ignored, primary-pointer guard); `DrawingCanvas` component suite
+(draw/select/undo/clear-with-confirmation, Escape exit with focus return,
+live-region announcements, empty/read states, `previewDataUrl` retained
+across edits); `JournalPane` drawing-integration suite (AC-003 page
+inheritance, AC-008 whole-vector persistence through the guarded save and
+remount, revision conflict surfaced without overwriting the remote drawing,
+failed edit kept visible and persisted through Retry, delete-then-restore
+preserves saved writing and newest strokes, trash blocked with a visible
+notice when a delete-triggered flush fails); `pendingEdit` save-path seam;
+and the production e2e journey (`drawing.spec.ts`) proving page-linked vector
+persistence, editability after reload, trash recovery, and zero network
+requests (including zero `data:` URLs) — all through the production UI with
+no harness seeding of the core journey.
 
 Final acceptance corrections (ChatGPT milestone review) added, in the
 annotation-feature layer: `legacyGeometry.ts` partitions records so
@@ -231,7 +254,7 @@ Contract suite is defined and run against both adapters — memory and indexeddb
 
 Phase 3B adds: unit coverage of the `createSourceAnnotation` membership/validation boundary (unlinked asset, wrong-source asset, missing source/asset, invalid page, kind/anchor mismatch, no partial writes — all rejected), the text-selection/region capture helpers (single-line, multiline, reverse drag, degenerate drag), the workspace `annotationTool` schema default, a `PdfAnnotationLayer` component suite (exact-page projection, **replacement-asset isolation**, keyboard actions + confirmation-before-delete, failed-intent retention with visible typed-or-generic error, style-update conflict reload, read retry, read-only point/ink projection, Escape cancels region drag with focus return, no setState after unmount), the fallback-geometry proofs (point/ink/area/text sentinels never rendered or focusable, record stays in the repository, degraded notice accessible, native+converted still positioned) and the virtualization proofs (failure after unmount → remount → Retry → exactly one durable record; success after unmount → exactly one durable record, no stale retry; cross-source/asset isolation; collapsed selection changes never clear an in-flight `saving` intent).
 
-Browser suite: one Chromium project, 94 tests. The Phase 3B production specs drive the real app: (1) a highlight journey that stays sub-pixel aligned through zoom, reload and page-unmount/remount, is deleted only via the confirmation dialog, and makes zero network requests; (2) a keyboard-reachable region tool that cancels with Escape, persists a drag across reload, and restores its tool state; (3) a cross-page text selection that is refused with an announced notice and creates no annotation; (4) a legacy-fallback spec that seeds a schema-valid `geometryStatus='fallback'` record through the e2e harness (never the production path), proves the degraded notice and the absence of any spatial mark, and proves the record survives a full reload.
+Browser suite: one Chromium project, 95 tests. The Phase 3B production specs drive the real app: (1) a highlight journey that stays sub-pixel aligned through zoom, reload and page-unmount/remount, is deleted only via the confirmation dialog, and makes zero network requests; (2) a keyboard-reachable region tool that cancels with Escape, persists a drag across reload, and restores its tool state; (3) a cross-page text selection that is refused with an announced notice and creates no annotation; (4) a legacy-fallback spec that seeds a schema-valid `geometryStatus='fallback'` record through the e2e harness (never the production path), proves the degraded notice and the absence of any spatial mark, and proves the record survives a full reload. The Phase 3C production spec drives the real app through a page-linked drawing journey: import → page 5 active → "Draw a sketch." → real-pointer stroke → save/reload → vector data still rendered and editable → trash → restore → zero network requests (no `data:` URLs either).
 
 **Not run:** WebKit and Firefox browser projects; axe or any automated
 accessibility rule engine; WCAG contrast measurement; visual regression.
@@ -255,19 +278,21 @@ accessibility rule engine; WCAG contrast measurement; visual regression.
 
 ## 7. Next step
 
-**Phase 3B Production PDF Annotation UX is complete, committed, verified, and
-reviewer-accepted** (the ChatGPT milestone review's two final acceptance
-blockers — legacy fallback geometry policy and pending-create-intent lifetime —
-are closed; see §5). Text-selection highlight and region annotations are
-created through an application boundary, persisted against the exact asset,
-rendered in a repository-backed per-page overlay, and are keyboard-accessible,
-colour-edited from restrained presets and confirmation-deleted. The next
-authorized implementation milestone is **Phase 3C — editable freehand
-pen/drawing authoring and Drawing journal blocks** (AC-008 editable vector
-drawing, AC-3 source-location inheritance for Drawing blocks), which Phase 3B
-intentionally deferred. Phase 3C has NOT been authorized or started; do not
-begin it or Phase 4 without reviewer acceptance of Phase 3B's final
-acceptance corrections.
+**Phase 3C — Editable Freehand Pen/Drawing Authoring + Drawing Journal Blocks
+is complete, committed, verified, gated green, and its acceptance-corrections
+are applied and re-verified** (see §5), and the manager's own full gate caught
+and corrected one regression in a pre-existing acceptance test
+(delete-then-restore of a block whose trailing debounced edit was blank text
+now preserves the last saved writing in the trash). Phase 3 (Annotation &
+Drawing) is therefore complete in full.
+
+Phase 3C awaits the **ChatGPT milestone review** of its acceptance before
+Phase 3 is formally marked complete and Phase 4 may lawfully begin. The next
+authorized implementation milestone after that acceptance is **Phase 4A —
+Connection and association authoring (the connection picker)**, which per its
+own prerequisite clause is hard-blocked on Phase 3C acceptance. Do not begin
+Phase 4 (Phase 4A connections, Phase 4B graph/map, Phase 4C argument maps) or
+any later phase without reviewer acceptance of the Phase 3C milestone.
 
 See `CNTKNW_Phase_0D_Checkpoint_Report.md`,
 `CNTKNW_Phase_0C_Checkpoint_Report.md` and

@@ -287,3 +287,59 @@ audit 0 vulns, and a production `dist/` leak scan with 0 matches).
 
 Findings 16, 18, 19 and 20 remain open/deferred exactly as before, unchanged
 by the acceptance corrections.
+
+## Phase 3C Editable Freehand Pen/Drawing Authoring + Drawing Journal Blocks (2026-08-06)
+
+Phase 3C implements the last Phase 3 piece: editable vector drawing authoring
+as journal Drawing blocks. Review of the committed candidate tree and the
+corrections applied across the review/gate loop:
+
+- **Typed vector model (AC-008).** `drawingData` is no longer a loose blob;
+  `DrawingDataSchema` is `version:1`, canvas-local `width`/`height`
+  (viewBox units — never PDF or viewport coordinates), and
+  `strokes: {id, color, width, opacity?, points[]}` with min-2 finite points
+  and a `superRefine` point-bounds check. No database schema/version change
+  (block content is a JSON blob). Strokes persist and render as SVG `<path>`
+  data; no raster conversion anywhere. Junk and out-of-canvas data are
+  rejected by tests.
+- **Capture and editor.** Pointer events become canvas-local points at the
+  DOM boundary (`getBoundingClientRect` + viewBox scaling), `isPrimary` guard,
+  `setPointerCapture`, 0.5-unit point sampling, 2-unit minimum travel so
+  degenerate drags are ignored. The `DrawingCanvas` is plain SVG (no new
+  dependency): draw, select a stroke, Delete/undo/clear-with-confirmation
+  (NFR-008), restrained colour/width presets, Escape exits edit with focus
+  returned, Enter opens edit, a `role="status"` live region announces changes,
+  honest empty and read states.
+- **Save path.** `pendingEdit.ts` discriminates text vs whole-content edits so
+  drawing content travels the same debounced, revision-guarded flush as text.
+  Conflicts surface a textual summary ("Drawing — N strokes"); failures stay
+  visible with Retry; `flushAll` on pagehide/visibility covers drawing edits.
+  Commit preserves the optional `previewDataUrl` so an existing raster
+  thumbnail is never discarded by an edit (M1).
+- **Page inheritance (AC-003).** "Draw a sketch." creates a drawing block via
+  `createPageLinkedBlock`, inheriting the active page — proven in unit and e2e.
+- **Trash/restore (NFR-008).** Deleting a block with a pending drawing flush
+  newest vector before soft-delete (restore never resurrects a stale version);
+  a trailing blank text edit never clobbers last-saved writing (regression
+  fixed); if a delete-triggered flush fails the user gets a visible notice
+  with Retry instead of a silent no-op (H1).
+- **Accessibility (AC-015).** Labelled tab-ordered buttons, stroke selection
+  via Enter/Space/Delete, Escape exits, live-region announcements, meaning
+  never conveyed by colour alone.
+- **Independent adversarial review (MiniMax M-3, OpenCode, read-only):**
+  APPROVED WITH CORRECTIONS. The three required corrections — H1
+  (delete feedback when a flush fails), M1 (preserve `previewDataUrl`), M5
+  (e2e network filter no longer allows `data:` URLs) — were applied with
+  regression tests. Remaining MEDIUM/LOW findings (stale-closure snapshot,
+  autoFocus mount-only contract, stroke-id non-UUID, focus-after-delete)
+  assessed non-blocking/deferred.
+- **Manager's own full gate** additionally caught and corrected one regression
+  in a pre-existing acceptance test (bv-009 E delete-then-restore: the new
+  flush-before-delete persisted a trailing empty text edit over saved text).
+- **Final gate (2026-08-06):** typecheck PASS, lint PASS, unit 39 files /
+  633 passed / 1 skipped, Chromium e2e 95 passed / 0 failed, build PASS,
+  audit 0 vulns, production `dist/` leak scan 0 matches.
+
+Findings 16, 18, 19 and 20 remain open/deferred exactly as before, unchanged
+by Phase 3C. Phase 4A (connection picker) is not started, hard-blocked on
+ChatGPT acceptance of the Phase 3C milestone.
