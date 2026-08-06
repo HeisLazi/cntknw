@@ -191,6 +191,25 @@ describe('createPageLinkedBlock', () => {
     expect(block.sourceLocation?.pdf?.page).toBe(5);
   });
 
+  it('creates a Drawing block on the active page without flattening it (AC-003, AC-008)', async () => {
+    const sourceId = id();
+    const block = await createPageLinkedBlock(repos, {
+      sourceId,
+      sourceLocation: locationAt(sourceId, 5),
+      kind: 'drawing',
+      content: {
+        type: 'drawing',
+        drawingData: { version: 1, width: 800, height: 600, strokes: [] },
+      },
+    });
+
+    expect(block.sourceLocation?.pdf?.page).toBe(5);
+    expect(block.content).toEqual({
+      type: 'drawing',
+      drawingData: { version: 1, width: 800, height: 600, strokes: [] },
+    });
+  });
+
   it('creates the journal on first write', async () => {
     const sourceId = id();
     expect(await repos.journals.getJournalForSource(sourceId)).toBeNull();

@@ -3,13 +3,15 @@ import { Menu } from '@components/primitives';
 import { canChangeKind } from '@domain/journals/transform';
 import type { BlockKind, JournalBlock } from '@domain/index';
 import { BlockEditor } from './BlockEditor';
+import { DrawingCanvas } from './DrawingCanvas';
 import { CHANGEABLE_KINDS, vocabularyFor } from './blockVocabulary';
 import './journal.css';
 
 export interface JournalBlockViewProps {
   block: JournalBlock;
   autoFocus: boolean;
-  onChange: (next: { doc: unknown; text: string }) => void;
+  onTextChange: (next: { doc: unknown; text: string }) => void;
+  onContentChange: (next: JournalBlock['content']) => void;
   onSplit: () => void;
   onRemove: () => void;
   onMoveUp: () => void;
@@ -37,7 +39,8 @@ export interface JournalBlockViewProps {
 export function JournalBlockView({
   block,
   autoFocus,
-  onChange,
+  onTextChange,
+  onContentChange,
   onSplit,
   onRemove,
   onMoveUp,
@@ -104,7 +107,7 @@ export function JournalBlockView({
             text={textOf(block)}
             autoFocus={autoFocus}
             placeholder={placeholderFor(block.kind)}
-            onChange={onChange}
+            onChange={onTextChange}
             onSplit={onSplit}
             onRemove={onRemove}
             onMoveUp={onMoveUp}
@@ -112,7 +115,12 @@ export function JournalBlockView({
             allowRichText={block.kind === 'paragraph'}
           />
         ) : (
-          <NonTextualBlock block={block} />
+          <NonTextualBlock
+            block={block}
+            autoFocus={autoFocus}
+            onContentChange={onContentChange}
+            onRemove={onRemove}
+          />
         )}
         {footer}
       </div>
@@ -165,8 +173,29 @@ function placeholderFor(kind: BlockKind): string {
  * indistinguishable from data loss, which is the impression a study
  * tool can least afford to give.
  */
-function NonTextualBlock({ block }: { block: JournalBlock }) {
+function NonTextualBlock({
+  block,
+  autoFocus,
+  onContentChange,
+  onRemove,
+}: {
+  block: JournalBlock;
+  autoFocus: boolean;
+  onContentChange: (next: JournalBlock['content']) => void;
+  onRemove: () => void;
+}) {
   const content = block.content;
+
+  if (content.type === 'drawing') {
+    return (
+      <DrawingCanvas
+        content={content}
+        autoFocus={autoFocus}
+        onChange={onContentChange}
+        onRemoveBlock={onRemove}
+      />
+    );
+  }
 
   if (content.type === 'divider') {
     return <hr className="cn-block__divider" />;

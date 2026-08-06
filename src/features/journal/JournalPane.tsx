@@ -6,11 +6,24 @@ import { RevisionConflictError } from '@data/errors';
 import { createPageLinkedBlock } from '@application/create-block';
 import { groupBlocksByLocation } from '@domain/journals/grouping';
 import type { JournalGroup } from '@domain/journals/grouping';
-import type { EntityId, JournalBlock, SourceLocation, BlockKind, BlockContent } from '@domain/index';
+import {
+  createEmptyDrawingData,
+  type EntityId,
+  type JournalBlock,
+  type SourceLocation,
+  type BlockKind,
+  type BlockContent,
+} from '@domain/index';
 import { textOfEditableContent, withEditedText, contentForKind } from '@domain/journals/transform';
 import { movePageLinkedBlock } from '@application/index';
 import { JournalBlockView } from './JournalBlockView';
 import { clearDraft, recoverDrafts, stashDraft } from './draftBuffer';
+import {
+  applyPendingEdit,
+  drawingSummary,
+  pendingEditSummary,
+  type PendingJournalEdit,
+} from './pendingEdit';
 import './journal.css';
 
 export interface JournalPaneProps {
@@ -28,11 +41,6 @@ export interface JournalPaneProps {
  * crash buffer and a flush on every path out of the page (ADR-0005).
  */
 const SAVE_DEBOUNCE_MS = 400;
-
-interface PendingEdit {
-  doc: unknown;
-  text: string;
-}
 
 /**
  * How far apart two runs are, as rhythm rather than as data.
@@ -99,12 +107,13 @@ export function JournalPane({
 
   const [conflictData, setConflictData] = useState<Map<EntityId, { remoteText: string, localText: string }>>(new Map());
   const [failedWrites, setFailedWrites] = useState<Set<EntityId>>(new Set());
+  const [trashBlocked, setTrashBlocked] = useState<Set<EntityId>>(new Set());
   const [resolutionErrors, setResolutionErrors] = useState<Set<EntityId>>(new Set());
   const [resetKeys, setResetKeys] = useState<Map<EntityId, number>>(new Map());
   const [focusBlockId, setFocusBlockId] = useState<EntityId | null>(null);
 
   const revisions = useRef(new Map<EntityId, number>());
-  const pending = useRef(new Map<EntityId, PendingEdit>());
+  const pending = useRef(new Map<EntityId, PendingJournalEdit>());
   const timers = useRef(new Map<EntityId, ReturnType<typeof setTimeout>>());
   const flushRef = useRef<(blockId: EntityId) => Promise<void>>(async () => {});
 
@@ -139,7 +148,11 @@ export function JournalPane({
             clearDraft(block.id);
             return block;
           }
-          pending.current.set(block.id, { doc: draft.doc, text: draft.text });
+          pending.current.set(block.id, {
+            kind: 'text',
+            doc: draft.doc,
+            text: draft.text,
+          });
           
           return { ...block, content: withEditedText(block.content, draft) as BlockContent };
         });
@@ -179,7 +192,7 @@ export function JournalPane({
         const currentBlock = blocks?.find((b) => b.id === blockId);
         if (!currentBlock) return;
 
-        const mergedContent = withEditedText(currentBlock.content, edit);
+        const mergedContent = applyPendingEdit(currentBlock.content, edit);
 
         const saved = await journals.updateBlock(
           {
@@ -188,7 +201,8 @@ export function JournalPane({
           },
           expectedRevision(revision),
         );
-        if (pending.current.get(blockId) === edit) {
+        const clearedPendingEdit = pending.current.get(blockId) === edit;
+        if (clearedPendingEdit) {
           pending.current.delete(blockId);
           clearDraft(blockId);
         }
@@ -206,6 +220,14 @@ export function JournalPane({
           next.delete(blockId);
           return next;
         });
+        if (clearedPendingEdit) {
+          setTrashBlocked((current) => {
+            if (!current.has(blockId)) return current;
+            const next = new Set(current);
+            next.delete(blockId);
+            return next;
+          });
+        }
       } catch (error) {
         if (error instanceof RevisionConflictError) {
           // Deliberately not reapplied. A reading position can be
@@ -214,14 +236,10 @@ export function JournalPane({
           // (ADR-0004 §6).
           journals.getBlockById(blockId).then(remoteBlock => {
             if (remoteBlock) {
-              const remoteText = textOfEditableContent(remoteBlock.content);
-
-              if (remoteText !== undefined) {
-                setConflictData(curr => new Map(curr).set(blockId, { 
-                  remoteText: remoteText,
-                  localText: edit.text 
-                }));
-              }
+              setConflictData(curr => new Map(curr).set(blockId, {
+                remoteText: drawingSummary(remoteBlock.content),
+                localText: pendingEditSummary(edit),
+              }));
             }
           });
           return;
@@ -244,11 +262,13 @@ export function JournalPane({
   useEffect(syncFlushRef);
 
   const scheduleSave = useCallback(
-    (blockId: EntityId, edit: PendingEdit) => {
+    (blockId: EntityId, edit: PendingJournalEdit) => {
       pending.current.set(blockId, edit);
-      // Synchronous, every keystroke. The only write guaranteed to
-      // have happened if the tab dies in the next millisecond.
-      stashDraft({ blockId, doc: edit.doc, text: edit.text });
+      if (edit.kind === 'text') {
+        // Synchronous, every keystroke. The only write guaranteed to
+        // have happened if the tab dies in the next millisecond.
+        stashDraft({ blockId, doc: edit.doc, text: edit.text });
+      }
       const existing = timers.current.get(blockId);
       if (existing) clearTimeout(existing);
       timers.current.set(
@@ -294,12 +314,18 @@ export function JournalPane({
    * be showing.
    */
   const addBlock = useCallback(
-    async (at: SourceLocation, afterBlockId?: EntityId) => {
+    async (
+      at: SourceLocation,
+      kind: 'paragraph' | 'drawing' = 'paragraph',
+      afterBlockId?: EntityId,
+    ) => {
       const block = await createPageLinkedBlock(repositories, {
         sourceId,
         sourceLocation: at,
-        kind: 'paragraph',
-        content: { type: 'paragraph', text: '' },
+        kind,
+        content: kind === 'drawing'
+          ? { type: 'drawing', drawingData: createEmptyDrawingData() }
+          : { type: 'paragraph', text: '' },
         ...(afterBlockId === undefined ? {} : { afterBlockId }),
       });
       revisions.current.set(block.id, block.revision);
@@ -311,6 +337,25 @@ export function JournalPane({
 
   const removeBlock = useCallback(
     async (blockId: EntityId) => {
+      const existingTimer = timers.current.get(blockId);
+      if (existingTimer) clearTimeout(existingTimer);
+      timers.current.delete(blockId);
+
+      // Preserve substantive edits before trashing, especially a drawing
+      // sent to trash inside its debounce window. A trailing blank text
+      // edit is different: flushing it would erase the last saved writing
+      // before soft deletion, leaving nothing useful to restore.
+      const edit = pending.current.get(blockId);
+      const shouldFlush = edit?.kind === 'content'
+        || (edit?.kind === 'text' && edit.text.trim() !== '');
+      if (shouldFlush) {
+        await flush(blockId);
+        if (pending.current.has(blockId)) {
+          setTrashBlocked((current) => new Set(current).add(blockId));
+          return;
+        }
+      }
+
       const revision = revisions.current.get(blockId);
       if (revision === undefined) return;
       // Soft delete: NFR-008 wants a recovery path for every
@@ -320,10 +365,6 @@ export function JournalPane({
       setBlocks((current) => (current ?? []).filter((b) => b.id !== blockId));
       setDeletedBlocks(current => [...current, saved]);
       revisions.current.delete(blockId);
-      
-      const existingTimer = timers.current.get(blockId);
-      if (existingTimer) clearTimeout(existingTimer);
-      timers.current.delete(blockId);
       
       pending.current.delete(blockId);
       clearDraft(blockId);
@@ -338,6 +379,11 @@ export function JournalPane({
         next.delete(blockId);
         return next;
       });
+      setTrashBlocked(curr => {
+        const next = new Set(curr);
+        next.delete(blockId);
+        return next;
+      });
       setResolutionErrors(curr => {
         const next = new Set(curr);
         next.delete(blockId);
@@ -345,7 +391,7 @@ export function JournalPane({
       });
       setFocusBlockId(curr => curr === blockId ? null : curr);
     },
-    [journals],
+    [flush, journals],
   );
 
   const restoreBlock = useCallback(
@@ -377,7 +423,7 @@ export function JournalPane({
 
       try {
         const edit = pending.current.get(blockId);
-        const baseContent = edit ? withEditedText(block.content, edit) : block.content;
+        const baseContent = edit ? applyPendingEdit(block.content, edit) : block.content;
         const newContent = contentForKind(baseContent as BlockContent, to);
         
         const saved = await journals.updateBlock(
@@ -516,9 +562,16 @@ export function JournalPane({
                       <button
                         type="button"
                         className="cn-run__start"
-                        onClick={() => void addBlock(location)}
+                        onClick={() => void addBlock(location, 'paragraph')}
                       >
                         Start writing.
+                      </button>
+                      <button
+                        type="button"
+                        className="cn-run__draw"
+                        onClick={() => void addBlock(location, 'drawing')}
+                      >
+                        Draw a sketch.
                       </button>
                     </div>
                   ) : (
@@ -528,10 +581,18 @@ export function JournalPane({
                             <JournalBlockView
                               block={block}
                               autoFocus={block.id === focusBlockId}
-                              onChange={(next) => scheduleSave(block.id, next)}
+                              onTextChange={(next) => scheduleSave(block.id, {
+                                kind: 'text',
+                                ...next,
+                              })}
+                              onContentChange={(content) => scheduleSave(block.id, {
+                                kind: 'content',
+                                content,
+                              })}
                               onSplit={() =>
                                 void addBlock(
                                   block.sourceLocation ?? location,
+                                  'paragraph',
                                   block.id,
                                 )
                               }
@@ -541,9 +602,24 @@ export function JournalPane({
                               onChangeKind={(to) => void changeBlockKind(block.id, to)}
                               footer={
                                 <>
-                                  {failedWrites.has(block.id) && !conflictData.has(block.id) ? (
+                                  {trashBlocked.has(block.id) ? (
                                     <p className="cn-journal__error" role="alert">
-                                      Failed to save your changes. Your draft is kept safe locally.
+                                      {conflictData.has(block.id)
+                                        ? 'Could not move this to trash yet because the latest changes have not saved. Resolve the save conflict, then delete again.'
+                                        : 'Could not move this to trash yet because the latest changes have not saved. Use Retry to finish saving, then delete again.'}
+                                      {failedWrites.has(block.id) && !conflictData.has(block.id) ? (
+                                        <button
+                                          type="button"
+                                          className="cn-journal__retry"
+                                          onClick={() => void flush(block.id)}
+                                        >
+                                          Retry saving
+                                        </button>
+                                      ) : null}
+                                    </p>
+                                  ) : failedWrites.has(block.id) && !conflictData.has(block.id) ? (
+                                    <p className="cn-journal__error" role="alert">
+                                      Failed to save your changes. Your changes are still here.
                                       <button
                                         type="button"
                                         className="cn-journal__retry"
@@ -582,6 +658,13 @@ export function JournalPane({
                                         setResetKeys,
                                         setResolutionErrors
                                       );
+                                      if (!pending.current.has(block.id)) {
+                                        setTrashBlocked((current) => {
+                                          const next = new Set(current);
+                                          next.delete(block.id);
+                                          return next;
+                                        });
+                                      }
                                     }}
                                   >
                                     Keep saved
@@ -602,6 +685,13 @@ export function JournalPane({
                                           setResetKeys,
                                           setResolutionErrors
                                         );
+                                        if (!pending.current.has(block.id)) {
+                                          setTrashBlocked((current) => {
+                                            const next = new Set(current);
+                                            next.delete(block.id);
+                                            return next;
+                                          });
+                                        }
                                       }}
                                   >
                                     Use my version
@@ -631,7 +721,7 @@ export function JournalPane({
                   <div className="cn-journal__trash-content">
                     <span className="cn-journal__trash-kind">{block.kind}</span>
                     <span className="cn-journal__trash-text">
-                      {textOfEditableContent(block.content) ?? '...'}
+                      {drawingSummary(block.content) || '...'}
                     </span>
                   </div>
                   <button type="button" onClick={() => void restoreBlock(block.id)}>Restore</button>

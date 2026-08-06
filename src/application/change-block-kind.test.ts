@@ -145,7 +145,20 @@ describe('changeBlockKind', () => {
       journalId: journal.id,
       kind: 'drawing',
       rank: 'a',
-      content: { type: 'drawing', drawingData: { strokes: [1, 2] } },
+      content: {
+        type: 'drawing',
+        drawingData: {
+          version: 1,
+          width: 800,
+          height: 600,
+          strokes: [{
+            id: 'stroke-one',
+            color: 'var(--cn-palette-ink-400)',
+            width: 3,
+            points: [{ x: 1, y: 2 }, { x: 30, y: 40 }],
+          }],
+        },
+      },
     });
 
     await expect(

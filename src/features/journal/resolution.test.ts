@@ -38,7 +38,7 @@ describe('Conflict Resolution Failure Paths', () => {
     const blockId = 'block-1';
     
     // Simulate pending local state
-    pending.set(blockId, { type: 'paragraph', text: 'local text' });
+    pending.set(blockId, { kind: 'text', doc: undefined, text: 'local text' });
     timers.set(blockId, setTimeout(() => {}, 1000));
     
     // Mock fetch failure
@@ -71,7 +71,7 @@ describe('Conflict Resolution Failure Paths', () => {
     const blockId = 'block-2';
     
     // Simulate pending local state
-    pending.set(blockId, { type: 'paragraph', text: 'local text' });
+    pending.set(blockId, { kind: 'text', doc: undefined, text: 'local text' });
     timers.set(blockId, setTimeout(() => {}, 1000));
     
     // Mock remote block existing
@@ -136,5 +136,56 @@ describe('Conflict Resolution Failure Paths', () => {
     expect(mockSetConflictData).toHaveBeenCalled();
     // Blocks array should be updated
     expect(mockSetBlocks).toHaveBeenCalled();
+  });
+
+  it('uses whole drawing content when resolving with my version', async () => {
+    const blockId = 'block-drawing';
+    const localContent = {
+      type: 'drawing' as const,
+      drawingData: {
+        version: 1 as const,
+        width: 800,
+        height: 600,
+        strokes: [{
+          id: 'local-stroke',
+          color: 'var(--cn-palette-ink-400)',
+          width: 4,
+          points: [{ x: 10, y: 10 }, { x: 40, y: 40 }],
+        }],
+      },
+    };
+    pending.set(blockId, { kind: 'content', content: localContent });
+    mockRepos.journals.getBlockById.mockResolvedValue({
+      id: blockId,
+      revision: 4,
+      content: {
+        type: 'drawing',
+        drawingData: { version: 1, width: 800, height: 600, strokes: [] },
+      },
+    });
+    mockRepos.journals.updateBlock.mockResolvedValue({
+      id: blockId,
+      revision: 5,
+      content: localContent,
+    });
+
+    await resolveConflictUseMyVersion(
+      blockId,
+      mockRepos,
+      mockClearDraft,
+      pending,
+      timers,
+      revisions,
+      mockSetBlocks,
+      mockSetConflictData,
+      mockSetResetKeys,
+      mockSetResolutionErrors,
+    );
+
+    expect(mockRepos.journals.updateBlock).toHaveBeenCalledWith(
+      { id: blockId, content: localContent },
+      { mode: 'expected', revision: 4 },
+    );
+    expect(pending.has(blockId)).toBe(false);
   });
 });

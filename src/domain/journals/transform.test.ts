@@ -12,6 +12,24 @@ import { BlockContentSchema } from './journal.schemas';
 import type { BlockContent } from './journal.schemas';
 
 const parse = (input: unknown): BlockContent => BlockContentSchema.parse(input);
+const emptyDrawing = {
+  type: 'drawing' as const,
+  drawingData: { version: 1 as const, width: 800, height: 600, strokes: [] },
+};
+const drawingWithStroke = {
+  type: 'drawing' as const,
+  drawingData: {
+    version: 1 as const,
+    width: 800,
+    height: 600,
+    strokes: [{
+      id: 'stroke-one',
+      color: 'var(--cn-palette-ink-400)',
+      width: 3,
+      points: [{ x: 1, y: 1 }, { x: 20, y: 20 }],
+    }],
+  },
+};
 
 describe('textOfContent', () => {
   it('reads the text of every prose kind', () => {
@@ -44,7 +62,7 @@ describe('textOfContent', () => {
   it('returns empty for kinds that hold no prose', () => {
     expect(textOfContent(parse({ type: 'divider' }))).toBe('');
     expect(
-      textOfContent(parse({ type: 'drawing', drawingData: { strokes: [] } })),
+      textOfContent(parse(emptyDrawing)),
     ).toBe('');
   });
 });
@@ -73,7 +91,7 @@ describe('canChangeKind', () => {
   it('refuses to turn a drawing into prose, and says what would be lost', () => {
     // A user who loses a drawing to a menu click has been robbed by
     // the interface. Being told costs one click and keeps the work.
-    const drawing = parse({ type: 'drawing', drawingData: { strokes: [1] } });
+    const drawing = parse(drawingWithStroke);
     const verdict = canChangeKind(drawing, 'paragraph');
     expect(verdict.ok).toBe(false);
     if (!verdict.ok) {
@@ -88,6 +106,11 @@ describe('canChangeKind', () => {
       const verdict = canChangeKind(paragraph, to);
       expect(verdict.ok, `paragraph -> ${to}`).toBe(false);
     }
+  });
+
+  it('refuses drawing transformations in both directions', () => {
+    expect(canChangeKind(parse(drawingWithStroke), 'paragraph').ok).toBe(false);
+    expect(canChangeKind(paragraph, 'drawing').ok).toBe(false);
   });
 
   it('refuses prose to divider, because that discards the words', () => {
@@ -159,7 +182,7 @@ describe('contentForKind', () => {
   });
 
   it('throws rather than destroying content when the caller forgot to check', () => {
-    const drawing = parse({ type: 'drawing', drawingData: {} });
+    const drawing = parse(emptyDrawing);
     expect(() => contentForKind(drawing, 'paragraph')).toThrow(/discard the drawing/);
   });
 });

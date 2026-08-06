@@ -1,18 +1,13 @@
 import { Repositories } from '@data/repositories';
-import type { EntityId, JournalBlock, BlockContent } from '@domain/index';
-import { withEditedText } from '@domain/journals/transform';
-
-export interface PendingEdit {
-  doc?: unknown;
-  text: string;
-}
+import type { EntityId, JournalBlock } from '@domain/index';
+import { applyPendingEdit, type PendingJournalEdit } from './pendingEdit';
 import { expectedRevision } from '@data/repositories/concurrency';
 
 export async function resolveConflictKeepSaved(
   blockId: EntityId,
   repositories: Repositories,
   clearDraft: (id: EntityId) => void,
-  pending: Map<EntityId, PendingEdit>,
+  pending: Map<EntityId, PendingJournalEdit>,
   timers: Map<EntityId, NodeJS.Timeout>,
   revisions: Map<EntityId, number>,
   setBlocks: (updater: (current: JournalBlock[] | null) => JournalBlock[] | null) => void,
@@ -48,7 +43,7 @@ export async function resolveConflictUseMyVersion(
   blockId: EntityId,
   repositories: Repositories,
   clearDraft: (id: EntityId) => void,
-  pending: Map<EntityId, PendingEdit>,
+  pending: Map<EntityId, PendingJournalEdit>,
   timers: Map<EntityId, NodeJS.Timeout>,
   revisions: Map<EntityId, number>,
   setBlocks: (updater: (current: JournalBlock[] | null) => JournalBlock[] | null) => void,
@@ -62,7 +57,7 @@ export async function resolveConflictUseMyVersion(
     if (remote) {
       const edit = pending.get(blockId);
       if (edit) {
-        const newContent = withEditedText(remote.content, edit) as BlockContent;
+        const newContent = applyPendingEdit(remote.content, edit);
         const saved = await repositories.journals.updateBlock(
           { id: blockId, content: newContent },
           expectedRevision(remote.revision)

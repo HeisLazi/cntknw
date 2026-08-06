@@ -136,10 +136,67 @@ export const DefinitionContentSchema = z.object({
 });
 export type DefinitionContent = z.infer<typeof DefinitionContentSchema>;
 
+export const DrawingPointSchema = z.object({
+  x: z.number().finite().nonnegative(),
+  y: z.number().finite().nonnegative(),
+});
+export type DrawingPoint = z.infer<typeof DrawingPointSchema>;
+
+export const DrawingStrokeSchema = z.object({
+  id: z.string().min(1),
+  color: z.string().min(1),
+  width: z.number().finite().positive(),
+  opacity: z.number().finite().min(0).max(1).optional(),
+  points: z.array(DrawingPointSchema).min(2),
+});
+export type DrawingStroke = z.infer<typeof DrawingStrokeSchema>;
+
+export const DrawingDataSchema = z
+  .object({
+    version: z.literal(1),
+    /** Canvas-local SVG viewBox units, never PDF or viewport coordinates. */
+    width: z.number().finite().positive(),
+    height: z.number().finite().positive(),
+    background: z.string().min(1).optional(),
+    strokes: z.array(DrawingStrokeSchema),
+  })
+  .superRefine((drawing, context) => {
+    drawing.strokes.forEach((stroke, strokeIndex) => {
+      stroke.points.forEach((point, pointIndex) => {
+        if (point.x > drawing.width) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Drawing point must stay inside the canvas width',
+            path: ['strokes', strokeIndex, 'points', pointIndex, 'x'],
+          });
+        }
+        if (point.y > drawing.height) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Drawing point must stay inside the canvas height',
+            path: ['strokes', strokeIndex, 'points', pointIndex, 'y'],
+          });
+        }
+      });
+    });
+  });
+export type DrawingData = z.infer<typeof DrawingDataSchema>;
+
+export const EMPTY_DRAWING_DATA: DrawingData = {
+  version: 1,
+  width: 800,
+  height: 600,
+  strokes: [],
+};
+
+export function createEmptyDrawingData(): DrawingData {
+  return { ...EMPTY_DRAWING_DATA, strokes: [] };
+}
+
 export const DrawingContentSchema = z.object({
   type: z.literal('drawing'),
-  /** Editable vector/object data — NOT a flattened raster. */
-  drawingData: z.record(z.unknown()),
+  /** Editable vector strokes are authoritative; a preview is disposable. */
+  drawingData: DrawingDataSchema,
   previewDataUrl: z.string().optional(),
 });
 export type DrawingContent = z.infer<typeof DrawingContentSchema>;

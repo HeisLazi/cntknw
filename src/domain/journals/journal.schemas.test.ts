@@ -1,5 +1,56 @@
 import { describe, it, expect } from 'vitest';
-import { JournalBlockSchema, UpdateBlockInputSchema } from './journal.schemas';
+import {
+  DrawingContentSchema,
+  DrawingDataSchema,
+  JournalBlockSchema,
+  UpdateBlockInputSchema,
+} from './journal.schemas';
+
+const validDrawingData = {
+  version: 1 as const,
+  width: 800,
+  height: 600,
+  strokes: [
+    {
+      id: 'stroke-one',
+      color: 'var(--cn-palette-ink-400)',
+      width: 3,
+      opacity: 0.8,
+      points: [{ x: 20, y: 30 }, { x: 120, y: 140 }],
+    },
+  ],
+};
+
+describe('DrawingContentSchema', () => {
+  it('accepts editable canvas-local vector strokes', () => {
+    expect(DrawingContentSchema.parse({
+      type: 'drawing',
+      drawingData: validDrawingData,
+      previewDataUrl: 'data:image/png;base64,disposable',
+    }).drawingData).toEqual(validDrawingData);
+  });
+
+  it.each([
+    ['empty point list', { ...validDrawingData, strokes: [{ ...validDrawingData.strokes[0], points: [] }] }],
+    ['one-point stroke', { ...validDrawingData, strokes: [{ ...validDrawingData.strokes[0], points: [{ x: 1, y: 1 }] }] }],
+    ['non-numeric coordinate', { ...validDrawingData, strokes: [{ ...validDrawingData.strokes[0], points: [{ x: 'one', y: 1 }, { x: 2, y: 2 }] }] }],
+    ['wrong version', { ...validDrawingData, version: 2 }],
+    ['opaque junk', { strokes: [1] }],
+  ])('rejects %s', (_label, drawingData) => {
+    expect(DrawingDataSchema.safeParse(drawingData).success).toBe(false);
+  });
+
+  it('rejects points outside the declared viewBox', () => {
+    const outside = {
+      ...validDrawingData,
+      strokes: [{
+        ...validDrawingData.strokes[0],
+        points: [{ x: 20, y: 30 }, { x: 801, y: 140 }],
+      }],
+    };
+    expect(DrawingDataSchema.safeParse(outside).success).toBe(false);
+  });
+});
 
 describe('Journal Block Zod Schemas', () => {
   describe('Block Consistency (Finding 4)', () => {
@@ -38,7 +89,7 @@ describe('Journal Block Zod Schemas', () => {
       evidence: { type: 'evidence', text: 'evidence text' },
       objection: { type: 'objection', text: 'objection text' },
       definition: { type: 'definition', term: 'term' },
-      drawing: { type: 'drawing', drawingData: {} },
+      drawing: { type: 'drawing', drawingData: validDrawingData },
       'argument-map': { type: 'argument-map' },
       image: { type: 'image' },
       'connection-embed': { type: 'connection-embed', connectionId: '12345678-1234-1234-1234-123456789014' },

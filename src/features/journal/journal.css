@@ -174,6 +174,10 @@
  */
 .cn-run__opening {
   grid-area: 1 / 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--cn-space-md);
   padding-block-start: var(--cn-space-xs);
 }
 
@@ -200,6 +204,31 @@
 
 .cn-run__start:hover {
   color: var(--cn-ink-muted);
+}
+
+.cn-run__draw {
+  min-height: var(--cn-target-min);
+  padding: var(--cn-space-sm) var(--cn-space-md);
+  border: 0;
+  border-bottom: var(--cn-border-width) solid var(--cn-rule-paper-strong);
+  background: none;
+  color: var(--cn-ink-muted);
+  font-family: var(--cn-font-sans);
+  font-size: var(--cn-text-sm);
+  text-align: start;
+  white-space: nowrap;
+  cursor: crosshair;
+}
+
+.cn-run__draw:hover {
+  color: var(--cn-ink-strong);
+  background-color: var(--cn-paper-hover);
+}
+
+.cn-run__draw:focus-visible,
+.cn-run__start:focus-visible {
+  outline: var(--cn-focus-ring-width) solid var(--cn-focus-ring);
+  outline-offset: var(--cn-focus-ring-offset);
 }
 
 /* ── Blocks ─────────────────────────────────────────────────────── */
@@ -275,6 +304,135 @@
   height: 0;
 }
 
+/* ── Drawing blocks ───────────────────────────────────────────────
+ *
+ * A drawing is another mark on the journal leaf, not a whiteboard
+ * application embedded inside it. The frame is a single paper rule;
+ * the compact controls read like instruments laid above the page.
+ */
+
+.cn-drawing {
+  max-width: var(--cn-measure);
+  padding-block: var(--cn-space-xs) var(--cn-space-md);
+  color: var(--cn-ink);
+  font-family: var(--cn-font-sans);
+}
+
+.cn-drawing:focus-visible {
+  outline: var(--cn-focus-ring-width) solid var(--cn-focus-ring);
+  outline-offset: var(--cn-focus-ring-offset);
+}
+
+.cn-drawing__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cn-space-xs) var(--cn-space-md);
+  margin-block-end: var(--cn-space-sm);
+  padding-block-end: var(--cn-space-sm);
+  border-bottom: var(--cn-border-width) solid var(--cn-rule-paper);
+}
+
+.cn-drawing__tool-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cn-space-2xs);
+}
+
+.cn-drawing__tool,
+.cn-drawing__edit {
+  min-height: var(--cn-target-min);
+  padding: var(--cn-space-xs) var(--cn-space-sm);
+  border: var(--cn-border-width) solid transparent;
+  border-radius: var(--cn-radius-sm);
+  background: none;
+  color: var(--cn-ink-muted);
+  font: inherit;
+  font-size: var(--cn-text-xs);
+  cursor: pointer;
+}
+
+.cn-drawing__tool:hover,
+.cn-drawing__edit:hover {
+  background-color: var(--cn-paper-hover);
+  color: var(--cn-ink-strong);
+}
+
+.cn-drawing__tool[aria-pressed='true'] {
+  border-color: var(--cn-rule-paper-strong);
+  background-color: var(--cn-paper-active);
+  color: var(--cn-ink-strong);
+}
+
+.cn-drawing__tool:focus-visible,
+.cn-drawing__edit:focus-visible,
+.cn-drawing__canvas:focus-visible {
+  outline: var(--cn-focus-ring-width) solid var(--cn-focus-ring);
+  outline-offset: var(--cn-focus-ring-offset);
+}
+
+.cn-drawing__tool:disabled {
+  color: var(--cn-disabled-ink);
+  cursor: default;
+  opacity: 0.65;
+}
+
+.cn-drawing__tool--danger:not(:disabled) {
+  color: var(--cn-danger);
+}
+
+.cn-drawing__edit {
+  margin-block-end: var(--cn-space-sm);
+  border-color: var(--cn-rule-paper);
+}
+
+.cn-drawing__canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border: var(--cn-border-width) solid var(--cn-rule-paper-strong);
+  border-radius: var(--cn-radius-xs);
+  background-color: var(--cn-paper-inset);
+  touch-action: none;
+}
+
+.cn-drawing--editing .cn-drawing__canvas {
+  cursor: crosshair;
+}
+
+.cn-drawing__stroke {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.cn-drawing__stroke:focus-visible {
+  outline: var(--cn-focus-ring-width) solid var(--cn-focus-ring);
+  outline-offset: var(--cn-focus-ring-offset);
+}
+
+.cn-drawing__stroke--draft {
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.cn-drawing__selection {
+  fill: none;
+  stroke: var(--cn-focus-ring);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 12 8;
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.cn-drawing__empty {
+  margin: var(--cn-space-sm) 0 0;
+  color: var(--cn-ink-subtle);
+  font-family: var(--cn-font-serif);
+  font-size: var(--cn-text-sm);
+}
+
 /* ── Conflict ───────────────────────────────────────────────────── */
 
 .cn-journal__conflict {
@@ -318,5 +476,13 @@
 
   .cn-journal__hint {
     margin-inline-start: var(--cn-gutter-folio);
+  }
+
+  .cn-run__opening {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cn-run__draw {
+    justify-self: start;
   }
 }
