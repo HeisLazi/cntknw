@@ -45,14 +45,15 @@ export function ImportSource({ onImported }: ImportSourceProps) {
         let pageCount: number | undefined;
         let title: string | undefined;
         let author: string | undefined;
+        let bytes: ArrayBuffer | undefined;
         try {
           // Imported here rather than at module scope: pdf.js is
           // roughly half the application's byte weight, and the
           // Library route would otherwise pay for it on first paint
           // whether or not anyone imports anything.
           const { loadPdfDocument } = await import('@features/reader/pdfjs');
-          const buffer = await file.arrayBuffer();
-          const document = await loadPdfDocument(buffer);
+          bytes = await file.arrayBuffer();
+          const document = await loadPdfDocument(bytes);
           pageCount = document.pageCount;
           title = document.title;
           author = document.author;
@@ -66,6 +67,7 @@ export function ImportSource({ onImported }: ImportSourceProps) {
 
         const result = await importPdf(repositories, {
           file,
+          bytes,
           metadata: { title, author, pageCount },
         });
 

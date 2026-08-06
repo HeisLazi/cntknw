@@ -3,9 +3,9 @@
 This living audit document tracks the findings and resolutions from the adversarial review of the CNTKNW repository prior to the continuation of Phase 2.
 
 **Baseline Details:**
-- **Reviewed Commit**: `2052207518060f17b41ed9c60fa62fedf7a7ed41`
-- **Local State**: Clean working tree on `main` branch.
-- **Initial Verification**: Run at beginning of hardening pass (`npm run verify && npm audit --omit=dev`).
+- **Reviewed Commit**: `51c4861`
+- **Local State**: `main` branch, with the preserved unrelated ZIP untracked and untouched.
+- **Verification**: Milestone 3B full gate passed after implementation (`npm run typecheck`, `npm run lint`, `npm run test`, `npm run test:e2e`, `npm run build`, `npm audit --omit=dev`).
 
 ---
 
@@ -81,9 +81,9 @@ This living audit document tracks the findings and resolutions from the adversar
 
 ## Finding 13: Search Semantics Need Hardening
 **Severity**: MEDIUM
-**Status**: TO DO
+**Status**: RESOLVED — Milestone 3B
 **Description**: Search concatenation lacks spacing rules, discarding `matches` counts.
-**Action**: Implement honest "Pages containing this text" semantics. Fix text normalization. Add cancellation tests.
+**Action**: Search now joins PDF text items with punctuation-aware spacing and line boundaries, applies Unicode/whitespace/case normalization, reports per-page non-overlapping match counts, propagates extraction failures, and treats cancellation as silent. The search UI retains counts, reports real failures, and guards results/navigation/loading state by search generation so stale searches cannot overwrite newer results. Unit coverage proves normalization, counts, failure handling, cancellation and stale-result suppression; Playwright covers real-document navigation and count display.
 
 ## Finding 14: PDF Outline Needs Failure Handling
 **Severity**: LOW/MEDIUM
@@ -93,9 +93,9 @@ This living audit document tracks the findings and resolutions from the adversar
 
 ## Finding 15: Large PDF Import Memory
 **Severity**: PERFORMANCE
-**Status**: TO DO
+**Status**: RESOLVED — Milestone 3B
 **Description**: The import pipeline copies the full File ArrayBuffer multiple times.
-**Action**: Create a realistic large PDF probe. Measure peak memory and duplicate reads. Optimize only if justified.
+**Action**: Added a deterministic 8 MiB duplicate-read probe. The import UI's metadata inspection and transactional persistence now share the already-read bytes, reducing `File.arrayBuffer()` reads from two to one while retaining pre-write `%PDF-` signature validation and transactional persistence. Browser peak-memory measurement is not portable in this environment; no speculative peak-memory claim or complexity was added.
 
 ## Finding 16: Notes Primary Destination Currently Lies About its Data
 **Severity**: HIGH PRODUCT TRUST

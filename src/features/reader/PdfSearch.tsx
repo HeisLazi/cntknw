@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import type { LoadedDocument } from './pdfjs';
+import type { LoadedDocument, SearchResult } from './pdfjs';
 import { IconButton } from '@components/primitives';
 
 export interface PdfSearchProps {
@@ -11,9 +11,11 @@ export interface PdfSearchProps {
 export function PdfSearch({ document, onNavigate, onClose }: PdfSearchProps) {
   const [query, setQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const [results, setResults] = useState<number[]>([]);
+  const [results, setResults] = useState<SearchResult[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
+  const [error, setError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const searchGenerationRef = useRef(0);
 
   useEffect(() => {
     return () => {
@@ -30,6 +32,7 @@ export function PdfSearch({ document, onNavigate, onClose }: PdfSearchProps) {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
+    const generation = ++searchGenerationRef.current;
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
@@ -37,12 +40,14 @@ export function PdfSearch({ document, onNavigate, onClose }: PdfSearchProps) {
     setIsSearching(true);
     setResults([]);
     setCurrentIndex(-1);
+    setError(null);
 
-    const foundPages: number[] = [];
+    const foundPages: SearchResult[] = [];
 
     try {
       for await (const result of document.searchDocument(query, abortController.signal)) {
-        foundPages.push(result.pageNumber);
+        if (generation !== searchGenerationRef.current || abortController.signal.aborted) return;
+        foundPages.push(result);
         setResults([...foundPages]);
         if (foundPages.length === 1) {
           setCurrentIndex(0);
@@ -50,11 +55,11 @@ export function PdfSearch({ document, onNavigate, onClose }: PdfSearchProps) {
         }
       }
     } catch (err) {
-      if (!abortController.signal.aborted) {
-        console.error('Search failed', err);
+      if (generation === searchGenerationRef.current && !abortController.signal.aborted) {
+        setError(err instanceof Error ? err.message : String(err));
       }
     } finally {
-      if (!abortController.signal.aborted) {
+      if (generation === searchGenerationRef.current && !abortController.signal.aborted) {
         setIsSearching(false);
       }
     }
@@ -64,14 +69,14 @@ export function PdfSearch({ document, onNavigate, onClose }: PdfSearchProps) {
     if (results.length === 0) return;
     const next = (currentIndex + 1) % results.length;
     setCurrentIndex(next);
-    onNavigate(results[next]!);
+    onNavigate(results[next]!.pageNumber);
   };
 
   const prevResult = () => {
     if (results.length === 0) return;
     const prev = (currentIndex - 1 + results.length) % results.length;
     setCurrentIndex(prev);
-    onNavigate(results[prev]!);
+    onNavigate(results[prev]!.pageNumber);
   };
 
   return (
@@ -86,8 +91,17 @@ export function PdfSearch({ document, onNavigate, onClose }: PdfSearchProps) {
           autoFocus
         />
         <span className="cn-pdf-search__status">
-          {isSearching ? 'Searching…' : results.length > 0 ? `${currentIndex + 1} of ${results.length}` : query ? 'No results' : ''}
+          {isSearching
+            ? 'Searching…'
+            : error
+              ? 'Search unavailable'
+              : results.length > 0
+                ? `${currentIndex + 1} of ${results.length} pages · ${results[currentIndex]?.matches ?? 0} matches`
+                : query
+                  ? 'No results'
+                  : ''}
         </span>
+        {error ? <span role="alert">{error}</span> : null}
         <div className="cn-pdf-search__controls">
           <IconButton icon="↑" label="Previous match" onClick={prevResult} disabled={results.length === 0} size="sm" />
           <IconButton icon="↓" label="Next match" onClick={nextResult} disabled={results.length === 0} size="sm" />

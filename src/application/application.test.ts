@@ -5,7 +5,7 @@
  * context inheritance (INV-004, AC-003), exact resume (WS-001,
  * AC-002), and claim promotion.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createEntityId } from '@lib/id';
 import { compareRank } from '@lib/rank';
 import { createMemoryRepositories } from '@data/adapters/memory';
@@ -45,6 +45,27 @@ beforeEach(() => {
 // ─── importPdf ───────────────────────────────────────────────────
 
 describe('importPdf', () => {
+  it('duplicate-read probe: reuses inspected bytes for a large import', async () => {
+    const bytes = new Uint8Array(8 * 1024 * 1024);
+    bytes.set(new TextEncoder().encode('%PDF-1.7\n'));
+    const file = new File([bytes], 'large-probe.pdf', { type: 'application/pdf' });
+    const read = vi.spyOn(file, 'arrayBuffer');
+
+    await importPdf(repos, { file, bytes: bytes.buffer });
+
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it('still validates the signature of caller-supplied bytes', async () => {
+    await expect(
+      importPdf(repos, {
+        file: pdfFile(),
+        bytes: new TextEncoder().encode('not a pdf').buffer,
+      }),
+    ).rejects.toBeInstanceOf(UnsupportedFileError);
+    expect(await repos.sources.getAll()).toHaveLength(0);
+  });
+
   it('creates source, asset, journal and workspace state', async () => {
     const result = await importPdf(repos, { file: pdfFile() });
 

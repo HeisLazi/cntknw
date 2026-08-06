@@ -16,6 +16,8 @@ export interface ImportPdfDeps {
 
 export interface ImportPdfInput {
   file: File;
+  /** Bytes already read by a caller that needs to inspect the PDF first. */
+  bytes?: ArrayBuffer;
   metadata?: {
     title?: string;
     author?: string;
@@ -45,8 +47,8 @@ const PDF_MAGIC = '%PDF-';
  * extension or reported MIME type. Handoff §11.1 requires
  * validating the signature before anything is written.
  */
-async function assertPdfSignature(file: File): Promise<ArrayBuffer> {
-  const buffer = await file.arrayBuffer();
+async function assertPdfSignature(file: File, suppliedBytes?: ArrayBuffer): Promise<ArrayBuffer> {
+  const buffer = suppliedBytes ?? (await file.arrayBuffer());
   const head = new Uint8Array(buffer.slice(0, PDF_MAGIC.length));
   const magic = String.fromCharCode(...head);
   if (magic !== PDF_MAGIC) {
@@ -62,7 +64,7 @@ export async function importPdf(
   input: ImportPdfInput,
 ): Promise<ImportPdfResult> {
   // Validate before writing anything.
-  const buffer = await assertPdfSignature(input.file);
+  const buffer = await assertPdfSignature(input.file, input.bytes);
   const title = input.metadata?.title || cleanFilename(input.file.name);
 
   // Every write happens inside one transaction. A failure part-way

@@ -139,6 +139,7 @@ test.describe('spatial navigation truth', () => {
     await page.getByPlaceholder('Find in document…').fill('Page 23');
     await page.getByPlaceholder('Find in document…').press('Enter');
 
+    await expect(page.getByText('1 of 1 pages · 1 matches')).toBeVisible();
     await expectPageInViewport(page, 23);
     await expect(page.getByRole('spinbutton', { name: 'Page 23 of 40' })).toBeVisible();
   });

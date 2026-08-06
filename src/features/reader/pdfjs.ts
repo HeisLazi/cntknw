@@ -26,8 +26,56 @@ export interface LoadedDocument {
   getPage(pageNumber: number): Promise<PDFPageProxy>;
   getOutline(): Promise<unknown[] | null>;
   getPageIndex(dest: unknown): Promise<number>;
-  searchDocument(query: string, abortSignal: AbortSignal): AsyncGenerator<{ pageNumber: number, matches: number }>;
+  searchDocument(query: string, abortSignal: AbortSignal): AsyncGenerator<SearchResult>;
   destroy(): Promise<void>;
+}
+
+export interface SearchResult {
+  pageNumber: number;
+  matches: number;
+}
+
+/** Make PDF text and user queries comparable without changing word boundaries. */
+export function normalizeSearchText(value: string): string {
+  return value.normalize('NFKC').replace(/\s+/gu, ' ').trim().toLowerCase();
+}
+
+function joinTextItems(items: Array<{ str?: string; hasEOL?: boolean }>): string {
+  return items.reduce((text, item, index) => {
+    const value = item.str ?? '';
+    if (index === 0) return value;
+    const previous = items[index - 1]?.str ?? '';
+    if (items[index - 1]?.hasEOL || previous.endsWith('\n')) return `${text}\n${value}`;
+    const needsSpace =
+      !/\s$/u.test(previous) &&
+      !/^\s/u.test(value) &&
+      !/[.,!?;:)\]}%'’”]/u.test(value) &&
+      !/[([{\u2018\u201c$]/u.test(previous);
+    return `${text}${needsSpace ? ' ' : ''}${value}`;
+  }, '');
+}
+
+function countOccurrences(text: string, query: string): number {
+  if (!query) return 0;
+  let matches = 0;
+  let from = 0;
+  while (from <= text.length - query.length) {
+    const index = text.indexOf(query, from);
+    if (index === -1) break;
+    matches += 1;
+    from = index + query.length;
+  }
+  return matches;
+}
+
+export function countSearchMatches(
+  items: Array<{ str?: string; hasEOL?: boolean }>,
+  query: string,
+): number {
+  return countOccurrences(
+    normalizeSearchText(joinTextItems(items)),
+    normalizeSearchText(query),
+  );
 }
 
 /**
@@ -120,28 +168,27 @@ export async function loadPdfDocument(
       throw new Error('Invalid destination');
     },
     searchDocument: async function* (query: string, abortSignal: AbortSignal) {
-      if (!query.trim()) return;
-      const lowerQuery = query.toLowerCase();
+      const normalizedQuery = normalizeSearchText(query);
+      if (!normalizedQuery) return;
       
       for (let i = 1; i <= document.numPages; i++) {
         if (abortSignal.aborted) break;
         try {
           const page = await document.getPage(i);
+          if (abortSignal.aborted) break;
           const textContent = await page.getTextContent();
-          const fullText = textContent.items.map((item: unknown) => (item as { str?: string }).str ?? '').join('');
-          
-          let matches = 0;
-          let index = fullText.toLowerCase().indexOf(lowerQuery);
-          while (index !== -1) {
-            matches++;
-            index = fullText.toLowerCase().indexOf(lowerQuery, index + 1);
-          }
+          if (abortSignal.aborted) break;
+          const matches = countSearchMatches(
+            textContent.items as Array<{ str?: string; hasEOL?: boolean }>,
+            normalizedQuery,
+          );
           
           if (matches > 0) {
             yield { pageNumber: i, matches };
           }
         } catch (err) {
-          console.warn(`Failed to search page ${i}`, err);
+          if (abortSignal.aborted) break;
+          throw err;
         }
       }
     },

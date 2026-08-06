@@ -1,8 +1,8 @@
 # CNTKNW Current Implementation Status
 
-**Updated:** 06 August 2026 (Milestone 3A PDF Spatial Reliability)
+**Updated:** 06 August 2026 (Milestone 3B PDF Core Reliability)
 **Repository:** `HeisLazi/cntknw`
-**Git baseline:** `23960ef`
+**Git baseline:** `51c4861`
 **Status:** Living document. Update at every phase boundary.
 
 Read `CNTKNW_Documentation_Index.md` first for the read order and the phase sequence in force.
@@ -24,7 +24,7 @@ system that is the styling source of truth, and nineteen accessible UI
 primitives. 
 
 The Infinite Journal feature (Phase 2) supports block editing, crash recovery, concurrent re-ordering,
-robust block kind transformation, and explicit, failure-safe conflict resolution. Milestone 3A now hardens the PDF reader with bounded continuous scrolling, viewport-truth navigation, exact resume coverage, and honest outline failure handling.
+robust block kind transformation, and explicit, failure-safe conflict resolution. Milestones 3A and 3B now harden the PDF reader with bounded continuous scrolling, viewport-truth navigation, exact resume coverage, honest outline failure handling, reliable search semantics, and evidence-based import duplicate-read reduction.
 
 **Phases 0A–0E are complete and verified.** 
 
@@ -39,7 +39,7 @@ robust block kind transformation, and explicit, failure-safe conflict resolution
 | 0C | Persistence — Dexie, schema versions, migrations, v1 readers | **Complete and verified**, contract and real browser |
 | 0D | Shell, routing, providers, design tokens, UI primitives | **Complete and verified** |
 | 0E | Editor spike, then journal vertical slice | **Complete and verified** (ADR-0004, ADR-0005) |
-| 1 | Reliable PDF core — import, render, exact resume | **Milestone 3A complete and verified** (Findings 11, 12 and 14 resolved; 13 and 15 remain open) |
+| 1 | Reliable PDF core — import, render, exact resume | **Milestone 3B complete and verified** (Findings 11–15 resolved; annotation UI remains out of scope) |
 | 2 | Infinite Journal | **Complete and verified** (Folio margin ADR-0006 landed) |
 
 Phase order per ADR-0001 §1, which supersedes Handoff §19.
@@ -153,19 +153,19 @@ That is checked in five tests, not asserted in prose — the earlier phrase
 - **Atlas entities.** Primitives only.
 - **Read Aloud playback, TTS, OCR.**
 - **3D, chess, AI, sync.**
-- **PDF Core Reliability**: Search semantics still need hardening and large PDF imports can consume high memory (Findings 13 and 15). Findings 11, 12 and 14 were resolved by Milestone 3A.
+- **PDF peak-memory measurement**: Browser peak-memory APIs are not portable enough for a deterministic project gate here. The repeatable 8 MiB probe measures duplicate file reads instead; it supports reusing inspected bytes and does not claim a portable peak-memory number.
 
 ---
 
 ## 5. Verification, last run 06 August 2026
 
-Node/npm and platform are supplied by the current Linux development environment; the required full gate is recorded after the Milestone 3A verification run.
+Node/npm and platform are supplied by the current Linux development environment; the required full gate is recorded after the Milestone 3B verification run.
 
 ```text
 npm run typecheck     PASS   0 errors      (src/ and e2e/)
 npm run lint          PASS   0 errors, 0 warnings
-npm run test          PASS   
-npm run test:e2e      PASS   chromium, 0 skipped
+npm run test          PASS   27 files, 538 passed, 1 skipped
+npm run test:e2e      PASS   Chromium, 87 passed, 0 skipped
 npm run build         PASS   
 npm audit --omit=dev  PASS   0 vulnerabilities
 ```
@@ -201,7 +201,7 @@ accessibility rule engine; WCAG contrast measurement; visual regression.
 
 ## 7. Next step
 
-**Phase 1 PDF reader reliability hardening is complete for Milestone 3A.** Findings 13 and 15 remain before annotation work or the next PDF milestone; annotations are not part of this milestone.
+**Phase 1 PDF reader reliability hardening is complete for Milestone 3B.** Findings 13 and 15 are resolved with focused unit/probe coverage and a real-document Playwright assertion. Annotation UI is the next bounded milestone and is not included in this implementation.
 
 See `CNTKNW_Phase_0D_Checkpoint_Report.md`,
 `CNTKNW_Phase_0C_Checkpoint_Report.md` and
