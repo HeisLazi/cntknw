@@ -142,7 +142,7 @@ This living audit document tracks the findings and resolutions from the adversar
 
 ## Phase 3A Annotation Geometry Architecture
 
-**Status**: VERIFIED BY MANAGER AND INDEPENDENT REVIEW — READY TO COMMIT; PRODUCTION ANNOTATION UI NOT YET IMPLEMENTED
+**Status**: VERIFIED BY MANAGER AND INDEPENDENT REVIEW — COMMITTED; PRODUCTION ANNOTATION UI NOT YET IMPLEMENTED
 
 ADR-0007 now settles exact asset and 1-based page identity, strict normalized
 unrotated page coordinates, explicit text/area/point/ink anchors, vector ink,
