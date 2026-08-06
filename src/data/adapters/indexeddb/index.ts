@@ -530,11 +530,17 @@ export class DexieAnnotationRepository implements AnnotationRepository {
     );
     return record ? annotationFromStorage(record) : null;
   }
-  async getBySourceAndPage(sourceId: EntityId, page: number): Promise<Annotation[]> {
+  async getBySourceAssetAndPage(
+    sourceId: EntityId,
+    assetId: EntityId,
+    page: number,
+  ): Promise<Annotation[]> {
     const records = await guarded('Listing annotations for a page', () =>
       this.db.annotations.where('[sourceId+page]').equals([sourceId, page]).toArray(),
     );
-    return records.map(annotationFromStorage);
+    return records
+      .map(annotationFromStorage)
+      .filter((annotation) => annotation.assetId === assetId);
   }
   async getBySource(sourceId: EntityId): Promise<Annotation[]> {
     const records = await guarded('Listing annotations', () =>

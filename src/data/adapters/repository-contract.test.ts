@@ -403,26 +403,72 @@ for (const adapter of adapters) {
     // ─── Annotations ─────────────────────────────────────────────
 
     describe('AnnotationRepository', () => {
-      it('queries by source and page', async () => {
-        const sourceId = id();
-        const assetId = id();
-        for (const page of [1, 1, 2]) {
-          await repos.annotations.create({
-            sourceId,
-            assetId,
-            page,
-            kind: 'highlight',
-            anchor: {
-              kind: 'text',
-              quote: 'passage',
-              rects: [{ x: 0.1, y: 0.2, width: 0.3, height: 0.05 }],
-              boundingRect: { x: 0.1, y: 0.2, width: 0.3, height: 0.05 },
-            },
-          });
-        }
-        expect(await repos.annotations.getBySourceAndPage(sourceId, 1)).toHaveLength(2);
-        expect(await repos.annotations.getBySourceAndPage(sourceId, 2)).toHaveLength(1);
-        expect(await repos.annotations.getBySource(sourceId)).toHaveLength(3);
+      it('retrieves annotations by exact source, asset, and page', async () => {
+        const source = await repos.sources.create({ type: 'book', title: 'A' });
+        const assetA = await repos.assets.create({
+          kind: 'pdf',
+          mimeType: 'application/pdf',
+          sizeBytes: 1,
+          storageKey: 'asset/a',
+        });
+        const assetB = await repos.assets.create({
+          kind: 'pdf',
+          mimeType: 'application/pdf',
+          sizeBytes: 1,
+          storageKey: 'asset/b',
+        });
+        await repos.assets.linkToSource(source.id, assetA.id, 'primary');
+        await repos.assets.linkToSource(source.id, assetB.id, 'supplement');
+
+        const anchor = {
+          kind: 'text' as const,
+          quote: 'passage',
+          rects: [{ x: 0.1, y: 0.2, width: 0.3, height: 0.05 }],
+          boundingRect: { x: 0.1, y: 0.2, width: 0.3, height: 0.05 },
+        };
+        const annotationA1 = await repos.annotations.create({
+          sourceId: source.id,
+          assetId: assetA.id,
+          page: 7,
+          kind: 'highlight',
+          anchor,
+        });
+        const annotationB1 = await repos.annotations.create({
+          sourceId: source.id,
+          assetId: assetB.id,
+          page: 7,
+          kind: 'highlight',
+          anchor,
+        });
+        const annotationA2 = await repos.annotations.create({
+          sourceId: source.id,
+          assetId: assetA.id,
+          page: 8,
+          kind: 'highlight',
+          anchor,
+        });
+
+        expect(
+          (await repos.annotations.getBySourceAssetAndPage(source.id, assetA.id, 7))
+            .map((annotation) => annotation.id),
+        ).toEqual([annotationA1.id]);
+        expect(
+          (await repos.annotations.getBySourceAssetAndPage(source.id, assetB.id, 7))
+            .map((annotation) => annotation.id),
+        ).toEqual([annotationB1.id]);
+        expect(
+          (await repos.annotations.getBySourceAssetAndPage(source.id, assetA.id, 8))
+            .map((annotation) => annotation.id),
+        ).toEqual([annotationA2.id]);
+        expect(
+          await repos.annotations.getBySourceAssetAndPage(source.id, assetA.id, 9),
+        ).toEqual([]);
+
+        const sourceAnnotations = await repos.annotations.getBySource(source.id);
+        expect(sourceAnnotations).toHaveLength(3);
+        expect(sourceAnnotations.map((annotation) => annotation.id)).toEqual(
+          expect.arrayContaining([annotationA1.id, annotationB1.id, annotationA2.id]),
+        );
       });
 
       it('rejects a non-positive page', async () => {

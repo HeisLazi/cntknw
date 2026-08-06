@@ -3,7 +3,12 @@ import type { ConcurrencyGuard } from './concurrency';
 
 export interface AnnotationRepository {
   getById(id: EntityId): Promise<Annotation | null>;
-  getBySourceAndPage(sourceId: EntityId, page: number): Promise<Annotation[]>;
+  /** Exact-asset page query required by the Phase 3B reader/rendering path. */
+  getBySourceAssetAndPage(
+    sourceId: EntityId,
+    assetId: EntityId,
+    page: number,
+  ): Promise<Annotation[]>;
   getBySource(sourceId: EntityId): Promise<Annotation[]>;
   create(input: CreateAnnotationInput): Promise<Annotation>;
 

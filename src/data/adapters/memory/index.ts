@@ -442,15 +442,13 @@ export class MemoryAnnotationRepository implements AnnotationRepository {
   async getById(id: EntityId): Promise<Annotation | null> {
     return this.annotations.get(id) ?? null;
   }
-  async getBySourceAndPage(
+  async getBySourceAssetAndPage(
     sourceId: EntityId,
+    assetId: EntityId,
     page: number,
   ): Promise<Annotation[]> {
-    // Annotation carries `page` directly. The previous
-    // implementation read `a.location.pdf?.page`, a property that
-    // does not exist on the schema (audit defect A-2).
     return Array.from(this.annotations.values()).filter(
-      (a) => a.sourceId === sourceId && a.page === page,
+      (a) => a.sourceId === sourceId && a.assetId === assetId && a.page === page,
     );
   }
   async getBySource(sourceId: EntityId): Promise<Annotation[]> {

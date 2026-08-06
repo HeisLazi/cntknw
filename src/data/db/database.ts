@@ -4,9 +4,10 @@
  * The schema is derived from `schemaVersions.ts` rather than
  * declared here, so the documentation cannot drift from the code.
  *
- * This module opens a database. It never migrates v1 data — there
- * is no apply path in this phase, so importing it cannot trigger a
- * destructive migration (ADR-0002 §7).
+ * This module opens the cntknw v2 database. It never destructively
+ * migrates data from the separate legacy philosophy-journal database;
+ * that reader has no apply path (ADR-0002 §7). Declared schema upgrades
+ * within cntknw do run here, currently the version-2 annotation upgrade.
  */
 import Dexie, { type Table, type Transaction } from 'dexie';
 import {

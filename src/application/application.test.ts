@@ -124,6 +124,59 @@ describe('importPdf', () => {
   });
 });
 
+// ─── annotation retrieval ───────────────────────────────────────
+
+describe('annotation retrieval', () => {
+  it('keeps replacement-asset annotations out of the Phase 3B renderer seam', async () => {
+    const source = await repos.sources.create({ type: 'book', title: 'A' });
+    const assetA = await repos.assets.create({
+      kind: 'pdf',
+      mimeType: 'application/pdf',
+      sizeBytes: 1,
+      storageKey: 'asset/a',
+    });
+    const assetB = await repos.assets.create({
+      kind: 'pdf',
+      mimeType: 'application/pdf',
+      sizeBytes: 1,
+      storageKey: 'asset/b',
+    });
+    await repos.assets.linkToSource(source.id, assetA.id, 'primary');
+    await repos.assets.linkToSource(source.id, assetB.id, 'supplement');
+
+    const anchor = {
+      kind: 'text' as const,
+      quote: 'passage',
+      rects: [{ x: 0.1, y: 0.2, width: 0.3, height: 0.05 }],
+      boundingRect: { x: 0.1, y: 0.2, width: 0.3, height: 0.05 },
+    };
+    await repos.annotations.create({
+      sourceId: source.id,
+      assetId: assetA.id,
+      page: 7,
+      kind: 'highlight',
+      anchor,
+    });
+    const annotationB1 = await repos.annotations.create({
+      sourceId: source.id,
+      assetId: assetB.id,
+      page: 7,
+      kind: 'highlight',
+      anchor,
+    });
+
+    // Phase 3B renderer seam: its active asset must bound page retrieval.
+    const rendererAnnotations = await repos.annotations.getBySourceAssetAndPage(
+      source.id,
+      assetB.id,
+      7,
+    );
+    expect(rendererAnnotations.map((annotation) => annotation.id)).toEqual([
+      annotationB1.id,
+    ]);
+  });
+});
+
 // ─── createPageLinkedBlock ───────────────────────────────────────
 
 describe('createPageLinkedBlock', () => {
