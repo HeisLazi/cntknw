@@ -173,3 +173,71 @@ belongs to its `sourceId` is the production annotation creation use-case's
 responsibility, not the repository contract.
 
 Findings 16, 18, 19 and 20 remain open/deferred exactly as before.
+
+## Phase 3B Production PDF Annotation UX
+
+**Status**: VERIFIED BY MANAGER AND INDEPENDENT REVIEW — COMMITTED; PHASE 3C PEN/DRAWING AUTHORING NOT STARTED
+
+Phase 3B turns the Phase 3A architecture into a real production experience in
+the PDF Study Workspace without redesigning ADR-0007 canonical geometry. The
+application-level creation boundary (`createSourceAnnotation`) fulfils the
+Phase 3A boundary note: it is the layer that confirms an `assetId` belongs to
+its `sourceId`, so a repository call can never silently write an annotation
+under an unrelated asset. It validates, in order: source exists → asset
+exists → asset actually linked to that source → page positive → kind/anchor
+schema-compatible, failing visibly with typed errors and no partial writes.
+
+- Text selection → highlight: page-local CSS rects are read from the pdf.js
+  text layer and converted to canonical ADR-0007 anchors ONLY at the CSS→
+  canonical boundary; multiline rects preserved; the quote is captured; the
+  record persists against the exact `sourceId + assetId + page`. Cross-page
+  selections are refused with an announced notice — never attached to ambiguous
+  geometry. The old source+page-only access path is never reconstructed; every
+  rendered page reads `getBySourceAssetAndPage(sourceId, assetId, page)`.
+- Region tool: a keyboard-reachable toggle; drag on one rendered page → canonical
+  area anchor; Escape cancels; degenerate drags are no-ops. The selected tool is
+  persisted in the workspace resume state (`annotationTool` on `SourceView`,
+  a zod default — no Dexie schema version/index change).
+- Overlay renderer: per-mounted-page projection of canonical repository records,
+  bounded by the reader's five-page window, tolerating page unmount/remount and
+  never persisting DOM-node identity. `pointer-events` keep the layer from
+  blocking text selection; the page isolates its own stacking context.
+- Supported kinds: highlight/area are fully interactive; migrated `point` and
+  vector `ink` records render read-only and cannot crash or corrupt the page.
+  Restrained preset colour editing and confirmation-before-delete (NFR-008)
+  with revision guards; read/create/update/delete failures are visible with
+  Retry and never silently clear user intent; `RevisionConflictError` reloads
+  instead of overwriting; in-flight async work is unmount-safe.
+- Keyboard/accessibility (AC-015): keyboard-reachable region tool, tabbable
+  annotations with meaningful names, Enter/Space actions, Delete → confirmation,
+  Escape cancels/returns focus, notices announced; no colour-only state;
+  reduced-motion respected.
+
+**Independent adversarial review (MiniMax M-3, OpenCode; cloned the Phase 3A
+review route): APPROVED WITH CORRECTIONS.** Findings and disposition:
+
+- HIGH (fixed): the create-failure notice surfaced a generic "Not saved" and
+  swallowed the typed error's `userMessage`. Corrected to surface the typed
+  message (with a generic fallback) and to retain the selection; regression
+  test added.
+- MEDIUM (fixed): the region tool's pointer-down accepted multi-touch
+  secondary pointers; added an `isPrimary` guard (test switched to a realistic
+  `user.pointer` event). A no-op region-tool toggle committed unchanged state
+  and bumped the workspace revision; added an early return. Each corrected with
+  a regression test.
+- MEDIUM (assessed, non-blocking, out of 3B scope): a speculative future
+  "active asset" helper for `assetId` (the product has exactly one content
+  asset per source today and `primaryAsset.id` is the loaded asset — a hook is
+  unwarranted until a second selectable asset exists); stale-`sourceView`
+  commit snapshot matching the established zoom-persistence pattern (drift-merged
+  fresh value) — to revisit with any active-asset work; one pure-function
+  perf nit on the renderer (negligible; memo decided against on a pure call).
+- The reviewer explicitly permitted the MEDIUM findings to land in a follow-up;
+  the HIGH was required in this milestone and is fixed.
+
+Full Phase 3B gate verified green on 2026-08-06 (typecheck, lint, 34 files /
+591 passed / 1 skipped, Chromium e2e 93 passed, build, audit 0 vulns, and a
+production `dist/` leak scan with 0 matches).
+
+Findings 16, 18, 19 and 20 remain open/deferred exactly as before, unchanged
+by this milestone.

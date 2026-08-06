@@ -1,8 +1,8 @@
 # CNTKNW Current Implementation Status
 
-**Updated:** 06 August 2026 (Phase 3A Annotation Geometry Architecture — closed)
+**Updated:** 06 August 2026 (Phase 3B Production PDF Annotation UX — closed)
 **Repository:** `HeisLazi/cntknw`
-**Git baseline:** Phase 3A is committed and verified on `main`. Per
+**Git baseline:** Phase 3B is committed and verified on `main`. Per
 AI_PROJECT_STATE policy, no volatile live-HEAD SHA is recorded here; derive
 HEAD from Git at session start.
 **Status:** Living document. Update at every phase boundary.
@@ -32,14 +32,20 @@ scrolling, viewport-truth navigation, exact resume coverage, honest outline
 failure handling, reliable search semantics, and evidence-based import
 duplicate-read reduction.
 
-Phase 3A now establishes asset-bound, rotation-aware canonical PDF annotation
+Phase 3A established asset-bound, rotation-aware canonical PDF annotation
 geometry, transactional schema-v2 migration, and a DOM-free coordinate
-projection library. A test-only real-reader probe proves zoom, virtualization
-and reload persistence. The Phase 3A closure pass added exact-asset page
-retrieval (`getBySourceAssetAndPage`) so annotations on a replaced asset can
-never leak onto a replacement asset's render path. **Production annotation
-selection, rendering and editing UI are not yet implemented; Phase 3 is not
-complete.**
+projection library; its closure pass added exact-asset page retrieval
+(`getBySourceAssetAndPage`) so annotations on a replaced asset can never leak
+onto a replacement asset's render path. Phase 3B turns that architecture into
+a real production experience: text-selection → highlight and a region tool
+persist canonical records against the exact `sourceId + assetId + page`
+through an application-level creation boundary; the reader renders a
+repository-backed overlay per mounted page that stays aligned across
+zoom/resize/reload/virtualization; annotations are keyboard-reachable,
+colour-editable from restrained presets, and deletable only through
+confirmation. Migrated vector `ink` and `point` records render read-only.
+**Editable freehand pen/drawing authoring and Drawing journal blocks are not
+built; that Phase 3C work remains, so Phase 3 is not fully complete.**
 
 **Phases 0A–0E are complete and verified.** 
 
@@ -56,7 +62,7 @@ complete.**
 | 0E | Editor spike, then journal vertical slice | **Complete and verified** (ADR-0004, ADR-0005) |
 | 1 | Reliable PDF core — import, render, exact resume | **Milestone 3B complete and verified** (Findings 11–15 resolved; annotation UI remains out of scope) |
 | 2 | Infinite Journal | **Complete and verified** (Folio margin ADR-0006 landed) |
-| 3 | Annotations | **Phase 3A geometry architecture complete, committed and verified** (incl. exact-asset retrieval closure correction); production UI not yet implemented |
+| 3 | Annotations | **Phase 3A geometry architecture + Phase 3B production annotation UX complete, committed and verified** (exact-asset creation + overlay, highlight/region, keyboard, confirmation-based delete); Phase 3C pen/drawing authoring and Drawing journal blocks remain |
 
 Phase order per ADR-0001 §1, which supersedes Handoff §19.
 
@@ -102,7 +108,7 @@ existing annotations store and remains deliberately separate from legacy v1
 
 ### Application — `src/application/`
 
-Contains use-cases that orchestrate repositories. Examples include: `importPdf`, `createPageLinkedBlock`, `resumeSource`, `promoteBlockToClaim`, `linkBlockToExistingClaim`, `changeBlockKind`, `removeBlock`, `resolveConflictKeepSaved`, `resolveConflictUseMyVersion`.
+Contains use-cases that orchestrate repositories. Examples include: `importPdf`, `createPageLinkedBlock`, `resumeSource`, `promoteBlockToClaim`, `linkBlockToExistingClaim`, `changeBlockKind`, `removeBlock`, `resolveConflictKeepSaved`, `resolveConflictUseMyVersion`, and `createSourceAnnotation` (the Phase 3B annotation creation boundary: source exists → asset exists → asset linked to that source → page positive → kind/anchor schema-valid).
 
 ### Library — `src/lib/`
 
@@ -176,8 +182,11 @@ That is checked in five tests, not asserted in prose — the earlier phrase
 - **`applyMigration`.** Dry run only — deliberately no destructive path exists.
 - **Soft deletion beyond blocks and claims.** Every other entity hard-deletes; NFR-008 partial.
 - **`appState` migration.** Needs a settings store.
-- **Annotation UX.** Canonical geometry exists, but selection, toolbar,
-  semantic highlight rendering, keyboard navigation and editing UI do not.
+- **Annotation UX.** Text highlight and region annotations can be created,
+  rendered, coloured and confirmation-deleted, keyboard-accessible, in the PDF
+  reader. **Editable freehand pen/drawing authoring and Drawing journal
+  blocks are not built** (Phase 3C); migrated `ink`/`point` records render
+  read-only.
 - **Dictionary, cross-source search, maps.**
 - **Atlas entities.** Primitives only.
 - **Read Aloud playback, TTS, OCR.**
@@ -186,32 +195,28 @@ That is checked in five tests, not asserted in prose — the earlier phrase
 
 ---
 
-## 5. Verification, Phase 3A closure run 06 August 2026
+## 5. Verification, Phase 3B gate run 06 August 2026
 
 Node/npm and platform are supplied by the current Linux development
 environment. The implementer ran the suite during implementation; Hermes ran
-the final uninterrupted gate on the exact committed candidate tree.
+the full uninterrupted gate once on the pre-review candidate tree and again
+on the corrected final tree after the adversarial review corrections.
 
 ```text
 npm run typecheck     PASS   0 errors      (src/ and e2e/)
 npm run lint          PASS   0 errors, 0 warnings
-npm run test          PASS   30 files, 563 passed, 1 skipped
-npm run test:e2e      PASS   Chromium, 90 passed, 0 skipped
+npm run test          PASS   34 files, 591 passed, 1 skipped
+npm run test:e2e      PASS   Chromium, 93 passed, 0 skipped
 npm run build         PASS   
 npm audit --omit=dev  PASS   0 vulnerabilities
+Production dist leak  PASS   0 matches (geometry-probe / __cntknwProbe / harness-client / e2e/harness)
 ```
 
-Contract suite is defined and run against both adapters — memory and indexeddb, identical cases. The annotation contract now includes a two-asset same-source same-page adversarial case proving exact-asset retrieval isolates annotations per asset and page on both adapters.
+Contract suite is defined and run against both adapters — memory and indexeddb, identical cases. The annotation contract includes a two-asset same-source same-page adversarial case proving exact-asset retrieval isolates annotations per asset and page on both adapters.
 
-Browser suite: one Chromium project, 90 tests. Persistence — BV-001 reload, BV-002 transaction rollback, BV-003
-revision conflict, BV-004 nested transaction, BV-005 database separation;
-validated by a negative control, since neutering `DexieUnitOfWork.run` fails
-BV-002 and BV-004. Shell — routing and refresh on five routes, exactly three
-primary links, keyboard focus, reduced motion, responsive navigation at 1280px
-and 375px, resizable text. Journal — acceptance tests for block editing,
-saving, conflict resolution, restoring, and exact resume. Phase 3A adds three
-real-reader geometry proofs for zoom alignment, page unmount/remount
-independence, and annotation repository persistence across reload.
+Phase 3B adds: unit coverage of the `createSourceAnnotation` membership/validation boundary (unlinked asset, wrong-source asset, missing source/asset, invalid page, kind/anchor mismatch, no partial writes — all rejected), the text-selection/region capture helpers (single-line, multiline, reverse drag, degenerate drag), the workspace `annotationTool` schema default, and a `PdfAnnotationLayer` component suite (exact-page projection, **replacement-asset isolation**, keyboard actions + confirmation-before-delete, failed-intent retention with visible typed-or-generic error, style-update conflict reload, read retry, read-only point/ink projection, Escape cancels region drag with focus return, no setState after unmount).
+
+Browser suite: one Chromium project, 93 tests. The three new Phase 3B production specs drive the real app: (1) a highlight journey that stays sub-pixel aligned through zoom, reload and page-unmount/remount, is deleted only via the confirmation dialog, and makes zero network requests; (2) a keyboard-reachable region tool that cancels with Escape, persists a drag across reload, and restores its tool state; (3) a cross-page text selection that is refused with an announced notice and creates no annotation.
 
 **Not run:** WebKit and Firefox browser projects; axe or any automated
 accessibility rule engine; WCAG contrast measurement; visual regression.
@@ -235,13 +240,16 @@ accessibility rule engine; WCAG contrast measurement; visual regression.
 
 ## 7. Next step
 
-**Phase 3A Annotation Geometry Architecture is complete, committed and
-verified.** ADR-0007, the canonical domain model, schema-v2 migration, the
-pure conversion boundary, the real-reader proof, and the exact-asset
-retrieval closure correction are implemented. The next authorized
-implementation milestone, after reviewer acceptance of Phase 3A closure, is
-Phase 3B — production annotation UX (selection, toolbar, highlight
-rendering, editing, keyboard accessibility). Phase 3B has NOT started.
+**Phase 3B Production PDF Annotation UX is complete, committed and verified.**
+Text-selection highlight and region annotations are created through an
+application boundary, persisted against the exact asset, rendered in a
+repository-backed per-page overlay, and are keyboard-accessible, colour-edited
+from restrained presets and confirmation-deleted. The next authorized
+implementation milestone is **Phase 3C — editable freehand pen/drawing
+authoring and Drawing journal blocks** (AC-008 editable vector drawing, AC-3
+source-location inheritance for Drawing blocks), which Phase 3B intentionally
+deferred. Phase 3C has NOT been authorized or started; do not begin it or
+Phase 4 without reviewer acceptance of Phase 3B.
 
 See `CNTKNW_Phase_0D_Checkpoint_Report.md`,
 `CNTKNW_Phase_0C_Checkpoint_Report.md` and
