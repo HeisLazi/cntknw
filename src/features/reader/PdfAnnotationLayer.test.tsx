@@ -588,7 +588,7 @@ describe('PdfAnnotationLayer', () => {
     const pendingCreate = deferred<Annotation>();
     const realCreate = repositories.annotations.create.bind(repositories.annotations);
     repositories.annotations.create = vi.fn(
-      async (input: Parameters<typeof realCreate>[0]) => pendingCreate.promise,
+      async (_input: Parameters<typeof realCreate>[0]) => pendingCreate.promise,
     );
     renderWithProviders(
       <PageHarness sourceId={source.id} assetId={assetA.id} />,
