@@ -241,3 +241,49 @@ production `dist/` leak scan with 0 matches).
 
 Findings 16, 18, 19 and 20 remain open/deferred exactly as before, unchanged
 by this milestone.
+
+---
+
+## Acceptance-corrections review — Phase 3B final (2026-08-06, after d5da063)
+
+ChatGPT's milestone review of committed Phase 3B blocked final closure on two
+correctness issues; an independent adversarial review of the correction delta
+was then run on MiniMax M3 (via OpenCode, read-only). The reviewer was given
+the uncommitted delta (`legacyGeometry.ts`, `pendingAnnotationIntent.ts`,
+`PdfAnnotationLayer.tsx`/`PdfReader.tsx` changes, harness seed, and all new
+tests) and a twelve-point attack brief. Verdict: **APPROVED WITH CORRECTIONS**.
+
+Attack matrix (fallback sentinel rendered / fallback deleted / degraded notice
+inaccessible / intent tied to DOM-viewport / retry duplication / stale retry
+after success / source-asset leakage / virtualization remount races / region
+flow / selectionchange handler / harness isolation / test quality): all CLEAN
+except one finding:
+
+- **MEDIUM (fixed before commit):** stale-closure race in the
+  `selectionchange` handler — the guard and draft-clear read render-time
+  `pending`, so a collapsed-selection event landing in the micro-gap after
+  `putPendingIntent('saving')` could transiently clear the in-flight intent.
+  No data loss or duplication was possible (the success/failure continuations
+  unconditionally rewrite the store), but the handler now reads the live store
+  (`getPendingIntent`) for both the `saving|failed` guard and every draft-clear
+  branch, and `handleRegionStart` does the same; effect deps no longer depend
+  on store status. A regression test proves a collapsed selection change never
+  clears a `saving` intent and still clears a `draft`.
+- **LOW (assessed, non-blocking, deferred):** module-map lifetime of abandoned
+  `failed` intents (bounded per source/asset/page; TTL or retry cap is a
+  future hardening option); `useSyncExternalStore` getSnapshot closure identity
+  (safe — value identity is stable); `crossPageNotice` local state lost on page
+  remount (minor UX; the selection itself is refused either way).
+
+Non-blocking pointer check from the milestone brief: marks use
+`pointer-events: auto`, but a real-Chromium probe showed ordinary mouse
+selection/copy of text under/through marks still works; a drag starting
+exactly on a mark also selects that annotation (documented as an annotation
+interaction hardening item, deliberately not redesigned in this milestone).
+
+Final acceptance-corrections gate verified green on 2026-08-06 (typecheck,
+lint, 36 files / 605 passed / 1 skipped, Chromium e2e 94 passed, build,
+audit 0 vulns, and a production `dist/` leak scan with 0 matches).
+
+Findings 16, 18, 19 and 20 remain open/deferred exactly as before, unchanged
+by the acceptance corrections.

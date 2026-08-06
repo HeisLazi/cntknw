@@ -93,14 +93,54 @@ Implemented, reviewed and verified:
   out-of-scope/non-blocking for Phase 3B;
 - full project gate verified green on 2026-08-06 (see Verification).
 
+Final acceptance corrections (ChatGPT milestone review at d5da063, closed
+2026-08-06):
+
+- **Blocker 1 — legacy fallback geometry policy.** Records with
+  `legacyMigration.geometryStatus === 'fallback'` carry zero-origin sentinel
+  geometry only to stay schema-valid and preserved; ADR-0007 §7 forbids
+  presenting them as precise source geometry. The overlay now partitions
+  annotations (`legacyGeometry.ts`): native/converted records render normally
+  at canonical geometry; fallback records are NEVER spatially projected,
+  rendered, focused, or made selectable, are never deleted or mutated by the
+  overlay, and surface one count-honest accessible degraded notice per page
+  (`role="status"`): "A legacy annotation on this page could not be positioned
+  precisely." (or an N-count variant). Migration semantics unchanged; no
+  reattachment workflow added.
+- **Blocker 2 — pending create intent lifetime.** Pending annotation creation
+  truth now lives ABOVE the virtualized page in an external store
+  (`pendingAnnotationIntent.ts`) keyed by `sourceId:assetId:page`, holding only
+  canonical fields (sourceId, assetId, 1-based page, kind, canonical anchor,
+  status `draft|saving|failed`, user-facing error). `savePending` transitions
+  `draft → saving → failed|cleared`; success reloads and clears the entry even
+  after page unmount; failure persists a retryable message even after unmount;
+  Retry/Dismiss are the only exits from `failed`; drafts are cleared on
+  selection collapse, region start, and source change (reader cleanup);
+  `saving`/`failed` intents survive navigation. No DOM/Selection/viewport
+  pixels are stored — the popover position is recomputed from the canonical
+  anchor at render. One intent per (source, asset, page); no duplicates, no
+  cross-source/asset leakage.
+- Non-blocking pointer check: marks (`pointer-events: auto`) do not prevent
+  ordinary mouse selection/copy of underlying text in Chromium (verified by a
+  real-browser probe; drags starting on a mark also select the annotation —
+  documented as an annotation interaction hardening item, not fixed).
+- Independent adversarial review of the correction delta (MiniMax M3):
+  APPROVED WITH CORRECTIONS — attack matrix clean; one MEDIUM (stale-closure
+  selectionchange race) corrected with a live-store read + regression test;
+  three LOW findings (module-map lifetime of abandoned failed entries,
+  getSnapshot closure identity, cross-page notice lost on remount) assessed
+  non-blocking and deferred.
+
 ## Current milestone
 
-Phase 3B — Production PDF Annotation UX is complete, committed and verified.
-The remaining Phase 3 exit work is Phase 3C: editable freehand pen/drawing
-authoring and Drawing journal blocks (AC-008 editable vector drawing, AC-3
-source-location inheritance for Drawing blocks). Phase 3 as a whole is not
-complete until 3C lands. Phase 3C is NOT yet authorized; do not start it or
-Phase 4 without reviewer acceptance of Phase 3B.
+Phase 3B — Production PDF Annotation UX is COMPLETE, committed, verified, and
+reviewer-ACCEPTED (both final acceptance blockers closed at the correction
+commit). The remaining Phase 3 exit work is Phase 3C: editable freehand
+pen/drawing authoring and Drawing journal blocks (AC-008 editable vector
+drawing, AC-3 source-location inheritance for Drawing blocks). Phase 3 as a
+whole is not complete until 3C lands. Phase 3C is NOT yet authorized; do not
+start it or Phase 4 without reviewer acceptance of Phase 3B's final
+acceptance corrections.
 
 ## Remaining tracked findings
 
@@ -116,12 +156,12 @@ Phase 4 without reviewer acceptance of Phase 3B.
 ## Verification
 
 Latest uninterrupted gate in the authoritative checkout on 2026-08-06
-(Phase 3B corrected tree, exact candidate for commit):
+(Phase 3B final acceptance-corrections tree, exact candidate for commit):
 
 - `npm run typecheck`: PASS
 - `npm run lint`: PASS
-- `npm run test`: PASS — 34 files, 591 passed, 1 skipped
-- `npm run test:e2e`: PASS — Chromium, 93 passed, 0 skipped
+- `npm run test`: PASS — 36 files, 605 passed, 1 skipped
+- `npm run test:e2e`: PASS — Chromium, 94 passed, 0 skipped
 - `npm run build`: PASS
 - `npm audit --omit=dev`: PASS — 0 vulnerabilities
 - production `dist/` leak scan (geometry-probe / __cntknwProbe /

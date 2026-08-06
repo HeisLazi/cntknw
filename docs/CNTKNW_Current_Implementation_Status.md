@@ -1,8 +1,8 @@
 # CNTKNW Current Implementation Status
 
-**Updated:** 06 August 2026 (Phase 3B Production PDF Annotation UX — closed)
+**Updated:** 06 August 2026 (Phase 3B Production PDF Annotation UX — closed; final acceptance corrections applied)
 **Repository:** `HeisLazi/cntknw`
-**Git baseline:** Phase 3B is committed and verified on `main`. Per
+**Git baseline:** Phase 3B (including its final acceptance corrections) is committed and verified on `main`. Per
 AI_PROJECT_STATE policy, no volatile live-HEAD SHA is recorded here; derive
 HEAD from Git at session start.
 **Status:** Living document. Update at every phase boundary.
@@ -205,18 +205,33 @@ on the corrected final tree after the adversarial review corrections.
 ```text
 npm run typecheck     PASS   0 errors      (src/ and e2e/)
 npm run lint          PASS   0 errors, 0 warnings
-npm run test          PASS   34 files, 591 passed, 1 skipped
-npm run test:e2e      PASS   Chromium, 93 passed, 0 skipped
+npm run test          PASS   36 files, 605 passed, 1 skipped
+npm run test:e2e      PASS   Chromium, 94 passed, 0 skipped
 npm run build         PASS   
 npm audit --omit=dev  PASS   0 vulnerabilities
 Production dist leak  PASS   0 matches (geometry-probe / __cntknwProbe / harness-client / e2e/harness)
 ```
 
+Final acceptance corrections (ChatGPT milestone review) added, in the
+annotation-feature layer: `legacyGeometry.ts` partitions records so
+`legacyMigration.geometryStatus === 'fallback'` records are never spatially
+projected, rendered, focused, or deleted — each page with such records shows
+one count-honest accessible degraded notice (`role="status"`); native and
+`'converted'` records render exactly as before. `pendingAnnotationIntent.ts`
+moves the pending-annotation-creation truth above the virtualized page: a
+store keyed by `sourceId:assetId:page` holding only canonical fields
+(status `draft|saving|failed`, canonical anchor, user-facing error), so an
+async page unmount can never destroy unsaved user intent — success clears the
+entry even after unmount, failure persists a Retry/Dismiss popover, Retry
+cannot duplicate (one durable record after retry), and intents never leak
+across source/asset identity. PdfReader clears only `draft` intents on source
+change/unmount; `saving`/`failed` intents survive navigation.
+
 Contract suite is defined and run against both adapters — memory and indexeddb, identical cases. The annotation contract includes a two-asset same-source same-page adversarial case proving exact-asset retrieval isolates annotations per asset and page on both adapters.
 
-Phase 3B adds: unit coverage of the `createSourceAnnotation` membership/validation boundary (unlinked asset, wrong-source asset, missing source/asset, invalid page, kind/anchor mismatch, no partial writes — all rejected), the text-selection/region capture helpers (single-line, multiline, reverse drag, degenerate drag), the workspace `annotationTool` schema default, and a `PdfAnnotationLayer` component suite (exact-page projection, **replacement-asset isolation**, keyboard actions + confirmation-before-delete, failed-intent retention with visible typed-or-generic error, style-update conflict reload, read retry, read-only point/ink projection, Escape cancels region drag with focus return, no setState after unmount).
+Phase 3B adds: unit coverage of the `createSourceAnnotation` membership/validation boundary (unlinked asset, wrong-source asset, missing source/asset, invalid page, kind/anchor mismatch, no partial writes — all rejected), the text-selection/region capture helpers (single-line, multiline, reverse drag, degenerate drag), the workspace `annotationTool` schema default, a `PdfAnnotationLayer` component suite (exact-page projection, **replacement-asset isolation**, keyboard actions + confirmation-before-delete, failed-intent retention with visible typed-or-generic error, style-update conflict reload, read retry, read-only point/ink projection, Escape cancels region drag with focus return, no setState after unmount), the fallback-geometry proofs (point/ink/area/text sentinels never rendered or focusable, record stays in the repository, degraded notice accessible, native+converted still positioned) and the virtualization proofs (failure after unmount → remount → Retry → exactly one durable record; success after unmount → exactly one durable record, no stale retry; cross-source/asset isolation; collapsed selection changes never clear an in-flight `saving` intent).
 
-Browser suite: one Chromium project, 93 tests. The three new Phase 3B production specs drive the real app: (1) a highlight journey that stays sub-pixel aligned through zoom, reload and page-unmount/remount, is deleted only via the confirmation dialog, and makes zero network requests; (2) a keyboard-reachable region tool that cancels with Escape, persists a drag across reload, and restores its tool state; (3) a cross-page text selection that is refused with an announced notice and creates no annotation.
+Browser suite: one Chromium project, 94 tests. The Phase 3B production specs drive the real app: (1) a highlight journey that stays sub-pixel aligned through zoom, reload and page-unmount/remount, is deleted only via the confirmation dialog, and makes zero network requests; (2) a keyboard-reachable region tool that cancels with Escape, persists a drag across reload, and restores its tool state; (3) a cross-page text selection that is refused with an announced notice and creates no annotation; (4) a legacy-fallback spec that seeds a schema-valid `geometryStatus='fallback'` record through the e2e harness (never the production path), proves the degraded notice and the absence of any spatial mark, and proves the record survives a full reload.
 
 **Not run:** WebKit and Firefox browser projects; axe or any automated
 accessibility rule engine; WCAG contrast measurement; visual regression.
@@ -240,16 +255,19 @@ accessibility rule engine; WCAG contrast measurement; visual regression.
 
 ## 7. Next step
 
-**Phase 3B Production PDF Annotation UX is complete, committed and verified.**
-Text-selection highlight and region annotations are created through an
-application boundary, persisted against the exact asset, rendered in a
-repository-backed per-page overlay, and are keyboard-accessible, colour-edited
-from restrained presets and confirmation-deleted. The next authorized
-implementation milestone is **Phase 3C — editable freehand pen/drawing
-authoring and Drawing journal blocks** (AC-008 editable vector drawing, AC-3
-source-location inheritance for Drawing blocks), which Phase 3B intentionally
-deferred. Phase 3C has NOT been authorized or started; do not begin it or
-Phase 4 without reviewer acceptance of Phase 3B.
+**Phase 3B Production PDF Annotation UX is complete, committed, verified, and
+reviewer-accepted** (the ChatGPT milestone review's two final acceptance
+blockers — legacy fallback geometry policy and pending-create-intent lifetime —
+are closed; see §5). Text-selection highlight and region annotations are
+created through an application boundary, persisted against the exact asset,
+rendered in a repository-backed per-page overlay, and are keyboard-accessible,
+colour-edited from restrained presets and confirmation-deleted. The next
+authorized implementation milestone is **Phase 3C — editable freehand
+pen/drawing authoring and Drawing journal blocks** (AC-008 editable vector
+drawing, AC-3 source-location inheritance for Drawing blocks), which Phase 3B
+intentionally deferred. Phase 3C has NOT been authorized or started; do not
+begin it or Phase 4 without reviewer acceptance of Phase 3B's final
+acceptance corrections.
 
 See `CNTKNW_Phase_0D_Checkpoint_Report.md`,
 `CNTKNW_Phase_0C_Checkpoint_Report.md` and
