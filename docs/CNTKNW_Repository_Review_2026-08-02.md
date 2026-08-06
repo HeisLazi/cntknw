@@ -152,3 +152,24 @@ converted or retained with an explicit fallback-geometry marker. A pure
 DOM-free conversion library and a test-only real-reader probe verify zoom,
 bounded virtualization and persistence/reload alignment. No production
 annotation UI was added, and no previous finding was reopened.
+
+**Closure correction (exact-asset retrieval).** ADR-0007's identity tuple is
+`(sourceId, assetId, page, annotationId)`, but `AnnotationRepository` exposed
+`getBySourceAndPage(sourceId, page)` with no assetId — an unsafe cross-asset
+access path for a renderer displaying a replacement asset. Closure replaced
+it with `getBySourceAssetAndPage(sourceId, assetId, page)` in the interface
+and both adapters (Memory: three-field filter; IndexedDB: existing
+`[sourceId+page]` index plus an in-JS assetId filter — no schema bump, no v3
+migration). `getBySourceAndPage` was removed; it had no production callers.
+A two-asset same-source same-page adversarial contract test now runs against
+both adapters (asset A/page 7 and asset B/page 7 never leak into each
+other's results; page mismatch returns empty; `getBySource` still
+intentionally returns both assets' annotations), and an application-level
+test guards the Phase 3B renderer seam against replacement-asset leakage.
+Merged annotation records still validate through `AnnotationSchema` on
+create and update in both adapters. Boundary note for Phase 3B: the
+repository validates record shape only; confirming that an `assetId`
+belongs to its `sourceId` is the production annotation creation use-case's
+responsibility, not the repository contract.
+
+Findings 16, 18, 19 and 20 remain open/deferred exactly as before.

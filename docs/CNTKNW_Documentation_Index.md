@@ -62,7 +62,7 @@ Handoff §19 places shell and routing at Phase 0B and persistence at 0C. **That 
 | 0E | **Editor spike, then the journal vertical slice** | Complete and verified (ADR-0004, ADR-0005) |
 | 1 | **Reliable PDF core** — import, render, exact resume | Complete and verified through PDF Core Reliability Milestone 3B (Findings 11–15 resolved) |
 | 2 | **Infinite Journal** | Complete and verified (Folio margin ADR-0006 landed) |
-| 3 | **Annotations** | Phase 3A canonical geometry architecture implemented; production annotation UI not yet implemented |
+| 3 | **Annotations** | Phase 3A canonical geometry architecture complete, committed and verified (incl. exact-asset retrieval closure correction); production annotation UI not yet implemented |
 
 Shell, routing, design tokens and UI primitives moved from 0B to **0D**. Domain and persistence, previously both at 0C, split into **0B** (contracts) and **0C** (storage).
 

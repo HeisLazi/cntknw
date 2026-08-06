@@ -1,8 +1,10 @@
 # CNTKNW Current Implementation Status
 
-**Updated:** 06 August 2026 (Phase 3A Annotation Geometry Architecture)
+**Updated:** 06 August 2026 (Phase 3A Annotation Geometry Architecture — closed)
 **Repository:** `HeisLazi/cntknw`
-**Git baseline:** `8197d36`; Phase 3A changes are intentionally uncommitted
+**Git baseline:** Phase 3A is committed and verified on `main`. Per
+AI_PROJECT_STATE policy, no volatile live-HEAD SHA is recorded here; derive
+HEAD from Git at session start.
 **Status:** Living document. Update at every phase boundary.
 
 Read `CNTKNW_Documentation_Index.md` first for the read order and the phase sequence in force.
@@ -33,8 +35,11 @@ duplicate-read reduction.
 Phase 3A now establishes asset-bound, rotation-aware canonical PDF annotation
 geometry, transactional schema-v2 migration, and a DOM-free coordinate
 projection library. A test-only real-reader probe proves zoom, virtualization
-and reload persistence. **Production annotation selection, rendering and
-editing UI are not yet implemented; Phase 3 is not complete.**
+and reload persistence. The Phase 3A closure pass added exact-asset page
+retrieval (`getBySourceAssetAndPage`) so annotations on a replaced asset can
+never leak onto a replacement asset's render path. **Production annotation
+selection, rendering and editing UI are not yet implemented; Phase 3 is not
+complete.**
 
 **Phases 0A–0E are complete and verified.** 
 
@@ -51,7 +56,7 @@ editing UI are not yet implemented; Phase 3 is not complete.**
 | 0E | Editor spike, then journal vertical slice | **Complete and verified** (ADR-0004, ADR-0005) |
 | 1 | Reliable PDF core — import, render, exact resume | **Milestone 3B complete and verified** (Findings 11–15 resolved; annotation UI remains out of scope) |
 | 2 | Infinite Journal | **Complete and verified** (Folio margin ADR-0006 landed) |
-| 3 | Annotations | **Phase 3A geometry architecture complete in the working tree**; production UI not yet implemented |
+| 3 | Annotations | **Phase 3A geometry architecture complete, committed and verified** (incl. exact-asset retrieval closure correction); production UI not yet implemented |
 
 Phase order per ADR-0001 §1, which supersedes Handoff §19.
 
@@ -181,22 +186,22 @@ That is checked in five tests, not asserted in prose — the earlier phrase
 
 ---
 
-## 5. Verification, Phase 3A local run 06 August 2026
+## 5. Verification, Phase 3A closure run 06 August 2026
 
 Node/npm and platform are supplied by the current Linux development
-environment; these are the implementer's local Phase 3A results. Hermes will
-independently re-run the final gate.
+environment. The implementer ran the suite during implementation; Hermes ran
+the final uninterrupted gate on the exact committed candidate tree.
 
 ```text
 npm run typecheck     PASS   0 errors      (src/ and e2e/)
 npm run lint          PASS   0 errors, 0 warnings
-npm run test          PASS   30 files, 559 passed, 1 skipped
+npm run test          PASS   30 files, 563 passed, 1 skipped
 npm run test:e2e      PASS   Chromium, 90 passed, 0 skipped
 npm run build         PASS   
 npm audit --omit=dev  PASS   0 vulnerabilities
 ```
 
-Contract suite is defined and run against both adapters — memory and indexeddb, identical cases.
+Contract suite is defined and run against both adapters — memory and indexeddb, identical cases. The annotation contract now includes a two-asset same-source same-page adversarial case proving exact-asset retrieval isolates annotations per asset and page on both adapters.
 
 Browser suite: one Chromium project, 90 tests. Persistence — BV-001 reload, BV-002 transaction rollback, BV-003
 revision conflict, BV-004 nested transaction, BV-005 database separation;
@@ -230,11 +235,13 @@ accessibility rule engine; WCAG contrast measurement; visual regression.
 
 ## 7. Next step
 
-**Phase 3A Annotation Geometry Architecture is complete in the current
-working tree.** ADR-0007, the canonical domain model, schema-v2 migration,
-pure conversion boundary and real-reader proof are implemented. Production
-annotation UX remains the next bounded work and must not be inferred from this
-architecture milestone.
+**Phase 3A Annotation Geometry Architecture is complete, committed and
+verified.** ADR-0007, the canonical domain model, schema-v2 migration, the
+pure conversion boundary, the real-reader proof, and the exact-asset
+retrieval closure correction are implemented. The next authorized
+implementation milestone, after reviewer acceptance of Phase 3A closure, is
+Phase 3B — production annotation UX (selection, toolbar, highlight
+rendering, editing, keyboard accessibility). Phase 3B has NOT started.
 
 See `CNTKNW_Phase_0D_Checkpoint_Report.md`,
 `CNTKNW_Phase_0C_Checkpoint_Report.md` and

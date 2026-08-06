@@ -11,8 +11,13 @@ change when a milestone lands, and a state file that stores them
 goes stale the next commit. Git is authoritative: derive HEAD from
 `git rev-parse HEAD` / `origin/main` at session start.
 
-**Last accepted product milestone:** `ecb3dd19d295e99a976eeb17429d03c065a72f68`
-(Milestone 3B — PDF Core Reliability).
+**Last completed product milestone:** Phase 3A — Annotation Geometry
+Architecture (milestone commit `67f7061` `feat(annotations): establish
+canonical PDF geometry`, plus the Phase 3A closure-pass correction whose
+commit SHA is in Git history; see `git log`).
+
+Prior milestone: Milestone 3B — PDF Core Reliability, commit
+`ecb3dd19d295e99a976eeb17429d03c065a72f68`.
 
 The AI routing/bootstrap commit `8197d3683f60d5d0d503dcd6888e0d6888d44413`
 (`chore(ai): optimize model routing across Zen and Go`) is recorded here
@@ -39,31 +44,43 @@ code had changed and Phase 3 had not started.
 - Phase 0 foundations: complete and verified.
 - Phase 1 PDF core reliability through Milestone 3B: complete and verified.
 - Phase 2 Infinite Journal: complete and verified; do not reopen without a demonstrated regression.
-- Phase 3 annotations: Phase 3A canonical geometry architecture is complete in
-  the current working tree; production annotation UI is not yet implemented.
+- Phase 3 annotations: Phase 3A canonical geometry architecture is complete,
+  committed and verified; production annotation UI (Phase 3B) is not yet
+  implemented.
 
 ## Latest completed milestone
 
-Milestone 3B — PDF Core Reliability, commit `ecb3dd1`.
+Phase 3A — Annotation Geometry Architecture, committed on `main`.
 
-Implemented and documented:
+Implemented, reviewed and verified:
 
-- hardened PDF search normalization, spacing, match counts, error/cancellation handling, and stale-result suppression;
-- one-read PDF import path with deterministic 8 MiB duplicate-read probe;
-- Findings 13 and 15 marked resolved;
+- ADR-0007 canonical geometry: exact `(sourceId, assetId, page, annotationId)`
+  identity, normalized unrotated page coordinates, `text | area | point | ink`
+  anchors, vector ink, rotation-aware projection;
+- schema-v2 transactional migration of legacy opaque geometry, no data loss;
+- pure DOM-free geometry conversion library with property tests;
+- real-reader Playwright proof of zoom, virtualization/remount and
+  persistence/reload alignment (AC-007);
+- Phase 3A closure: exact-asset page retrieval
+  (`getBySourceAssetAndPage(sourceId, assetId, page)`) replaced the unsafe
+  `getBySourceAndPage` (removed; it had no production callers), with a
+  two-asset same-source same-page adversarial contract test on BOTH Memory
+  and IndexedDB adapters and an application-level asset-replacement safety
+  test;
 - full project gate verified green on 2026-08-06.
 
-Note: the one-time orchestration brief saying not to start Milestone 3B arrived after `ecb3dd1` had already been implemented and pushed. Public history was not rewritten.
+Note: the one-time orchestration brief saying not to start Milestone 3B
+arrived after `ecb3dd1` had already been implemented and pushed. Public
+history was not rewritten.
 
 ## Current milestone
 
-Phase 3A — Annotation Geometry Architecture was explicitly stakeholder
-authorized on 2026-08-06 and is implemented in the current uncommitted working
-tree. ADR-0007, strict canonical anchors, schema-v2 transactional migration,
-the pure geometry projection boundary, and a real-reader Playwright proof are
-complete. The production annotation toolbar, selection interaction,
-highlight rendering and editing UX are **not implemented**. Do not mark Phase
-3 itself complete.
+Phase 3A — Annotation Geometry Architecture is complete, committed and
+verified. No further product milestone is currently authorized. The next
+authorized implementation milestone, after reviewer acceptance of Phase 3A
+closure, is Phase 3B — production annotation UX (selection, toolbar,
+highlight rendering, editing, keyboard accessibility). Phase 3B has NOT
+started; do not mark Phase 3 itself complete.
 
 ## Remaining tracked findings
 
@@ -76,11 +93,12 @@ highlight rendering and editing UX are **not implemented**. Do not mark Phase
 
 ## Verification
 
-Latest uninterrupted gate in the authoritative checkout on 2026-08-06:
+Latest uninterrupted gate in the authoritative checkout on 2026-08-06
+(Phase 3A closure tree):
 
 - `npm run typecheck`: PASS
 - `npm run lint`: PASS
-- `npm run test`: PASS — 30 files, 559 passed, 1 skipped
+- `npm run test`: PASS — 30 files, 563 passed, 1 skipped
 - `npm run test:e2e`: PASS — Chromium, 90 passed, 0 skipped
 - `npm run build`: PASS
 - `npm audit --omit=dev`: PASS — 0 vulnerabilities
