@@ -47,6 +47,28 @@ export function harness(page: Page) {
   return { call };
 }
 
+export async function seedFallbackAnnotation(
+  page: Page,
+  sourceId: string,
+  pageNumber: number,
+) {
+  return harness(page).call('seedFallbackAnnotation', sourceId, pageNumber);
+}
+
+export async function countPageAnnotations(
+  page: Page,
+  sourceId: string,
+  assetId: string,
+  pageNumber: number,
+): Promise<number> {
+  return harness(page).call(
+    'countPageAnnotations',
+    sourceId,
+    assetId,
+    pageNumber,
+  );
+}
+
 /**
  * Load the harness page and wait for the composition surface to be
  * installed. Called again after every reload, which is the point:

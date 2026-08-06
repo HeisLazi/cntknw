@@ -4,6 +4,7 @@ import type { AnnotationTool, EntityId } from '@domain/index';
 import { PdfPage } from './PdfPage';
 import { PdfOutline } from './PdfOutline';
 import { PdfSearch } from './PdfSearch';
+import { clearDraftIntentsForSource } from './pendingAnnotationIntent';
 import type { LoadedDocument } from './pdfjs';
 import './reader.css';
 
@@ -91,6 +92,13 @@ export function PdfReader({
 
   const [pageInput, setPageInput] = useState(String(page));
   const [previousPage, setPreviousPage] = useState(page);
+
+  useEffect(
+    () => () => {
+      clearDraftIntentsForSource(sourceId);
+    },
+    [sourceId],
+  );
 
   if (page !== previousPage) {
     setPreviousPage(page);

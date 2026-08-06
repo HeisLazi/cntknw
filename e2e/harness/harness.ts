@@ -34,11 +34,12 @@ import { createPageLinkedBlock } from '@application/create-block';
 import { resumeSource } from '@application/resume-source';
 import { readV1Snapshot, v1DatabaseExists } from '../../src/legacy/v1/readers';
 import { V1_DATABASE_NAME } from '@data/db/schemaVersions';
-import type {
-  Annotation,
-  AnnotationAnchor,
-  AnnotationKind,
-  EntityId,
+import {
+  AnnotationSchema,
+  type Annotation,
+  type AnnotationAnchor,
+  type AnnotationKind,
+  type EntityId,
 } from '@domain/index';
 
 type Repositories = ReturnType<typeof createIndexedDbRepositories>;
@@ -217,6 +218,50 @@ const api = {
     anchor: AnnotationAnchor;
   }): Promise<Annotation> {
     return active().repos.annotations.create(input);
+  },
+
+  /** Phase 3B acceptance fixture: bypass create-input stripping, but parse fully. */
+  async seedFallbackAnnotation(
+    sourceId: EntityId,
+    page: number,
+  ): Promise<Annotation> {
+    const { db, repos } = active();
+    const asset = await repos.assets.getPrimaryAsset(sourceId);
+    if (!asset) throw new Error(`No primary asset for ${sourceId}`);
+    const timestamp = new Date().toISOString();
+    const annotation = AnnotationSchema.parse({
+      id: crypto.randomUUID(),
+      sourceId,
+      assetId: asset.id,
+      page,
+      kind: 'bookmark',
+      anchor: { kind: 'point', point: { x: 0, y: 0 } },
+      style: {},
+      linkedBlockIds: [],
+      legacyMigration: {
+        fromSchemaVersion: 1,
+        geometryStatus: 'fallback',
+      },
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      revision: 0,
+    });
+    await db.annotations.add(annotation);
+    return annotation;
+  },
+
+  async countPageAnnotations(
+    sourceId: EntityId,
+    assetId: EntityId,
+    page: number,
+  ): Promise<number> {
+    return (
+      await active().repos.annotations.getBySourceAssetAndPage(
+        sourceId,
+        assetId,
+        page,
+      )
+    ).length;
   },
 
   /** Phase 3A proof: read through validation, never from the Dexie table. */

@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,9 +6,20 @@ import { createSourceAnnotation } from '@application/annotations/create-annotati
 import { createMemoryRepositories } from '@data/adapters/memory';
 import type { MemoryRepositories } from '@data/adapters/memory';
 import { AssetNotLinkedToSourceError, RevisionConflictError } from '@data/errors';
-import type { EntityId } from '@domain/index';
+import {
+  AnnotationSchema,
+  type Annotation,
+  type AnnotationAnchor,
+  type AnnotationKind,
+  type EntityId,
+} from '@domain/index';
 import type { PageViewportLike, PdfPageBox } from '@lib/geometry';
 import { renderWithProviders } from '@tests/renderWithProviders';
+import {
+  clearPendingIntent,
+  getPendingIntent,
+  putPendingIntent,
+} from './pendingAnnotationIntent';
 import { PdfAnnotationLayer } from './PdfAnnotationLayer';
 
 const PAGE_BOX: PdfPageBox = [0, 0, 400, 600];
@@ -54,6 +65,24 @@ function PageHarness({
         />
       </div>
     </div>
+  );
+}
+
+function VirtualizedPageHarness({
+  sourceId,
+  assetId,
+}: {
+  sourceId: EntityId;
+  assetId: EntityId;
+}) {
+  const [mounted, setMounted] = useState(true);
+  return (
+    <>
+      <button type="button" onClick={() => setMounted((current) => !current)}>
+        {mounted ? 'Unmount page' : 'Remount page'}
+      </button>
+      {mounted ? <PageHarness sourceId={sourceId} assetId={assetId} /> : null}
+    </>
   );
 }
 
@@ -111,6 +140,114 @@ async function seedRegion(
   });
 }
 
+function parsedAnnotation({
+  id,
+  sourceId,
+  assetId,
+  kind,
+  anchor,
+  geometryStatus,
+}: {
+  id: EntityId;
+  sourceId: EntityId;
+  assetId: EntityId;
+  kind: AnnotationKind;
+  anchor: AnnotationAnchor;
+  geometryStatus?: 'converted' | 'fallback';
+}): Annotation {
+  return AnnotationSchema.parse({
+    id,
+    sourceId,
+    assetId,
+    page: 3,
+    kind,
+    anchor,
+    style: {},
+    linkedBlockIds: [],
+    legacyMigration: geometryStatus
+      ? { fromSchemaVersion: 1, geometryStatus }
+      : undefined,
+    createdAt: '2026-08-06T00:00:00.000Z',
+    updatedAt: '2026-08-06T00:00:00.000Z',
+    revision: 0,
+  });
+}
+
+function fallbackAnnotation(
+  sourceId: EntityId,
+  assetId: EntityId,
+  kind: 'point' | 'ink' | 'area' | 'text',
+): Annotation {
+  const id = crypto.randomUUID();
+  if (kind === 'point') {
+    return parsedAnnotation({
+      id,
+      sourceId,
+      assetId,
+      kind: 'bookmark',
+      anchor: { kind: 'point', point: { x: 0, y: 0 } },
+      geometryStatus: 'fallback',
+    });
+  }
+  if (kind === 'ink') {
+    return parsedAnnotation({
+      id,
+      sourceId,
+      assetId,
+      kind: 'pen',
+      anchor: { kind: 'ink', strokes: [{ points: [{ x: 0, y: 0 }] }] },
+      geometryStatus: 'fallback',
+    });
+  }
+  if (kind === 'area') {
+    return parsedAnnotation({
+      id,
+      sourceId,
+      assetId,
+      kind: 'region',
+      anchor: { kind: 'area', rect: { x: 0, y: 0, width: 0, height: 0 } },
+      geometryStatus: 'fallback',
+    });
+  }
+  return parsedAnnotation({
+    id,
+    sourceId,
+    assetId,
+    kind: 'highlight',
+    anchor: {
+      kind: 'text',
+      quote: '',
+      rects: [{ x: 0, y: 0, width: 0, height: 0 }],
+      boundingRect: { x: 0, y: 0, width: 0, height: 0 },
+    },
+    geometryStatus: 'fallback',
+  });
+}
+
+function selectHarnessText(): Selection {
+  const text = screen.getByText('Selectable archive quote').firstChild!;
+  const range = document.createRange();
+  range.selectNodeContents(text);
+  Object.defineProperty(range, 'getClientRects', {
+    value: () => [{ left: 40, top: 120, width: 160, height: 24 }],
+  });
+  const selection = window.getSelection()!;
+  selection.removeAllRanges();
+  selection.addRange(range);
+  fireEvent(document, new Event('selectionchange'));
+  return selection;
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
+}
+
 let repositories: MemoryRepositories;
 
 beforeEach(() => {
@@ -154,6 +291,97 @@ describe('PdfAnnotationLayer', () => {
     expect(
       await screen.findByRole('button', { name: /Highlight on page 3/u }),
     ).toBeVisible();
+  });
+
+  it('does not spatially render or focus a fallback point sentinel', async () => {
+    const { source, assetA } = await sourceWithAssets(repositories);
+    const fallback = fallbackAnnotation(source.id, assetA.id, 'point');
+    const read = vi.fn(async () => [fallback]);
+    repositories.annotations.getBySourceAssetAndPage = read;
+    const deleteSpy = vi.spyOn(repositories.annotations, 'delete');
+
+    renderWithProviders(
+      <PageHarness sourceId={source.id} assetId={assetA.id} />,
+      { repositories },
+    );
+
+    const notice = await screen.findByText(
+      'A legacy annotation on this page could not be positioned precisely.',
+    );
+    expect(notice).toHaveAttribute('role', 'status');
+    expect(notice).toHaveAttribute('aria-live', 'polite');
+    const layer = screen.getByTestId('annotation-layer');
+    expect(layer.querySelector('.cn-annotation--point')).toBeNull();
+    expect(layer.querySelector(`[data-annotation-id="${fallback.id}"]`)).toBeNull();
+    expect(layer.querySelector('button.cn-annotation')).toBeNull();
+    expect(await repositories.annotations.getBySourceAssetAndPage(
+      source.id,
+      assetA.id,
+      3,
+    )).toEqual([fallback]);
+    expect(deleteSpy).not.toHaveBeenCalled();
+  });
+
+  it('hides fallback ink, area, and text sentinels behind one count-honest notice', async () => {
+    const { source, assetA } = await sourceWithAssets(repositories);
+    const fallback = (['ink', 'area', 'text'] as const).map((kind) =>
+      fallbackAnnotation(source.id, assetA.id, kind),
+    );
+    repositories.annotations.getBySourceAssetAndPage = vi.fn(async () => fallback);
+    const deleteSpy = vi.spyOn(repositories.annotations, 'delete');
+
+    renderWithProviders(
+      <PageHarness sourceId={source.id} assetId={assetA.id} />,
+      { repositories },
+    );
+
+    const notice = await screen.findByText(
+      '3 legacy annotations on this page could not be positioned precisely.',
+    );
+    expect(notice).toHaveAttribute('role', 'status');
+    expect(notice).toHaveAttribute('aria-live', 'polite');
+    const layer = screen.getByTestId('annotation-layer');
+    expect(layer.querySelector('.cn-annotation__ink')).toBeNull();
+    expect(layer.querySelector('.cn-annotation--ink-target')).toBeNull();
+    expect(layer.querySelector('.cn-annotation--region')).toBeNull();
+    expect(layer.querySelector('.cn-annotation--highlight')).toBeNull();
+    expect(layer.querySelectorAll('[data-annotation-id]')).toHaveLength(0);
+    expect(await repositories.annotations.getBySourceAssetAndPage(
+      source.id,
+      assetA.id,
+      3,
+    )).toEqual(fallback);
+    expect(deleteSpy).not.toHaveBeenCalled();
+  });
+
+  it('continues to position native and converted legacy geometry', async () => {
+    const { source, assetA } = await sourceWithAssets(repositories);
+    const native = await seedHighlight(repositories, source.id, assetA.id);
+    const converted = parsedAnnotation({
+      id: crypto.randomUUID(),
+      sourceId: source.id,
+      assetId: assetA.id,
+      kind: 'region',
+      anchor: { kind: 'area', rect: { x: 0.5, y: 0.4, width: 0.2, height: 0.1 } },
+      geometryStatus: 'converted',
+    });
+    repositories.annotations.getBySourceAssetAndPage = vi.fn(async () => [
+      native,
+      converted,
+    ]);
+
+    renderWithProviders(
+      <PageHarness sourceId={source.id} assetId={assetA.id} />,
+      { repositories },
+    );
+
+    const nativeMark = await screen.findByRole('button', {
+      name: /Highlight on page 3/u,
+    });
+    const convertedMark = screen.getByRole('button', { name: 'Region on page 3' });
+    expect(nativeMark).toHaveStyle({ left: '40px', top: '120px', width: '160px' });
+    expect(convertedMark).toHaveStyle({ left: '200px', top: '240px', width: '80px' });
+    expect(screen.queryByText(/legacy annotations? on this page/u)).toBeNull();
   });
 
   it('supports keyboard actions and requires confirmation before delete', async () => {
@@ -236,6 +464,197 @@ describe('PdfAnnotationLayer', () => {
       await screen.findByRole('button', { name: /Highlight on page 3/u }),
     ).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Highlight' })).toBeNull();
+  });
+
+  it('restores a failed create after unmount and retries to one durable record', async () => {
+    const user = userEvent.setup();
+    const { source, assetA } = await sourceWithAssets(repositories);
+    const firstCreate = deferred<Annotation>();
+    const realCreate = repositories.annotations.create.bind(repositories.annotations);
+    const createSpy = vi.fn(async (input: Parameters<typeof realCreate>[0]) => {
+      if (createSpy.mock.calls.length === 1) {
+        return firstCreate.promise;
+      }
+      return realCreate(input);
+    });
+    repositories.annotations.create = createSpy;
+    renderWithProviders(
+      <VirtualizedPageHarness sourceId={source.id} assetId={assetA.id} />,
+      { repositories },
+    );
+
+    selectHarnessText();
+    await user.click(await screen.findByRole('button', { name: 'Highlight' }));
+    await waitFor(() => expect(createSpy).toHaveBeenCalledOnce());
+    await user.click(screen.getByRole('button', { name: 'Unmount page' }));
+    await act(async () => {
+      firstCreate.reject(new Error('delayed persistence failure'));
+      await firstCreate.promise.catch(() => undefined);
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Remount page' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /could not save the annotation/iu,
+    );
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(
+      await screen.findByRole('button', { name: /Highlight on page 3/u }),
+    ).toBeVisible();
+    await waitFor(() => expect(createSpy).toHaveBeenCalledTimes(2));
+    expect(await repositories.annotations.getBySourceAssetAndPage(
+      source.id,
+      assetA.id,
+      3,
+    )).toHaveLength(1);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+  });
+
+  it('clears a successful create after unmount without exposing a stale retry', async () => {
+    const user = userEvent.setup();
+    const { source, assetA } = await sourceWithAssets(repositories);
+    const firstCreate = deferred<Annotation>();
+    const realCreate = repositories.annotations.create.bind(repositories.annotations);
+    let capturedInput: Parameters<typeof realCreate>[0] | null = null;
+    const createSpy = vi.fn(async (input: Parameters<typeof realCreate>[0]) => {
+      capturedInput = input;
+      return firstCreate.promise;
+    });
+    repositories.annotations.create = createSpy;
+    renderWithProviders(
+      <VirtualizedPageHarness sourceId={source.id} assetId={assetA.id} />,
+      { repositories },
+    );
+
+    selectHarnessText();
+    await user.click(await screen.findByRole('button', { name: 'Highlight' }));
+    await waitFor(() => expect(createSpy).toHaveBeenCalledOnce());
+    await user.click(screen.getByRole('button', { name: 'Unmount page' }));
+    await act(async () => {
+      if (!capturedInput) throw new Error('Create input was not captured');
+      firstCreate.resolve(await realCreate(capturedInput));
+      await firstCreate.promise;
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Remount page' }));
+    expect(
+      await screen.findByRole('button', { name: /Highlight on page 3/u }),
+    ).toBeVisible();
+    expect(createSpy).toHaveBeenCalledOnce();
+    expect(await repositories.annotations.getBySourceAssetAndPage(
+      source.id,
+      assetA.id,
+      3,
+    )).toHaveLength(1);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+  });
+
+  it('does not expose a pending intent across source and asset identity', async () => {
+    const { source: sourceA, assetA } = await sourceWithAssets(repositories);
+    const { source: sourceB, assetA: assetB } = await sourceWithAssets(repositories);
+    putPendingIntent({
+      sourceId: sourceA.id,
+      assetId: assetA.id,
+      page: 3,
+      kind: 'highlight',
+      anchor: {
+        kind: 'text',
+        quote: 'Source A only',
+        rects: [{ x: 0.1, y: 0.2, width: 0.3, height: 0.04 }],
+        boundingRect: { x: 0.1, y: 0.2, width: 0.3, height: 0.04 },
+      },
+      status: 'failed',
+      errorMessage: 'Source A failure',
+    });
+
+    renderWithProviders(
+      <PageHarness sourceId={sourceB.id} assetId={assetB.id} />,
+      { repositories },
+    );
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+      expect(screen.queryByText('Source A failure')).toBeNull();
+      expect(document.querySelector('.cn-annotation-create')).toBeNull();
+      expect(document.querySelector('.cn-annotation-notice')).toBeNull();
+    });
+    clearPendingIntent(sourceA.id, assetA.id, 3);
+  });
+
+  it('keeps an in-flight saving intent when a selection change collapses mid-save', async () => {
+    const user = userEvent.setup();
+    const { source, assetA } = await sourceWithAssets(repositories);
+    const pendingCreate = deferred<Annotation>();
+    const realCreate = repositories.annotations.create.bind(repositories.annotations);
+    repositories.annotations.create = vi.fn(
+      async (input: Parameters<typeof realCreate>[0]) => pendingCreate.promise,
+    );
+    renderWithProviders(
+      <PageHarness sourceId={source.id} assetId={assetA.id} />,
+      { repositories },
+    );
+
+    // A draft highlight is showing.
+    selectHarnessText();
+    await screen.findByRole('button', { name: 'Highlight' });
+    const draft = await waitFor(() => {
+      const intent = getPendingIntent(source.id, assetA.id, 3);
+      expect(intent?.status).toBe('draft');
+      return intent!;
+    });
+
+    // The user clicks Highlight: savePending moves the store to 'saving' while
+    // the write is in flight.
+    await user.click(screen.getByRole('button', { name: 'Highlight' }));
+    await waitFor(() => {
+      expect(getPendingIntent(source.id, assetA.id, 3)?.status).toBe('saving');
+    });
+
+    // A collapsed selection change (e.g. a click elsewhere) must not clear the
+    // in-flight intent — the handler reads the live store, never a stale
+    // render-time snapshot.
+    act(() => {
+      window.getSelection()?.removeAllRanges();
+      document.dispatchEvent(new Event('selectionchange'));
+    });
+    expect(getPendingIntent(source.id, assetA.id, 3)?.status).toBe('saving');
+
+    // Resolve the write: exactly one durable annotation, no pending UI.
+    act(() => {
+      pendingCreate.resolve(realCreate({
+        sourceId: source.id,
+        assetId: assetA.id,
+        page: 3,
+        kind: 'highlight',
+        anchor: draft.anchor,
+      }));
+    });
+    await waitFor(() => {
+      expect(getPendingIntent(source.id, assetA.id, 3)).toBeNull();
+    });
+    expect(
+      await repositories.annotations.getBySourceAssetAndPage(source.id, assetA.id, 3),
+    ).toHaveLength(1);
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    // The opposite direction still holds: a fresh draft IS cleared by a
+    // collapsed selection change.
+    act(() => {
+      putPendingIntent({
+        sourceId: source.id,
+        assetId: assetA.id,
+        page: 3,
+        kind: 'highlight',
+        anchor: draft.anchor,
+        status: 'draft',
+      });
+    });
+    act(() => {
+      window.getSelection()?.removeAllRanges();
+      document.dispatchEvent(new Event('selectionchange'));
+    });
+    expect(getPendingIntent(source.id, assetA.id, 3)).toBeNull();
   });
 
   it('surfaces a typed error message on a failed create instead of a generic failure', async () => {

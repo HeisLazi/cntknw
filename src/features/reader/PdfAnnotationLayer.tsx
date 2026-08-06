@@ -15,7 +15,6 @@ import { CntknwStorageError, RevisionConflictError } from '@data/errors';
 import { expectedRevision } from '@data/repositories/concurrency';
 import type {
   Annotation,
-  AnnotationAnchor,
   EntityId,
 } from '@domain/index';
 import {
@@ -32,6 +31,14 @@ import {
   captureTextSelection,
   rectFromRegionDrag,
 } from './annotationCapture';
+import { splitAnnotationsByLegacyGeometry } from './legacyGeometry';
+import {
+  clearPendingIntent,
+  getPendingIntent,
+  putPendingIntent,
+  usePendingIntent,
+  type PendingAnnotationIntent,
+} from './pendingAnnotationIntent';
 import { usePageAnnotations } from './usePageAnnotations';
 
 const STYLE_PRESETS = [
@@ -41,13 +48,6 @@ const STYLE_PRESETS = [
   { label: 'Clay', value: 'var(--cn-palette-danger-300)' },
   { label: 'Graphite', value: 'var(--cn-palette-ink-400)' },
 ] as const;
-
-interface PendingCreate {
-  kind: 'highlight' | 'region';
-  anchor: AnnotationAnchor;
-  position: ViewportPoint;
-  failed: boolean;
-}
 
 export interface PdfAnnotationLayerProps {
   sourceId: EntityId;
@@ -164,10 +164,8 @@ export function PdfAnnotationLayer({
     pageNumber,
   );
   const [selectedId, setSelectedId] = useState<EntityId | null>(null);
-  const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null);
-  const [savingCreate, setSavingCreate] = useState(false);
+  const pending = usePendingIntent(sourceId, assetId, pageNumber);
   const [notice, setNotice] = useState<string | null>(null);
-  const [createError, setCreateError] = useState<string | null>(null);
   const [crossPageNotice, setCrossPageNotice] = useState(false);
   const [dragStart, setDragStart] = useState<ViewportPoint | null>(null);
   const [dragCurrent, setDragCurrent] = useState<ViewportPoint | null>(null);
@@ -183,9 +181,16 @@ export function PdfAnnotationLayer({
     [],
   );
 
+  const { positioned, fallback } = useMemo(
+    () => splitAnnotationsByLegacyGeometry(annotations),
+    [annotations],
+  );
+  const saving = pending?.status === 'saving';
+  const failed = pending?.status === 'failed';
+
   const selected = useMemo(
-    () => annotations.find((annotation) => annotation.id === selectedId) ?? null,
-    [annotations, selectedId],
+    () => positioned.find((annotation) => annotation.id === selectedId) ?? null,
+    [positioned, selectedId],
   );
 
   const focusSource = useCallback(() => {
@@ -204,8 +209,8 @@ export function PdfAnnotationLayer({
   }, [deleteRequested, selectedId]);
 
   const savePending = useCallback(
-    async (intent: PendingCreate) => {
-      setSavingCreate(true);
+    async (intent: PendingAnnotationIntent) => {
+      putPendingIntent({ ...intent, status: 'saving', errorMessage: undefined });
       setNotice(null);
       try {
         const saved = await createSourceAnnotation(repositories, {
@@ -216,22 +221,19 @@ export function PdfAnnotationLayer({
           anchor: intent.anchor,
         });
         await reload();
+        clearPendingIntent(sourceId, assetId, pageNumber);
         if (!mounted.current) return;
-        setPendingCreate(null);
-        setCreateError(null);
         setSelectedId(saved.id);
-        setSavingCreate(false);
         window.getSelection()?.removeAllRanges();
         requestAnimationFrame(() => annotationRefs.current.get(saved.id)?.focus());
       } catch (cause) {
-        if (!mounted.current) return;
-        setCreateError(
-          cause instanceof CntknwStorageError
+        putPendingIntent({
+          ...intent,
+          status: 'failed',
+          errorMessage: cause instanceof CntknwStorageError
             ? cause.userMessage
             : 'Could not save the annotation. Your selection is kept — try again.',
-        );
-        setPendingCreate({ ...intent, failed: true });
-        setSavingCreate(false);
+        });
       }
     },
     [assetId, pageNumber, reload, repositories, sourceId],
@@ -239,27 +241,37 @@ export function PdfAnnotationLayer({
 
   useEffect(() => {
     const handleSelectionChange = () => {
-      if (regionActive || savingCreate || pendingCreate?.failed) return;
+      const current = getPendingIntent(sourceId, assetId, pageNumber);
+      if (current?.status === 'saving' || current?.status === 'failed') return;
       const selection = window.getSelection();
       if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-        setPendingCreate(null);
-        setCreateError(null);
+        if (current?.status === 'draft') {
+          clearPendingIntent(sourceId, assetId, pageNumber);
+        }
         setCrossPageNotice(false);
         return;
       }
 
       const anchorPage = pageForNode(selection.anchorNode);
-      if (!anchorPage || anchorPage !== pageRef.current) return;
+      if (!anchorPage || anchorPage !== pageRef.current) {
+        if (current?.status === 'draft') {
+          clearPendingIntent(sourceId, assetId, pageNumber);
+        }
+        return;
+      }
       const focusPage = pageForNode(selection.focusNode);
       if (
         focusPage !== anchorPage ||
         !isTextLayerNode(selection.anchorNode) ||
         !isTextLayerNode(selection.focusNode)
       ) {
-        setPendingCreate(null);
+        if (current?.status === 'draft') {
+          clearPendingIntent(sourceId, assetId, pageNumber);
+        }
         setCrossPageNotice(true);
         return;
       }
+      if (regionActive) return;
 
       const pageRect = anchorPage.getBoundingClientRect();
       const rangeRects = [...selection.getRangeAt(0).getClientRects()];
@@ -272,25 +284,30 @@ export function PdfAnnotationLayer({
           pageBox,
         });
         if (!anchor) {
-          setPendingCreate(null);
+          if (current?.status === 'draft') {
+            clearPendingIntent(sourceId, assetId, pageNumber);
+          }
           return;
         }
-        const projected = canonicalRectToViewport(anchor.boundingRect, viewport, pageBox);
         setCrossPageNotice(false);
-        setPendingCreate({
+        putPendingIntent({
+          sourceId,
+          assetId,
+          page: pageNumber,
           kind: 'highlight',
           anchor,
-          position: { x: projected.x, y: projected.y + projected.height },
-          failed: false,
+          status: 'draft',
         });
       } catch {
-        setPendingCreate(null);
+        if (current?.status === 'draft') {
+          clearPendingIntent(sourceId, assetId, pageNumber);
+        }
       }
     };
 
     document.addEventListener('selectionchange', handleSelectionChange);
     return () => document.removeEventListener('selectionchange', handleSelectionChange);
-  }, [pageBox, pageRef, pendingCreate?.failed, regionActive, savingCreate, viewport]);
+  }, [assetId, pageBox, pageNumber, pageRef, regionActive, sourceId, viewport]);
 
   const localPoint = (event: ReactPointerEvent<HTMLDivElement>): ViewportPoint => {
     const rect = pageRef.current?.getBoundingClientRect();
@@ -304,11 +321,14 @@ export function PdfAnnotationLayer({
 
   const handleRegionStart = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!regionActive || !event.isPrimary || event.target !== event.currentTarget) return;
+    const current = getPendingIntent(sourceId, assetId, pageNumber);
+    if (current?.status === 'saving' || current?.status === 'failed') return;
     event.currentTarget.focus({ preventScroll: true });
     event.currentTarget.setPointerCapture(event.pointerId);
     const point = localPoint(event);
-    setPendingCreate(null);
-    setCreateError(null);
+    if (current?.status === 'draft') {
+      clearPendingIntent(sourceId, assetId, pageNumber);
+    }
     setNotice(null);
     setDragStart(point);
     setDragCurrent(point);
@@ -325,14 +345,15 @@ export function PdfAnnotationLayer({
     setDragCurrent(null);
     const anchor = captureRegionAnchor(dragStart, end, viewport, pageBox);
     if (!anchor) return;
-    const rect = canonicalRectToViewport(anchor.rect, viewport, pageBox);
-    const intent: PendingCreate = {
+    const intent: PendingAnnotationIntent = {
+      sourceId,
+      assetId,
+      page: pageNumber,
       kind: 'region',
       anchor,
-      position: { x: rect.x, y: rect.y + rect.height },
-      failed: false,
+      status: 'saving',
     };
-    setPendingCreate(intent);
+    putPendingIntent(intent);
     void savePending(intent);
   };
 
@@ -395,9 +416,18 @@ export function PdfAnnotationLayer({
   const previewRect =
     dragStart && dragCurrent ? rectFromRegionDrag(dragStart, dragCurrent, 0) : null;
   const failedRegionRect =
-    pendingCreate?.failed && pendingCreate.anchor.kind === 'area'
-      ? canonicalRectToViewport(pendingCreate.anchor.rect, viewport, pageBox)
+    failed && pending?.anchor.kind === 'area'
+      ? canonicalRectToViewport(pending.anchor.rect, viewport, pageBox)
       : null;
+  const pendingRect =
+    pending?.anchor.kind === 'text'
+      ? canonicalRectToViewport(pending.anchor.boundingRect, viewport, pageBox)
+      : pending?.anchor.kind === 'area'
+        ? canonicalRectToViewport(pending.anchor.rect, viewport, pageBox)
+        : null;
+  const pendingPosition = pendingRect
+    ? { x: pendingRect.x, y: pendingRect.y + pendingRect.height }
+    : null;
 
   return (
     <div
@@ -428,7 +458,7 @@ export function PdfAnnotationLayer({
         }
       }}
     >
-      {annotations.map((annotation) => {
+      {positioned.map((annotation) => {
         const name = annotationAccessibleName(annotation);
         const color = annotationColor(annotation);
         const open = () => setSelectedId(annotation.id);
@@ -557,20 +587,20 @@ export function PdfAnnotationLayer({
         />
       ) : null}
 
-      {pendingCreate ? (
+      {pending && pendingPosition ? (
         <div
           className="cn-annotation-create"
-          style={{ left: pendingCreate.position.x, top: pendingCreate.position.y }}
-          role={pendingCreate.failed ? 'alert' : undefined}
+          style={{ left: pendingPosition.x, top: pendingPosition.y }}
+          role={failed ? 'alert' : undefined}
         >
-          {pendingCreate.failed ? (
+          {failed ? (
             <>
-              <span>{createError ?? 'Not saved'}</span>
+              <span>{pending.errorMessage ?? 'Not saved'}</span>
               <Button
                 size="sm"
                 variant="primary"
                 onPointerDown={(event) => event.preventDefault()}
-                onClick={() => void savePending(pendingCreate)}
+                onClick={() => void savePending(pending)}
               >
                 Retry
               </Button>
@@ -578,22 +608,21 @@ export function PdfAnnotationLayer({
                 size="sm"
                 variant="quiet"
                 onClick={() => {
-                  setPendingCreate(null);
-                  setCreateError(null);
+                  clearPendingIntent(sourceId, assetId, pageNumber);
                   window.getSelection()?.removeAllRanges();
                 }}
               >
                 Dismiss
               </Button>
             </>
-          ) : pendingCreate.kind === 'highlight' ? (
+          ) : pending.kind === 'highlight' ? (
             <Button
               size="sm"
               variant="primary"
-              loading={savingCreate}
+              loading={saving}
               loadingLabel="Saving…"
               onPointerDown={(event) => event.preventDefault()}
-              onClick={() => void savePending(pendingCreate)}
+              onClick={() => void savePending(pending)}
             >
               Highlight
             </Button>
@@ -646,6 +675,13 @@ export function PdfAnnotationLayer({
         <span className="cn-visually-hidden" role="status">
           Loading annotations…
         </span>
+      ) : null}
+      {fallback.length > 0 ? (
+        <div className="cn-annotation-notice" role="status" aria-live="polite">
+          {fallback.length === 1
+            ? 'A legacy annotation on this page could not be positioned precisely.'
+            : `${fallback.length} legacy annotations on this page could not be positioned precisely.`}
+        </div>
       ) : null}
       {crossPageNotice ? (
         <div className="cn-annotation-notice" role="status" aria-live="polite">
