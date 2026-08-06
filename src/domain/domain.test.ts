@@ -238,16 +238,21 @@ describe('JournalBlockSchema', () => {
 // ─── Annotation ──────────────────────────────────────────────────
 
 describe('AnnotationSchema', () => {
-  it('accepts valid annotation with legacy (non-normalized) geometry', () => {
+  it('accepts a canonical multi-rectangle text anchor', () => {
     const result = AnnotationSchema.safeParse({
       ...baseFields(),
       sourceId: id(),
       assetId: id(),
       page: 1,
       kind: 'highlight',
-      geometry: {
-        normalized: false,
-        data: { rects: [{ x: 100, y: 200, w: 300, h: 20 }] },
+      anchor: {
+        kind: 'text',
+        quote: 'The selected passage',
+        rects: [
+          { x: 0.1, y: 0.2, width: 0.4, height: 0.04 },
+          { x: 0.1, y: 0.25, width: 0.3, height: 0.04 },
+        ],
+        boundingRect: { x: 0.1, y: 0.2, width: 0.4, height: 0.09 },
       },
       style: { color: '#ffff00', opacity: 0.3 },
     });

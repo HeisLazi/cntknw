@@ -1,6 +1,6 @@
 # CNTKNW Documentation Index
 
-**Updated:** 26 July 2026
+**Updated:** 6 August 2026
 **Status:** Supplemental, unversioned. Maintained continuously.
 
 `CNTKNW_READ_ME_FIRST_v0.2.md` remains the canonical entry point and is unchanged — it is covered by `CNTKNW_CHECKSUMS_v0.2.sha256` and still verifies. This index supplements it with everything approved *since* v0.2 was sealed.
@@ -25,23 +25,27 @@
 5. `CNTKNW_ADR_0001_Phase_0B_Foundations.md` — thirteen decisions. **Supersedes Handoff §19, §8, §9.1, §9.2.**
 6. `CNTKNW_ADR_0002_Phase_0C_Persistence.md` — ten decisions. **§4 is superseded by ADR-0003; the rest stands.**
 7. `CNTKNW_ADR_0003_Mandatory_Concurrency_Guards.md` — **supersedes ADR-0002 §4.** Read it before writing any repository call.
-8. `CNTKNW_Amendments_Register_v0.2.md` — every change to the v0.2 line, with evidence.
+8. `CNTKNW_ADR_0004_Editor_and_Block_Content.md` — explicit journal conflict resolution.
+9. `CNTKNW_ADR_0005_Durability_of_In_Flight_State.md` — ProseMirror and durable block-editing boundary.
+10. `CNTKNW_ADR_0006_The_Folio_Margin.md` — continuous canonical journal layout and provenance.
+11. `CNTKNW_ADR_0007_Canonical_Annotation_Geometry.md` — asset-bound, rotation-aware canonical annotation anchors.
+12. `CNTKNW_Amendments_Register_v0.2.md` — every change to the v0.2 line, with evidence.
 
 ### Current state
 
-9. `CNTKNW_Current_Implementation_Status.md` — what exists, what is next, which phase applies.
-10. `CNTKNW_Phase_0D_Checkpoint_Report.md` — most recent completed phase. Covers the Phase 0C closure as well as Phase 0D.
-11. `CNTKNW_Phase_0C_Checkpoint_Report.md` — revised 26 July; read §0 first, which lists what the first revision got wrong.
-12. `CNTKNW_Phase_0B_Checkpoint_Report.md` — the phase before those.
+13. `CNTKNW_Current_Implementation_Status.md` — what exists, what is next, which phase applies.
+14. `CNTKNW_Phase_0D_Checkpoint_Report.md` — most recent completed phase. Covers the Phase 0C closure as well as Phase 0D.
+15. `CNTKNW_Phase_0C_Checkpoint_Report.md` — revised 26 July; read §0 first, which lists what the first revision got wrong.
+16. `CNTKNW_Phase_0B_Checkpoint_Report.md` — the phase before those.
 
 ### Supplemental feature specifications
 
-13. `CNTKNW_Atlas_System_Design_Document_v0.1.md` — **approved.** Owner-authored. Governs Atlas work. Primitives reconciled against it in ADR-0001 §13.
-14. `CNTKNW_Read_Aloud_System_Design_Document_v0.1.md` — **approved** 25 July 2026. See §3.
+17. `CNTKNW_Atlas_System_Design_Document_v0.1.md` — **approved.** Owner-authored. Governs Atlas work. Primitives reconciled against it in ADR-0001 §13.
+18. `CNTKNW_Read_Aloud_System_Design_Document_v0.1.md` — **approved** 25 July 2026. See §3.
 
 ### Working history
 
-15. `prompts/` — prompts and briefs issued to agents, in date order. Archival, never normative.
+19. `prompts/` — prompts and briefs issued to agents, in date order. Archival, never normative.
 
 ---
 
@@ -56,8 +60,9 @@ Handoff §19 places shell and routing at Phase 0B and persistence at 0C. **That 
 | 0C | **Persistence.** Dexie adapter, schema versions, migrations, v1 readers. | Complete and verified, contract and real browser |
 | 0D | **Shell, routing, providers, design tokens, UI primitives.** | Complete and verified |
 | 0E | **Editor spike, then the journal vertical slice** | Complete and verified (ADR-0004, ADR-0005) |
-| 1 | **Reliable PDF core** — import, render, exact resume | Implemented, but reliability hardening still open (Findings 11–15) |
+| 1 | **Reliable PDF core** — import, render, exact resume | Complete and verified through PDF Core Reliability Milestone 3B (Findings 11–15 resolved) |
 | 2 | **Infinite Journal** | Complete and verified (Folio margin ADR-0006 landed) |
+| 3 | **Annotations** | Phase 3A canonical geometry architecture implemented; production annotation UI not yet implemented |
 
 Shell, routing, design tokens and UI primitives moved from 0B to **0D**. Domain and persistence, previously both at 0C, split into **0B** (contracts) and **0C** (storage).
 

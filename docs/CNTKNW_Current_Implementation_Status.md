@@ -1,8 +1,8 @@
 # CNTKNW Current Implementation Status
 
-**Updated:** 06 August 2026 (Milestone 3B PDF Core Reliability)
+**Updated:** 06 August 2026 (Phase 3A Annotation Geometry Architecture)
 **Repository:** `HeisLazi/cntknw`
-**Git baseline:** `51c4861`
+**Git baseline:** `8197d36`; Phase 3A changes are intentionally uncommitted
 **Status:** Living document. Update at every phase boundary.
 
 Read `CNTKNW_Documentation_Index.md` first for the read order and the phase sequence in force.
@@ -23,8 +23,18 @@ exactly three primary destinations, the shared Study Workspace, a design-token
 system that is the styling source of truth, and nineteen accessible UI
 primitives. 
 
-The Infinite Journal feature (Phase 2) supports block editing, crash recovery, concurrent re-ordering,
-robust block kind transformation, and explicit, failure-safe conflict resolution. Milestones 3A and 3B now harden the PDF reader with bounded continuous scrolling, viewport-truth navigation, exact resume coverage, honest outline failure handling, reliable search semantics, and evidence-based import duplicate-read reduction.
+The Infinite Journal feature (Phase 2) supports block editing, crash recovery,
+concurrent re-ordering, robust block kind transformation, and explicit,
+failure-safe conflict resolution. The PDF reader has bounded continuous
+scrolling, viewport-truth navigation, exact resume coverage, honest outline
+failure handling, reliable search semantics, and evidence-based import
+duplicate-read reduction.
+
+Phase 3A now establishes asset-bound, rotation-aware canonical PDF annotation
+geometry, transactional schema-v2 migration, and a DOM-free coordinate
+projection library. A test-only real-reader probe proves zoom, virtualization
+and reload persistence. **Production annotation selection, rendering and
+editing UI are not yet implemented; Phase 3 is not complete.**
 
 **Phases 0A–0E are complete and verified.** 
 
@@ -41,6 +51,7 @@ robust block kind transformation, and explicit, failure-safe conflict resolution
 | 0E | Editor spike, then journal vertical slice | **Complete and verified** (ADR-0004, ADR-0005) |
 | 1 | Reliable PDF core — import, render, exact resume | **Milestone 3B complete and verified** (Findings 11–15 resolved; annotation UI remains out of scope) |
 | 2 | Infinite Journal | **Complete and verified** (Folio margin ADR-0006 landed) |
+| 3 | Annotations | **Phase 3A geometry architecture complete in the working tree**; production UI not yet implemented |
 
 Phase order per ADR-0001 §1, which supersedes Handoff §19.
 
@@ -58,7 +69,7 @@ Zod schemas are authoritative; TypeScript types are inferred. Types describing d
 | `sources/` | `Source`, `BookDetails`, `ArtworkDetails`. **No reading position** — that lives on `WorkspaceState` |
 | `assets/` | `Asset` (immutable, no revision), `SourceAsset` (pure join record) |
 | `journals/` | `Journal`, `JournalBlock` with `deletedAt` and `epistemicClaimId`, 14-variant `BlockContent` discriminated union |
-| `annotations/` | `Annotation` addressed by source + asset + page |
+| `annotations/` | `Annotation` addressed by source + exact asset + 1-based page; strict `text`/`area`/`point`/`ink` anchor union in normalized unrotated page space; vector ink and linked journal block IDs |
 | `connections/` | `Connection`, extended `Reference` union, `referenceKey`, relationship vocabulary |
 | `concepts/` | `Concept`, `GlossaryEntry` incl. `preferredPronunciation` |
 | `sessions/` | `StudySession` with `activityMode`, `listenedSeconds`, `listenedLocations` |
@@ -78,7 +89,11 @@ ADR-0002 §4).
 
 **Two adapters, contract-identical:** `adapters/memory/` (snapshot rollback) and `adapters/indexeddb/` (Dexie, real transactions). `db/schemaVersions.ts` is the schema source of truth; `db/storageRecords.ts` maps and validates the domain/storage boundary; `errors.ts` carries typed storage errors.
 
-Database: `cntknw`, schema version 1, 16 stores. Deliberately separate from v1 (ADR-0002 §1).
+Database: `cntknw`, schema version 2, 16 stores. Version 2 transactionally
+folds opaque v1 annotation geometry/text anchors into canonical ADR-0007
+anchors, explicitly marking converted versus fallback geometry. It reuses the
+existing annotations store and remains deliberately separate from legacy v1
+(ADR-0002 §1).
 
 ### Application — `src/application/`
 
@@ -87,6 +102,10 @@ Contains use-cases that orchestrate repositories. Examples include: `importPdf`,
 ### Library — `src/lib/`
 
 `id.ts` (single generation point), `rank.ts` (base-62 fractional indexing).
+`geometry/` is the pure, deterministic conversion boundary between page-local
+CSS coordinates and canonical normalized annotation coordinates. It accepts a
+structural PDF viewport and plain page box and imports neither the DOM nor
+`pdfjs-dist`.
 
 ### Composition and routing — `src/app/`
 
@@ -122,7 +141,10 @@ plus the route-level loading, error, missing-source and not-found states.
 ### Documented decisions
 
 ADR-0001 (Phase 0B foundations, 13 decisions), ADR-0002 (Phase 0C persistence,
-10 decisions), ADR-0003 (mandatory concurrency guards; supersedes ADR-0002 §4), ADR-0004 (explicit journal conflict resolution), ADR-0005 (ProseMirror for block-level rich text editing), ADR-0006 (Folio margin reading layout).
+10 decisions), ADR-0003 (mandatory concurrency guards; supersedes ADR-0002
+§4), ADR-0004 (explicit journal conflict resolution), ADR-0005 (ProseMirror
+for block-level rich text editing), ADR-0006 (Folio margin reading layout),
+ADR-0007 (canonical annotation geometry and asset identity).
 
 ### Legacy — `src/legacy/v1/`
 
@@ -149,7 +171,9 @@ That is checked in five tests, not asserted in prose — the earlier phrase
 - **`applyMigration`.** Dry run only — deliberately no destructive path exists.
 - **Soft deletion beyond blocks and claims.** Every other entity hard-deletes; NFR-008 partial.
 - **`appState` migration.** Needs a settings store.
-- **Annotation UI, editor, dictionary, cross-source search, maps.**
+- **Annotation UX.** Canonical geometry exists, but selection, toolbar,
+  semantic highlight rendering, keyboard navigation and editing UI do not.
+- **Dictionary, cross-source search, maps.**
 - **Atlas entities.** Primitives only.
 - **Read Aloud playback, TTS, OCR.**
 - **3D, chess, AI, sync.**
@@ -157,27 +181,32 @@ That is checked in five tests, not asserted in prose — the earlier phrase
 
 ---
 
-## 5. Verification, last run 06 August 2026
+## 5. Verification, Phase 3A local run 06 August 2026
 
-Node/npm and platform are supplied by the current Linux development environment; the required full gate is recorded after the Milestone 3B verification run.
+Node/npm and platform are supplied by the current Linux development
+environment; these are the implementer's local Phase 3A results. Hermes will
+independently re-run the final gate.
 
 ```text
 npm run typecheck     PASS   0 errors      (src/ and e2e/)
 npm run lint          PASS   0 errors, 0 warnings
-npm run test          PASS   27 files, 538 passed, 1 skipped
-npm run test:e2e      PASS   Chromium, 87 passed, 0 skipped
+npm run test          PASS   30 files, 559 passed, 1 skipped
+npm run test:e2e      PASS   Chromium, 90 passed, 0 skipped
 npm run build         PASS   
 npm audit --omit=dev  PASS   0 vulnerabilities
 ```
 
 Contract suite is defined and run against both adapters — memory and indexeddb, identical cases.
 
-Browser suite: one Chromium project, 87 tests. Persistence — BV-001 reload, BV-002 transaction rollback, BV-003
+Browser suite: one Chromium project, 90 tests. Persistence — BV-001 reload, BV-002 transaction rollback, BV-003
 revision conflict, BV-004 nested transaction, BV-005 database separation;
 validated by a negative control, since neutering `DexieUnitOfWork.run` fails
 BV-002 and BV-004. Shell — routing and refresh on five routes, exactly three
 primary links, keyboard focus, reduced motion, responsive navigation at 1280px
-and 375px, resizable text. Journal — acceptance tests for block editing, saving, conflict resolution, restoring, and exact resume.
+and 375px, resizable text. Journal — acceptance tests for block editing,
+saving, conflict resolution, restoring, and exact resume. Phase 3A adds three
+real-reader geometry proofs for zoom alignment, page unmount/remount
+independence, and annotation repository persistence across reload.
 
 **Not run:** WebKit and Firefox browser projects; axe or any automated
 accessibility rule engine; WCAG contrast measurement; visual regression.
@@ -201,7 +230,11 @@ accessibility rule engine; WCAG contrast measurement; visual regression.
 
 ## 7. Next step
 
-**Phase 1 PDF reader reliability hardening is complete for Milestone 3B.** Findings 13 and 15 are resolved with focused unit/probe coverage and a real-document Playwright assertion. Annotation UI is the next bounded milestone and is not included in this implementation.
+**Phase 3A Annotation Geometry Architecture is complete in the current
+working tree.** ADR-0007, the canonical domain model, schema-v2 migration,
+pure conversion boundary and real-reader proof are implemented. Production
+annotation UX remains the next bounded work and must not be inferred from this
+architecture milestone.
 
 See `CNTKNW_Phase_0D_Checkpoint_Report.md`,
 `CNTKNW_Phase_0C_Checkpoint_Report.md` and

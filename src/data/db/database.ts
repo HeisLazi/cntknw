@@ -8,7 +8,7 @@
  * is no apply path in this phase, so importing it cannot trigger a
  * destructive migration (ADR-0002 §7).
  */
-import Dexie, { type Table } from 'dexie';
+import Dexie, { type Table, type Transaction } from 'dexie';
 import {
   V2_DATABASE_NAME,
   SCHEMA_VERSIONS,
@@ -36,6 +36,26 @@ import type {
   StoredMeta,
 } from './storageRecords';
 import { classifyStorageFailure } from '../errors';
+import { migrateAnnotationV1ToV2 } from './annotationMigration';
+
+type Upgrade = (transaction: Transaction) => Promise<void>;
+
+const UPGRADES: Readonly<Partial<Record<number, Upgrade>>> = {
+  2: async (transaction) => {
+    await transaction
+      .table(STORES.annotations)
+      .toCollection()
+      .modify((record: Record<string, unknown>) => {
+        const migrated = migrateAnnotationV1ToV2(record);
+        for (const key of Object.keys(record)) delete record[key];
+        Object.assign(record, migrated);
+      });
+    await transaction.table(STORES.meta).put({
+      key: META_KEYS.schemaVersion,
+      value: 2,
+    });
+  },
+};
 
 export class CntknwDatabase extends Dexie {
   declare sources: Table<StoredSource, string>;
@@ -62,7 +82,11 @@ export class CntknwDatabase extends Dexie {
     // created today and one upgraded from an older version end up
     // structurally identical.
     for (const declared of SCHEMA_VERSIONS) {
-      this.version(declared.version).stores(dexieStores(declared.version));
+      const version = this.version(declared.version).stores(
+        dexieStores(declared.version),
+      );
+      const upgrade = UPGRADES[declared.version];
+      if (upgrade) version.upgrade(upgrade);
     }
 
     this.on('populate', () => {

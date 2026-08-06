@@ -41,6 +41,7 @@ import {
   JournalBlockSchema,
   UpdateBlockInputSchema,
   CreateAssetInputSchema,
+  AnnotationSchema,
   CreateAnnotationInputSchema,
   CreateConnectionInputSchema,
   CreateConceptInputSchema,
@@ -559,14 +560,14 @@ export class DexieAnnotationRepository implements AnnotationRepository {
       if (!record) throw new RecordNotFoundError('Annotation', id);
       const existing = annotationFromStorage(record);
       assertRevision('Annotation', id, existing.revision, guard);
-      const updated: Annotation = {
+      const updated = AnnotationSchema.parse({
         ...existing,
         ...updates,
         id: existing.id,
         createdAt: existing.createdAt,
         updatedAt: now(),
         revision: existing.revision + 1,
-      };
+      });
       await this.db.annotations.put(annotationToStorage(updated));
       return updated;
     });

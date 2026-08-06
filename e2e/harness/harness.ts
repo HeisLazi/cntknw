@@ -34,7 +34,12 @@ import { createPageLinkedBlock } from '@application/create-block';
 import { resumeSource } from '@application/resume-source';
 import { readV1Snapshot, v1DatabaseExists } from '../../src/legacy/v1/readers';
 import { V1_DATABASE_NAME } from '@data/db/schemaVersions';
-import type { EntityId } from '@domain/index';
+import type {
+  Annotation,
+  AnnotationAnchor,
+  AnnotationKind,
+  EntityId,
+} from '@domain/index';
 
 type Repositories = ReturnType<typeof createIndexedDbRepositories>;
 
@@ -99,8 +104,10 @@ async function attempt<T>(operation: () => Promise<T>): Promise<HarnessResult<T>
 
 // ─── Fixtures ────────────────────────────────────────────────────
 
-function pdfFile(name: string): File {
-  const bytes = new TextEncoder().encode('%PDF-1.7\nharness fixture body');
+function pdfFile(name: string, suppliedBytes?: readonly number[]): File {
+  const bytes = suppliedBytes
+    ? new Uint8Array(suppliedBytes)
+    : new TextEncoder().encode('%PDF-1.7\nharness fixture body');
   return new File([bytes], name, { type: 'application/pdf' });
 }
 
@@ -148,6 +155,16 @@ export interface DatabaseListing {
   version: number;
 }
 
+function importedIds(result: Awaited<ReturnType<typeof importPdf>>): ImportedIds {
+  return {
+    sourceId: result.source.id,
+    assetId: result.asset.id,
+    journalId: result.journal.id,
+    workspaceStateId: result.workspaceState.id,
+    workspaceRevision: result.workspaceState.revision,
+  };
+}
+
 const api = {
   /** Build the composition against an isolated v2 database. */
   async open(databaseName: string): Promise<void> {
@@ -174,13 +191,37 @@ const api = {
       file: pdfFile(`${title}.pdf`),
       metadata: { title, author: 'Frantz Fanon', pageCount: 251 },
     });
-    return {
-      sourceId: result.source.id,
-      assetId: result.asset.id,
-      journalId: result.journal.id,
-      workspaceStateId: result.workspaceState.id,
-      workspaceRevision: result.workspaceState.revision,
-    };
+    return importedIds(result);
+  },
+
+  /** Test-only real-byte import through the production application use case. */
+  async importPdfSource(
+    title: string,
+    bytes: readonly number[],
+    pageCount: number,
+  ): Promise<ImportedIds> {
+    const { repos } = active();
+    const result = await importPdf(repos, {
+      file: pdfFile(`${title}.pdf`, bytes),
+      metadata: { title, pageCount },
+    });
+    return importedIds(result);
+  },
+
+  /** Phase 3A proof: write only through the real AnnotationRepository. */
+  async createAnnotation(input: {
+    sourceId: EntityId;
+    assetId: EntityId;
+    page: number;
+    kind: AnnotationKind;
+    anchor: AnnotationAnchor;
+  }): Promise<Annotation> {
+    return active().repos.annotations.create(input);
+  },
+
+  /** Phase 3A proof: read through validation, never from the Dexie table. */
+  async getAnnotation(annotationId: EntityId): Promise<Annotation | null> {
+    return active().repos.annotations.getById(annotationId);
   },
 
   /** BV-001 — a page-linked block, so INV-004 context survives too. */

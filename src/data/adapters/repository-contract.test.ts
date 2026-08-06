@@ -412,7 +412,12 @@ for (const adapter of adapters) {
             assetId,
             page,
             kind: 'highlight',
-            geometry: { normalized: true, data: {} },
+            anchor: {
+              kind: 'text',
+              quote: 'passage',
+              rects: [{ x: 0.1, y: 0.2, width: 0.3, height: 0.05 }],
+              boundingRect: { x: 0.1, y: 0.2, width: 0.3, height: 0.05 },
+            },
           });
         }
         expect(await repos.annotations.getBySourceAndPage(sourceId, 1)).toHaveLength(2);
@@ -427,7 +432,12 @@ for (const adapter of adapters) {
             assetId: id(),
             page: 0,
             kind: 'highlight',
-            geometry: { normalized: true, data: {} },
+            anchor: {
+              kind: 'text',
+              quote: 'passage',
+              rects: [{ x: 0.1, y: 0.2, width: 0.3, height: 0.05 }],
+              boundingRect: { x: 0.1, y: 0.2, width: 0.3, height: 0.05 },
+            },
           }),
         ).rejects.toThrow();
       });
@@ -1046,7 +1056,12 @@ for (const adapter of adapters) {
           assetId: id(),
           page: 1,
           kind: 'highlight',
-          geometry: { normalized: true, data: {} },
+          anchor: {
+            kind: 'text',
+            quote: 'passage',
+            rects: [{ x: 0.1, y: 0.2, width: 0.3, height: 0.05 }],
+            boundingRect: { x: 0.1, y: 0.2, width: 0.3, height: 0.05 },
+          },
         });
         await repos.annotations.update(
           annotation.id,

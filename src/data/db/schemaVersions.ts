@@ -26,7 +26,7 @@ export const V1_DATABASE_NAME = 'philosophy-journal';
 export const V1_DATABASE_VERSION = 1;
 
 /** Current v2 schema version. Bump only alongside a migration entry. */
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 
 // ─── Store names ─────────────────────────────────────────────────
 
@@ -81,19 +81,8 @@ export interface SchemaVersion {
  *   `*field`    multi-entry index (array members indexed separately)
  *   `[a+b]`     compound index
  */
-export const SCHEMA_VERSIONS: readonly SchemaVersion[] = [
-  {
-    version: 1,
-    introduced: '2026-07-25',
-    migration:
-      'Initial v2 schema. Creates a new database; touches no v1 data. ' +
-      'Nothing is migrated automatically — see the Phase 0C dry run.',
-    recovery:
-      'The database is new and empty on creation, so failure loses nothing. ' +
-      'Delete the "cntknw" database and reopen. The v1 database ' +
-      '"philosophy-journal" is never modified and remains intact.',
-    stores: {
-      [STORES.sources]: {
+const CNTKNW_STORES: Readonly<Record<string, StoreDefinition>> = {
+  [STORES.sources]: {
         indexes: 'id, type, archivedAt, updatedAt',
         purpose:
           'Books and artworks. `archivedAt` indexed so the active-source ' +
@@ -144,8 +133,8 @@ export const SCHEMA_VERSIONS: readonly SchemaVersion[] = [
       [STORES.annotations]: {
         indexes: 'id, sourceId, assetId, [sourceId+page]',
         purpose:
-          'Addressed by source, asset and page. Never by book alone — ' +
-          'that was the v1 defect (handoff §5.3).',
+          'Canonical source markup addressed by source, exact asset and ' +
+          '1-based page, with ADR-0007 normalized anchor geometry.',
       },
       [STORES.connections]: {
         indexes: 'id, fromKey, toKey, relationship',
@@ -186,13 +175,39 @@ export const SCHEMA_VERSIONS: readonly SchemaVersion[] = [
           'Resume state, keyed by source — one per source. Canonical ' +
           'holder of visual, listening and furthest positions.',
       },
-      [STORES.meta]: {
+  [STORES.meta]: {
         indexes: 'key',
         purpose:
           'Database-level bookkeeping: schema version, creation time, ' +
           'migration status. Key-value.',
-      },
-    },
+  },
+};
+
+export const SCHEMA_VERSIONS: readonly SchemaVersion[] = [
+  {
+    version: 1,
+    introduced: '2026-07-25',
+    migration:
+      'Initial v2 schema. Creates a new database; touches no v1 data. ' +
+      'Nothing is migrated automatically — see the Phase 0C dry run.',
+    recovery:
+      'The database is new and empty on creation, so failure loses nothing. ' +
+      'Delete the "cntknw" database and reopen. The v1 database ' +
+      '"philosophy-journal" is never modified and remains intact.',
+    stores: CNTKNW_STORES,
+  },
+  {
+    version: 2,
+    introduced: '2026-08-06',
+    migration:
+      'Transactionally converts every annotation from opaque geometry plus ' +
+      'optional textAnchor fields to the ADR-0007 canonical anchor union. ' +
+      'The annotations store and all indexes are reused.',
+    recovery:
+      'Close other tabs and reopen so Dexie can retry the atomic upgrade. ' +
+      'If recovery is impossible, export or back up the cntknw IndexedDB ' +
+      'before deleting it. Never delete or upgrade philosophy-journal.',
+    stores: CNTKNW_STORES,
   },
 ];
 

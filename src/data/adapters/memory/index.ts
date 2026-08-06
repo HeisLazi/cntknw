@@ -38,6 +38,7 @@ import {
   JournalBlockSchema,
   UpdateBlockInputSchema,
   CreateAssetInputSchema,
+  AnnotationSchema,
   CreateAnnotationInputSchema,
   CreateConnectionInputSchema,
   CreateConceptInputSchema,
@@ -471,14 +472,14 @@ export class MemoryAnnotationRepository implements AnnotationRepository {
     const existing = this.annotations.get(id);
     if (!existing) throw new RecordNotFoundError('Annotation', id);
     assertRevision('Annotation', id, existing.revision, guard);
-    const updated: Annotation = {
+    const updated = AnnotationSchema.parse({
       ...existing,
       ...updates,
       id: existing.id,
       createdAt: existing.createdAt,
       updatedAt: now(),
       revision: existing.revision + 1,
-    };
+    });
     this.annotations.set(id, updated);
     return updated;
   }

@@ -137,3 +137,18 @@ This living audit document tracks the findings and resolutions from the adversar
 - Verified IndexedDB and Memory adapters strictly enforce domain invariants when assembling merged records before commit.
 - Final failure-safe conflict resolution implemented at `9094220`. Retains local truth (draft, edits, conflict UI) safely without discarding it before remote fetching succeeds.
 - Real gate (Typecheck, Lint, Test, E2E, Build) verified as passing. Phase 2 closure achieved.
+
+---
+
+## Phase 3A Annotation Geometry Architecture
+
+**Status**: VERIFIED BY MANAGER AND INDEPENDENT REVIEW — READY TO COMMIT; PRODUCTION ANNOTATION UI NOT YET IMPLEMENTED
+
+ADR-0007 now settles exact asset and 1-based page identity, strict normalized
+unrotated page coordinates, explicit text/area/point/ink anchors, vector ink,
+rotation, multiline selections and asset replacement. The existing annotation
+store advances transactionally to schema version 2; every legacy record is
+converted or retained with an explicit fallback-geometry marker. A pure
+DOM-free conversion library and a test-only real-reader probe verify zoom,
+bounded virtualization and persistence/reload alignment. No production
+annotation UI was added, and no previous finding was reopened.
