@@ -105,7 +105,12 @@ function initialWorkspace(context: ResumedSourceContext): WorkspaceState {
     sourceId: context.source.id,
     activeLocation: location,
     furthestLocation: location,
-    sourceView: { mode: 'continuous', zoom: 1, scrollOffset: 0 },
+    sourceView: {
+      mode: 'continuous',
+      zoom: 1,
+      scrollOffset: 0,
+      annotationTool: 'select',
+    },
     journalView: { scrollOffset: 0 },
     layout: {
       mode: 'split',
@@ -216,12 +221,21 @@ function StudyWorkspace({ context }: { context: ResumedSourceContext }) {
                 <h2 className="cn-lab__heading">Source</h2>
                 <p className="cn-study__reading">{documentError}</p>
               </div>
-            ) : document ? (
+            ) : document && assetId ? (
               <PdfReader
                 document={document}
+                sourceId={context.source.id}
+                assetId={assetId}
                 page={page}
                 zoom={state.sourceView.zoom}
                 scrollOffset={state.sourceView.scrollOffset}
+                annotationTool={state.sourceView.annotationTool}
+                onAnnotationToolChange={(annotationTool) => {
+                  if (annotationTool === state.sourceView.annotationTool) return;
+                  commit({
+                    sourceView: { ...state.sourceView, annotationTool },
+                  });
+                }}
                 onPageChange={setPage}
                 onZoomChange={(zoom) =>
                   // A zoom step is a discrete decision, like a page turn.

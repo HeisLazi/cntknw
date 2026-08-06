@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
 import { IconButton } from '@components/primitives';
+import type { AnnotationTool, EntityId } from '@domain/index';
 import { PdfPage } from './PdfPage';
 import { PdfOutline } from './PdfOutline';
 import { PdfSearch } from './PdfSearch';
@@ -8,6 +9,8 @@ import './reader.css';
 
 export interface PdfReaderProps {
   document: LoadedDocument;
+  sourceId: EntityId;
+  assetId: EntityId;
   /** 1-based, as everywhere at the domain boundary. */
   page: number;
   zoom: number;
@@ -15,6 +18,8 @@ export interface PdfReaderProps {
   onPageChange: (page: number) => void;
   onZoomChange: (zoom: number) => void;
   onScroll: (offset: number) => void;
+  annotationTool: AnnotationTool;
+  onAnnotationToolChange: (tool: AnnotationTool) => void;
 }
 
 const ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3] as const;
@@ -59,12 +64,16 @@ function nextZoom(current: number, direction: 1 | -1): number {
  */
 export function PdfReader({
   document,
+  sourceId,
+  assetId,
   page,
   zoom,
   scrollOffset,
   onPageChange,
   onZoomChange,
   onScroll,
+  annotationTool,
+  onAnnotationToolChange,
 }: PdfReaderProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const currentPageRef = useRef(page);
@@ -294,6 +303,15 @@ export function PdfReader({
       <div className="cn-reader__toolbar">
         <div className="cn-reader__group">
           <IconButton
+            label="Region annotation tool"
+            icon="▱"
+            size="sm"
+            aria-pressed={annotationTool === 'region'}
+            onClick={() =>
+              onAnnotationToolChange(annotationTool === 'region' ? 'select' : 'region')
+            }
+          />
+          <IconButton
             label="Toggle contents"
             icon="≡"
             size="sm"
@@ -409,8 +427,11 @@ export function PdfReader({
             <PdfPage
               key={pageNumber}
               document={document}
+              sourceId={sourceId}
+              assetId={assetId}
               pageNumber={pageNumber}
               zoom={zoom}
+              regionActive={annotationTool === 'region'}
               onRendered={(size) => handleRendered(pageNumber, size.height)}
             />
           ))}

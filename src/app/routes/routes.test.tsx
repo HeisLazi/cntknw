@@ -212,7 +212,12 @@ describe('Study workspace', () => {
       id: '5c9a1f22-3d4e-4f5a-8b6c-7d8e9f0a1b2c',
       sourceId: source.id,
       activeLocation: at(67),
-      sourceView: { mode: 'continuous', zoom: 1, scrollOffset: 0 },
+      sourceView: {
+        mode: 'continuous',
+        zoom: 1,
+        scrollOffset: 0,
+        annotationTool: 'select',
+      },
       journalView: { scrollOffset: 0 },
       layout: {
         mode: 'split',

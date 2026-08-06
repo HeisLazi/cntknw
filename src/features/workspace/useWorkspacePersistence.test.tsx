@@ -32,7 +32,12 @@ function makeState(page = 1): WorkspaceState {
     sourceId: SOURCE_ID,
     activeLocation: at(page),
     furthestLocation: at(page),
-    sourceView: { mode: 'continuous', zoom: 1, scrollOffset: 0 },
+    sourceView: {
+      mode: 'continuous',
+      zoom: 1,
+      scrollOffset: 0,
+      annotationTool: 'select',
+    },
     journalView: { scrollOffset: 0 },
     layout: {
       mode: 'split',

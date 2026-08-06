@@ -119,7 +119,12 @@ export async function importPdf(
       sourceId: source.id,
       activeLocation: initialLocation,
       furthestLocation: initialLocation,
-      sourceView: { mode: 'continuous', zoom: 1, scrollOffset: 0 },
+      sourceView: {
+        mode: 'continuous',
+        zoom: 1,
+        scrollOffset: 0,
+        annotationTool: 'select',
+      },
       journalView: { scrollOffset: 0 },
       layout: {
         mode: 'split',

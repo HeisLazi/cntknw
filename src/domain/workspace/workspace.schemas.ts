@@ -21,10 +21,14 @@ export const SourceViewModeSchema = z.enum([
 ]);
 export type SourceViewMode = z.infer<typeof SourceViewModeSchema>;
 
+export const AnnotationToolSchema = z.enum(['select', 'region']);
+export type AnnotationTool = z.infer<typeof AnnotationToolSchema>;
+
 export const SourceViewSchema = z.object({
   mode: SourceViewModeSchema.default('continuous'),
   zoom: z.number().positive().default(1),
   scrollOffset: z.number().nonnegative().default(0),
+  annotationTool: AnnotationToolSchema.default('select'),
 });
 export type SourceView = z.infer<typeof SourceViewSchema>;
 

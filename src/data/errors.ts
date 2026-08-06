@@ -16,7 +16,8 @@ export type StorageErrorKind =
   | 'malformed-record'
   | 'revision-conflict'
   | 'transaction-failed'
-  | 'legacy-read-failed';
+  | 'legacy-read-failed'
+  | 'asset-not-linked';
 
 export abstract class CntknwStorageError extends Error {
   abstract readonly kind: StorageErrorKind;
@@ -46,13 +47,49 @@ export class QuotaExceededError extends CntknwStorageError {
 /** A record was expected and is absent. */
 export class RecordNotFoundError extends CntknwStorageError {
   readonly kind = 'not-found' as const;
-  readonly userMessage = 'That item could not be found.';
+  readonly userMessage: string = 'That item could not be found.';
 
   constructor(
     readonly entity: string,
     readonly id: string,
   ) {
     super(`${entity} ${id} not found`);
+  }
+}
+
+/** A production annotation command referenced a source that no longer exists. */
+export class SourceNotFoundError extends RecordNotFoundError {
+  override readonly userMessage =
+    'This source could not be found. The annotation has not been saved.';
+
+  constructor(sourceId: string) {
+    super('Source', sourceId);
+    this.name = 'SourceNotFoundError';
+  }
+}
+
+/** A production annotation command referenced an asset that no longer exists. */
+export class AssetNotFoundError extends RecordNotFoundError {
+  override readonly userMessage =
+    'This document file could not be found. The annotation has not been saved.';
+
+  constructor(assetId: string) {
+    super('Asset', assetId);
+    this.name = 'AssetNotFoundError';
+  }
+}
+
+/** The asset exists, but is not a member of the requested source. */
+export class AssetNotLinkedToSourceError extends CntknwStorageError {
+  readonly kind = 'asset-not-linked' as const;
+  readonly userMessage =
+    'This document is no longer attached to the source. The annotation has not been saved.';
+
+  constructor(
+    readonly sourceId: string,
+    readonly assetId: string,
+  ) {
+    super(`Asset ${assetId} is not linked to source ${sourceId}`);
   }
 }
 

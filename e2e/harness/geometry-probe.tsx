@@ -1,6 +1,8 @@
 /** Test-only proof that ADR-0007 geometry composes with the real PdfReader. */
 import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { RepositoryProvider } from '@app/providers/RepositoryProvider';
+import { createMemoryRepositories } from '@data/adapters/memory';
 import { PdfReader } from '@features/reader/PdfReader';
 import { loadPdfDocument, type LoadedDocument } from '@features/reader/pdfjs';
 import {
@@ -155,9 +157,13 @@ function GeometryProbe() {
     <PdfReader
       key={loaded.generation}
       document={loaded.value}
+      sourceId={probeSourceId}
+      assetId={probeAssetId}
       page={page}
       zoom={zoom}
       scrollOffset={scrollOffset}
+      annotationTool="select"
+      onAnnotationToolChange={() => undefined}
       onPageChange={(nextPage) => {
         pageRef.current = nextPage;
         setPage(nextPage);
@@ -179,4 +185,11 @@ declare global {
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Geometry probe root is missing');
-createRoot(root).render(<GeometryProbe />);
+const repositories = createMemoryRepositories();
+const probeSourceId = '00000000-0000-4000-8000-000000000001';
+const probeAssetId = '00000000-0000-4000-8000-000000000002';
+createRoot(root).render(
+  <RepositoryProvider repositories={repositories}>
+    <GeometryProbe />
+  </RepositoryProvider>,
+);

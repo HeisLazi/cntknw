@@ -142,7 +142,12 @@ export function mapBook(
       sourceId,
       activeLocation: location,
       furthestLocation: location,
-      sourceView: { mode: 'continuous', zoom: 1, scrollOffset: 0 },
+      sourceView: {
+        mode: 'continuous',
+        zoom: 1,
+        scrollOffset: 0,
+        annotationTool: 'select',
+      },
       journalView: { scrollOffset: 0 },
       layout: {
         mode: 'split',

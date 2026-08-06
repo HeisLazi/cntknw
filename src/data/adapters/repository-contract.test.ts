@@ -676,7 +676,12 @@ for (const adapter of adapters) {
         id: id(),
         sourceId,
         activeLocation: locationAt(sourceId, 1),
-        sourceView: { mode: 'continuous' as const, zoom: 1, scrollOffset: 0 },
+        sourceView: {
+          mode: 'continuous' as const,
+          zoom: 1,
+          scrollOffset: 0,
+          annotationTool: 'select' as const,
+        },
         journalView: { scrollOffset: 0 },
         layout: {
           mode: 'split' as const,
@@ -994,7 +999,12 @@ for (const adapter of adapters) {
           id: id(),
           sourceId,
           activeLocation: locationAt(sourceId, 1),
-          sourceView: { mode: 'continuous' as const, zoom: 1, scrollOffset: 0 },
+          sourceView: {
+            mode: 'continuous' as const,
+            zoom: 1,
+            scrollOffset: 0,
+            annotationTool: 'select' as const,
+          },
           journalView: { scrollOffset: 0 },
           layout: {
             mode: 'split' as const,

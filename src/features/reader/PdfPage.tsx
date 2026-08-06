@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import type { EntityId } from '@domain/index';
+import type { PageViewportLike, PdfPageBox } from '@lib/geometry';
 import type { LoadedDocument } from './pdfjs';
 import { renderTextLayer } from './pdfjs';
+import { pdfPageBox } from './annotationCapture';
+import { PdfAnnotationLayer } from './PdfAnnotationLayer';
 import './reader.css';
 
 export interface PdfPageProps {
@@ -8,6 +12,9 @@ export interface PdfPageProps {
   pageNumber: number;
   /** Multiplier on the page's natural size at 96dpi. */
   zoom: number;
+  sourceId: EntityId;
+  assetId: EntityId;
+  regionActive: boolean;
   /** Reported once the page has painted, so the container can size. */
   onRendered?: (size: { width: number; height: number }) => void;
 }
@@ -40,17 +47,30 @@ export interface PdfPageProps {
  * and then read the page — the label becomes noise in front of the
  * real content.
  */
-export function PdfPage({ document, pageNumber, zoom, onRendered }: PdfPageProps) {
+export function PdfPage({
+  document,
+  pageNumber,
+  zoom,
+  sourceId,
+  assetId,
+  regionActive,
+  onRendered,
+}: PdfPageProps) {
+  const pageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [textFailed, setTextFailed] = useState(false);
+  const [projection, setProjection] = useState<{
+    viewport: PageViewportLike;
+    pageBox: PdfPageBox;
+    zoom: number;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     let renderTask: { cancel: () => void } | null = null;
     let cancelText: (() => void) | null = null;
-
     void (async () => {
       try {
         const page = await document.getPage(pageNumber);
@@ -79,6 +99,7 @@ export function PdfPage({ document, pageNumber, zoom, onRendered }: PdfPageProps
         if (cancelled) return;
 
         onRendered?.({ width: viewport.width, height: viewport.height });
+        setProjection({ viewport, pageBox: pdfPageBox(page.view), zoom });
 
         // Text after pixels: the page is readable the moment the
         // canvas lands, and the text layer arrives without holding it.
@@ -123,11 +144,22 @@ export function PdfPage({ document, pageNumber, zoom, onRendered }: PdfPageProps
   }
 
   return (
-    <div className="cn-pdf-page" data-page={pageNumber}>
+    <div ref={pageRef} className="cn-pdf-page" data-page={pageNumber}>
       {/* Announces where the reader is, before the page's own text. */}
       <span className="cn-visually-hidden">Page {pageNumber}</span>
       <canvas ref={canvasRef} className="cn-pdf-page__canvas" aria-hidden="true" />
       <div ref={textRef} className="cn-pdf-page__text" data-testid="text-layer" />
+      {projection?.zoom === zoom ? (
+        <PdfAnnotationLayer
+          sourceId={sourceId}
+          assetId={assetId}
+          pageNumber={pageNumber}
+          viewport={projection.viewport}
+          pageBox={projection.pageBox}
+          pageRef={pageRef}
+          regionActive={regionActive}
+        />
+      ) : null}
       {textFailed ? (
         <span className="cn-visually-hidden">
           The text of page {pageNumber} could not be extracted. It may be a scan.
