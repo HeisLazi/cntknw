@@ -3,7 +3,13 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryRepositories, type MemoryRepositories } from '@data/adapters/memory';
 import { expectedRevision } from '@data/repositories/concurrency';
-import type { DrawingContent, EntityId, JournalBlock, SourceLocation } from '@domain/index';
+import type {
+  DrawingContent,
+  DrawingStroke,
+  EntityId,
+  JournalBlock,
+  SourceLocation,
+} from '@domain/index';
 import { renderWithProviders } from '@tests/renderWithProviders';
 import { JournalPane } from './JournalPane';
 
@@ -31,6 +37,20 @@ const remoteStroke: DrawingContent = {
     }],
   },
 };
+
+function drawingWithStrokesForProjection(): DrawingContent {
+  const strokes: DrawingStroke[] = [{
+    id: 'whiteboard-projection-stroke',
+    color: 'var(--cn-palette-ink-400)',
+    width: 4,
+    points: [{ x: 10, y: 20 }, { x: 100, y: 120 }],
+  }];
+
+  return {
+    type: 'drawing',
+    drawingData: { version: 1, width: 800, height: 600, strokes },
+  };
+}
 
 async function setupJournal() {
   const source = await repositories.sources.create({ type: 'book', title: 'Drawing study' });
@@ -60,9 +80,14 @@ async function createParagraph(text: string): Promise<JournalBlock> {
   });
 }
 
-function renderPane() {
+function renderPane(excludedBlockIds?: ReadonlySet<EntityId>) {
   return renderWithProviders(
-    <JournalPane sourceId={sourceId} journalId={journalId} location={location} />,
+    <JournalPane
+      sourceId={sourceId}
+      journalId={journalId}
+      location={location}
+      excludedBlockIds={excludedBlockIds}
+    />,
     { repositories },
   );
 }
@@ -110,6 +135,39 @@ beforeEach(async () => {
 });
 
 describe('JournalPane drawing integration', () => {
+  it('keeps Whiteboard layout members out of Write without copying canonical records', async () => {
+    const prose = await repositories.journals.createBlock({
+      journalId,
+      kind: 'paragraph',
+      sourceLocation: location,
+      rank: 'a',
+      content: { type: 'paragraph', text: 'journal-authored prose' },
+    });
+    const boardDrawing = await repositories.journals.createBlock({
+      journalId,
+      kind: 'drawing',
+      sourceLocation: location,
+      rank: 'b',
+      content: drawingWithStrokesForProjection(),
+    });
+    const boardText = await repositories.journals.createBlock({
+      journalId,
+      kind: 'paragraph',
+      sourceLocation: location,
+      rank: 'c',
+      content: { type: 'paragraph', text: 'whiteboard-only text' },
+    });
+
+    renderPane(new Set([boardDrawing.id, boardText.id]));
+
+    expect(await screen.findByText('journal-authored prose')).toBeVisible();
+    expect(screen.queryByText('whiteboard-only text')).not.toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /Drawing/ })).not.toBeInTheDocument();
+    const stored = await repositories.journals.listBlocks(journalId);
+    expect(stored.map((block) => block.id)).toEqual([prose.id, boardDrawing.id, boardText.id]);
+    expect(new Set(stored.map((block) => block.id)).size).toBe(3);
+    expect(stored.every((block) => block.sourceLocation?.pdf?.page === 5)).toBe(true);
+  });
   it('keeps saved paragraph text when a trailing blank edit removes the block', async () => {
     const block = await createParagraph('to be deleted');
     const updateBlock = vi.spyOn(repositories.journals, 'updateBlock');
@@ -223,9 +281,8 @@ describe('JournalPane drawing integration', () => {
   it('keeps a block intact and explains when its delete-triggered flush fails', async () => {
     const block = await createDrawing();
     const originalUpdate = repositories.journals.updateBlock.bind(repositories.journals);
-    vi.spyOn(repositories.journals, 'updateBlock')
-      .mockRejectedValueOnce(new Error('disk unavailable'))
-      .mockImplementation(originalUpdate);
+    const updateBlock = vi.spyOn(repositories.journals, 'updateBlock')
+      .mockRejectedValue(new Error('disk unavailable'));
     const user = userEvent.setup();
     renderPane();
     await user.click(await screen.findByRole('button', { name: 'Edit drawing' }));
@@ -241,6 +298,7 @@ describe('JournalPane drawing integration', () => {
     expect(await repositories.journals.listDeletedBlocks(journalId)).toEqual([]);
     expect((await repositories.journals.getBlockById(block.id))?.deletedAt).toBeUndefined();
 
+    updateBlock.mockImplementation(originalUpdate);
     await user.click(within(notice).getByRole('button', { name: 'Retry saving' }));
     await waitFor(async () => {
       const stored = await repositories.journals.getBlockById(block.id);

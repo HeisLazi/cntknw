@@ -48,4 +48,18 @@ describe('canonical whiteboard operations', () => {
     history.push({ label: 'move two', undo: async () => undefined, redo: async () => undefined });
     expect(history.undoCount).toBe(2);
   });
+
+  it('invalidates both Undo and Redo branches after an external conflict', async () => {
+    const history = new WhiteboardCommandHistory();
+    history.push({ label: 'stale edit', undo: async () => undefined, redo: async () => undefined });
+    await history.undo();
+    expect(history.canRedo).toBe(true);
+
+    history.clear();
+
+    expect(history.canUndo).toBe(false);
+    expect(history.canRedo).toBe(false);
+    expect(await history.undo()).toBeNull();
+    expect(await history.redo()).toBeNull();
+  });
 });

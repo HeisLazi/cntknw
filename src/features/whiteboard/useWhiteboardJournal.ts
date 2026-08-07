@@ -3,14 +3,18 @@ import { useRepositories } from '@app/providers/RepositoryProvider';
 import { createPageLinkedBlock } from '@application/create-block';
 import { expectedRevision } from '@data/repositories/concurrency';
 import { RevisionConflictError } from '@data/errors';
+import { textOfEditableContent } from '@domain/journals/transform';
 import type {
   BlockContent,
   EntityId,
   JournalBlock,
   SourceLocation,
 } from '@domain/index';
+import { clearDraft, recoverDrafts, stashDraft } from '@features/journal/draftBuffer';
 import {
   applyPendingEdit,
+  drawingSummary,
+  pendingEditSummary,
   type PendingJournalEdit,
 } from '@features/journal/pendingEdit';
 import {
@@ -20,9 +24,20 @@ import {
 
 const SAVE_DEBOUNCE_MS = 400;
 
+type ConflictResolution = 'keep-saved' | 'use-mine';
+
+export interface WhiteboardConflict {
+  remoteSummary: string;
+  localSummary: string;
+  resolutionError: boolean;
+  retryAction?: ConflictResolution;
+}
+
 export interface WhiteboardJournal {
   blocks: JournalBlock[] | null;
   failedWrites: ReadonlyMap<EntityId, string>;
+  conflicts: ReadonlyMap<EntityId, WhiteboardConflict>;
+  historyEpoch: number;
   createBlock: (
     kind: 'drawing' | 'paragraph',
     content: BlockContent,
@@ -30,6 +45,9 @@ export interface WhiteboardJournal {
   ) => Promise<JournalBlock>;
   scheduleEdit: (blockId: EntityId, edit: PendingJournalEdit) => void;
   flush: (blockId: EntityId) => Promise<void>;
+  resolveKeepSaved: (blockId: EntityId) => Promise<void>;
+  resolveUseMyVersion: (blockId: EntityId) => Promise<void>;
+  retryResolution: (blockId: EntityId) => Promise<void>;
   deleteBlock: (blockId: EntityId) => Promise<void>;
   restoreBlock: (blockId: EntityId) => Promise<JournalBlock>;
   refresh: () => Promise<void>;
@@ -40,21 +58,48 @@ export function useWhiteboardJournal(
   sourceId: EntityId,
   journalId: EntityId,
   active: boolean,
+  boardBlockIds: ReadonlySet<EntityId>,
 ): WhiteboardJournal {
   const repositories = useRepositories();
   const { journals } = repositories;
   const [blocks, setBlocks] = useState<JournalBlock[] | null>(null);
   const [failedWrites, setFailedWrites] = useState<Map<EntityId, string>>(new Map());
+  const [conflicts, setConflicts] = useState<Map<EntityId, WhiteboardConflict>>(new Map());
+  const [historyEpoch, setHistoryEpoch] = useState(0);
   const blocksRef = useRef<JournalBlock[]>([]);
   const deletedRef = useRef(new Map<EntityId, JournalBlock>());
   const revisions = useRef(new Map<EntityId, number>());
   const pending = useRef(new Map<EntityId, PendingJournalEdit>());
   const timers = useRef(new Map<EntityId, ReturnType<typeof setTimeout>>());
+  const conflictsRef = useRef(new Map<EntityId, WhiteboardConflict>());
+  const boardBlockIdsRef = useRef(boardBlockIds);
+  const mountedRef = useRef(false);
   const flushRef = useRef<(blockId: EntityId) => Promise<void>>(async () => undefined);
+
+  useEffect(() => {
+    boardBlockIdsRef.current = boardBlockIds;
+  }, [boardBlockIds]);
 
   const replaceBlocks = useCallback((next: JournalBlock[]) => {
     blocksRef.current = next;
     setBlocks(next);
+  }, []);
+
+  const replaceConflicts = useCallback((
+    update: (current: Map<EntityId, WhiteboardConflict>) => Map<EntityId, WhiteboardConflict>,
+  ) => {
+    const next = update(conflictsRef.current);
+    conflictsRef.current = next;
+    setConflicts(next);
+  }, []);
+
+  const clearFailure = useCallback((blockId: EntityId) => {
+    setFailedWrites((current) => {
+      if (!current.has(blockId)) return current;
+      const next = new Map(current);
+      next.delete(blockId);
+      return next;
+    });
   }, []);
 
   const refresh = useCallback(async () => {
@@ -66,18 +111,39 @@ export function useWhiteboardJournal(
     for (const block of [...found, ...deleted]) {
       revisions.current.set(block.id, block.revision);
     }
+
+    const drafts = recoverDrafts();
+    const recoveredIds: EntityId[] = [];
     const withPending = found.map((block) => {
+      if (boardBlockIdsRef.current.has(block.id) && !pending.current.has(block.id)) {
+        const draft = drafts.get(block.id);
+        const storedText = textOfEditableContent(block.content);
+        if (draft && storedText !== undefined) {
+          if (draft.text === storedText) {
+            clearDraft(block.id);
+          } else {
+            pending.current.set(block.id, {
+              kind: 'text',
+              doc: draft.doc,
+              text: draft.text,
+            });
+            recoveredIds.push(block.id);
+          }
+        }
+      }
       const edit = pending.current.get(block.id);
       return edit ? { ...block, content: applyPendingEdit(block.content, edit) } : block;
     });
     replaceBlocks(withPending);
+    for (const blockId of recoveredIds) void flushRef.current(blockId);
   }, [journalId, journals, replaceBlocks]);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      void refresh();
+      return;
+    }
     if (active) void refresh();
   }, [active, refresh]);
 
@@ -86,6 +152,7 @@ export function useWhiteboardJournal(
   }), [active, journalId, refresh]);
 
   const flush = useCallback(async (blockId: EntityId) => {
+    if (conflictsRef.current.has(blockId)) return;
     const edit = pending.current.get(blockId);
     const revision = revisions.current.get(blockId);
     const current = blocksRef.current.find((block) => block.id === blockId);
@@ -97,54 +164,57 @@ export function useWhiteboardJournal(
       );
       revisions.current.set(blockId, saved.revision);
       const cleared = pending.current.get(blockId) === edit;
-      if (cleared) pending.current.delete(blockId);
+      if (cleared) {
+        pending.current.delete(blockId);
+        clearDraft(blockId);
+      }
       const newer = pending.current.get(blockId);
       const visible = newer
         ? { ...saved, content: applyPendingEdit(saved.content, newer) }
         : saved;
       replaceBlocks(blocksRef.current.map((block) => block.id === blockId ? visible : block));
-      setFailedWrites((currentFailures) => {
-        if (!currentFailures.has(blockId)) return currentFailures;
-        const next = new Map(currentFailures);
-        next.delete(blockId);
-        return next;
-      });
+      clearFailure(blockId);
       announceJournalProjectionChange({ journalId, blockId, source: 'whiteboard' });
       if (newer) void flushRef.current(blockId);
     } catch (error) {
       if (error instanceof RevisionConflictError) {
+        replaceConflicts((currentConflicts) => new Map(currentConflicts).set(blockId, {
+          remoteSummary: 'Loading saved version…',
+          localSummary: pendingEditSummary(edit),
+          resolutionError: false,
+        }));
+        clearFailure(blockId);
+        setHistoryEpoch((current) => current + 1);
         try {
           const remote = await journals.getBlockById(blockId);
           if (!remote) throw new Error('The current object could not be reloaded.');
           revisions.current.set(blockId, remote.revision);
-          const cleared = pending.current.get(blockId) === edit;
-          if (cleared) pending.current.delete(blockId);
-          const newer = pending.current.get(blockId);
-          const visible = newer
-            ? { ...remote, content: applyPendingEdit(remote.content, newer) }
-            : remote;
-          replaceBlocks(blocksRef.current.map((block) => block.id === blockId ? visible : block));
-          setFailedWrites((currentFailures) => {
-            if (!currentFailures.has(blockId)) return currentFailures;
-            const next = new Map(currentFailures);
-            next.delete(blockId);
-            return next;
+          replaceConflicts((currentConflicts) => {
+            const conflict = currentConflicts.get(blockId);
+            if (!conflict) return currentConflicts;
+            return new Map(currentConflicts).set(blockId, {
+              ...conflict,
+              remoteSummary: drawingSummary(remote.content),
+            });
           });
-          return;
         } catch {
-          setFailedWrites((currentFailures) => new Map(currentFailures).set(
-            blockId,
-            'This object changed in another window and could not be reloaded. Your changes are still visible.',
-          ));
-          return;
+          replaceConflicts((currentConflicts) => {
+            const conflict = currentConflicts.get(blockId);
+            if (!conflict) return currentConflicts;
+            return new Map(currentConflicts).set(blockId, {
+              ...conflict,
+              remoteSummary: 'Saved version could not be loaded.',
+            });
+          });
         }
+        return;
       }
       setFailedWrites((currentFailures) => new Map(currentFailures).set(
         blockId,
         'Failed to save this object. Your changes are still visible.',
       ));
     }
-  }, [journalId, journals, replaceBlocks]);
+  }, [clearFailure, journalId, journals, replaceBlocks, replaceConflicts]);
 
   useEffect(() => {
     flushRef.current = flush;
@@ -154,13 +224,95 @@ export function useWhiteboardJournal(
     const current = blocksRef.current.find((block) => block.id === blockId);
     if (!current) return;
     pending.current.set(blockId, edit);
+    if (edit.kind === 'text') {
+      stashDraft({ blockId, doc: edit.doc, text: edit.text });
+    }
     replaceBlocks(blocksRef.current.map((block) => block.id === blockId
       ? { ...block, content: applyPendingEdit(block.content, edit) }
       : block));
+    if (conflictsRef.current.has(blockId)) {
+      replaceConflicts((currentConflicts) => {
+        const conflict = currentConflicts.get(blockId);
+        return conflict
+          ? new Map(currentConflicts).set(blockId, {
+              ...conflict,
+              localSummary: pendingEditSummary(edit),
+            })
+          : currentConflicts;
+      });
+      return;
+    }
     const timer = timers.current.get(blockId);
     if (timer) clearTimeout(timer);
     timers.current.set(blockId, setTimeout(() => void flushRef.current(blockId), SAVE_DEBOUNCE_MS));
-  }, [replaceBlocks]);
+  }, [replaceBlocks, replaceConflicts]);
+
+  const resolveConflict = useCallback(async (
+    blockId: EntityId,
+    action: ConflictResolution,
+  ) => {
+    const conflict = conflictsRef.current.get(blockId);
+    if (!conflict) return;
+    replaceConflicts((currentConflicts) => new Map(currentConflicts).set(blockId, {
+      ...conflict,
+      resolutionError: false,
+      retryAction: action,
+    }));
+    try {
+      const remote = await journals.getBlockById(blockId);
+      if (!remote) throw new Error('The saved object is no longer available.');
+
+      let accepted = remote;
+      if (action === 'use-mine') {
+        const edit = pending.current.get(blockId);
+        if (!edit) throw new Error('The local version is no longer available.');
+        accepted = await journals.updateBlock(
+          { id: blockId, content: applyPendingEdit(remote.content, edit) },
+          expectedRevision(remote.revision),
+        );
+      }
+
+      const timer = timers.current.get(blockId);
+      if (timer) clearTimeout(timer);
+      timers.current.delete(blockId);
+      pending.current.delete(blockId);
+      clearDraft(blockId);
+      revisions.current.set(blockId, accepted.revision);
+      replaceBlocks(blocksRef.current.map((block) => block.id === blockId ? accepted : block));
+      replaceConflicts((currentConflicts) => {
+        const next = new Map(currentConflicts);
+        next.delete(blockId);
+        return next;
+      });
+      clearFailure(blockId);
+      setHistoryEpoch((current) => current + 1);
+      announceJournalProjectionChange({ journalId, blockId, source: 'whiteboard' });
+    } catch {
+      replaceConflicts((currentConflicts) => {
+        const current = currentConflicts.get(blockId);
+        return current
+          ? new Map(currentConflicts).set(blockId, {
+              ...current,
+              resolutionError: true,
+              retryAction: action,
+            })
+          : currentConflicts;
+      });
+    }
+  }, [clearFailure, journalId, journals, replaceBlocks, replaceConflicts]);
+
+  const resolveKeepSaved = useCallback(
+    (blockId: EntityId) => resolveConflict(blockId, 'keep-saved'),
+    [resolveConflict],
+  );
+  const resolveUseMyVersion = useCallback(
+    (blockId: EntityId) => resolveConflict(blockId, 'use-mine'),
+    [resolveConflict],
+  );
+  const retryResolution = useCallback(async (blockId: EntityId) => {
+    const action = conflictsRef.current.get(blockId)?.retryAction;
+    if (action) await resolveConflict(blockId, action);
+  }, [resolveConflict]);
 
   const createBlock = useCallback(async (
     kind: 'drawing' | 'paragraph',
@@ -180,6 +332,9 @@ export function useWhiteboardJournal(
   }, [journalId, replaceBlocks, repositories, sourceId]);
 
   const deleteBlock = useCallback(async (blockId: EntityId) => {
+    if (conflictsRef.current.has(blockId)) {
+      throw new Error('Resolve this object conflict before deleting it.');
+    }
     const timer = timers.current.get(blockId);
     if (timer) clearTimeout(timer);
     timers.current.delete(blockId);
@@ -211,17 +366,37 @@ export function useWhiteboardJournal(
     return restored;
   }, [journalId, journals, replaceBlocks]);
 
-  useEffect(() => () => {
+  const flushAll = useCallback(() => {
     for (const timer of timers.current.values()) clearTimeout(timer);
-    for (const blockId of pending.current.keys()) void flushRef.current(blockId);
+    timers.current.clear();
+    for (const blockId of [...pending.current.keys()]) void flushRef.current(blockId);
   }, []);
+
+  useEffect(() => {
+    const onPageHide = () => flushAll();
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flushAll();
+    };
+    window.addEventListener('pagehide', onPageHide);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', onPageHide);
+      document.removeEventListener('visibilitychange', onVisibility);
+      flushAll();
+    };
+  }, [flushAll]);
 
   return {
     blocks,
     failedWrites,
+    conflicts,
+    historyEpoch,
     createBlock,
     scheduleEdit,
     flush,
+    resolveKeepSaved,
+    resolveUseMyVersion,
+    retryResolution,
     deleteBlock,
     restoreBlock,
     refresh,

@@ -37,6 +37,8 @@ export interface JournalPaneProps {
   location: SourceLocation;
   scrollOffset?: number;
   onScroll?: (offset: number) => void;
+  /** Presentation membership owned by WhiteboardState, never copied content. */
+  excludedBlockIds?: ReadonlySet<EntityId>;
 }
 
 /**
@@ -45,6 +47,7 @@ export interface JournalPaneProps {
  * crash buffer and a flush on every path out of the page (ADR-0005).
  */
 const SAVE_DEBOUNCE_MS = 400;
+const NO_EXCLUDED_BLOCKS: ReadonlySet<EntityId> = new Set();
 
 /**
  * How far apart two runs are, as rhythm rather than as data.
@@ -93,6 +96,7 @@ export function JournalPane({
   location,
   scrollOffset,
   onScroll,
+  excludedBlockIds = NO_EXCLUDED_BLOCKS,
 }: JournalPaneProps) {
   const repositories = useRepositories();
   const { journals } = repositories;
@@ -115,6 +119,11 @@ export function JournalPane({
   const [resolutionErrors, setResolutionErrors] = useState<Set<EntityId>>(new Set());
   const [resetKeys, setResetKeys] = useState<Map<EntityId, number>>(new Map());
   const [focusBlockId, setFocusBlockId] = useState<EntityId | null>(null);
+  const excludedBlockIdsRef = useRef(excludedBlockIds);
+
+  useEffect(() => {
+    excludedBlockIdsRef.current = excludedBlockIds;
+  }, [excludedBlockIds]);
 
   const revisions = useRef(new Map<EntityId, number>());
   const pending = useRef(new Map<EntityId, PendingJournalEdit>());
@@ -157,6 +166,7 @@ export function JournalPane({
         // save path as any other edit.
         const drafts = recoverDrafts();
         const restored = found.map((block) => {
+          if (excludedBlockIdsRef.current.has(block.id)) return block;
           const draft = drafts.get(block.id);
           if (!draft) return block;
           const storedText = textOfEditableContent(block.content);
@@ -483,8 +493,10 @@ export function JournalPane({
 
   // ── Runs ────────────────────────────────────────────────────────
   const runs = useMemo<JournalGroup[]>(
-    () => groupBlocksByLocation((blocks ?? []).filter(b => !b.deletedAt)),
-    [blocks],
+    () => groupBlocksByLocation((blocks ?? []).filter(
+      (block) => !block.deletedAt && !excludedBlockIds.has(block.id),
+    )),
+    [blocks, excludedBlockIds],
   );
 
 
@@ -735,11 +747,11 @@ export function JournalPane({
           </ol>
         )}
 
-        {deletedBlocks.length > 0 && (
+        {deletedBlocks.some((block) => !excludedBlockIds.has(block.id)) && (
           <details className="cn-journal__trash">
-            <summary>Recently Deleted ({deletedBlocks.length})</summary>
+            <summary>Recently Deleted ({deletedBlocks.filter((block) => !excludedBlockIds.has(block.id)).length})</summary>
             <ol className="cn-journal__trash-list">
-              {deletedBlocks.map(block => (
+              {deletedBlocks.filter((block) => !excludedBlockIds.has(block.id)).map(block => (
                 <li key={block.id} className="cn-journal__trash-item">
                   <div className="cn-journal__trash-content">
                     <span className="cn-journal__trash-kind">{block.kind}</span>

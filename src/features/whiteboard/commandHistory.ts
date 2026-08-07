@@ -26,6 +26,11 @@ export class WhiteboardCommandHistory {
     return this.undoStack.length;
   }
 
+  clear(): void {
+    this.undoStack = [];
+    this.redoStack = [];
+  }
+
   push(command: WhiteboardCommand): void {
     this.undoStack.push(command);
     if (this.undoStack.length > this.limit) this.undoStack.shift();

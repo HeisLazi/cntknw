@@ -1,11 +1,12 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RepositoryProvider } from '@app/providers/RepositoryProvider';
 import { createMemoryRepositories, type MemoryRepositories } from '@data/adapters/memory';
 import { expectedRevision } from '@data/repositories/concurrency';
-import type { SourceLocation, WhiteboardState } from '@domain/index';
+import type { DrawingContent, JournalBlock, SourceLocation, WhiteboardState } from '@domain/index';
+import { recoverDrafts, stashDraft } from '@features/journal/draftBuffer';
 import { Whiteboard } from './Whiteboard';
 
 let repositories: MemoryRepositories;
@@ -79,12 +80,53 @@ function pointer(
 }
 
 beforeEach(async () => {
+  localStorage.clear();
   repositories = createMemoryRepositories();
   const source = await repositories.sources.create({ type: 'book', title: 'Whiteboard source' });
   const journal = await repositories.journals.getOrCreateJournalForSource(source.id, source.title);
   sourceId = source.id;
   journalId = journal.id;
   location = { sourceType: 'book', sourceId, pdf: { page: 7 } };
+});
+
+const drawingWithStrokes = (ids: string[], color = '#ebdbb2'): DrawingContent => ({
+  type: 'drawing',
+  drawingData: {
+    version: 1,
+    width: 200,
+    height: 120,
+    strokes: ids.map((id, index) => ({
+      id,
+      color,
+      width: 4,
+      points: [{ x: 10, y: 10 + index }, { x: 100, y: 80 + index }],
+    })),
+  },
+});
+
+async function createBoardParagraph(text: string): Promise<JournalBlock> {
+  return repositories.journals.createBlock({
+    journalId,
+    kind: 'paragraph',
+    rank: 'm',
+    sourceLocation: location,
+    content: { type: 'paragraph', text },
+  });
+}
+
+async function createBoardDrawing(content = drawingWithStrokes(['local-stroke'])): Promise<JournalBlock> {
+  return repositories.journals.createBlock({
+    journalId,
+    kind: 'drawing',
+    rank: 'm',
+    sourceLocation: location,
+    content,
+  });
+}
+
+const boardStateFor = (block: JournalBlock): WhiteboardState => ({
+  viewport: { x: 0, y: 0, zoom: 1 },
+  layout: { [block.id]: { x: 10, y: 20 } },
 });
 
 describe('Whiteboard canonical projection', () => {
@@ -244,47 +286,179 @@ describe('Whiteboard canonical projection', () => {
     }, { timeout: 1_500 });
   });
 
-  it('reconciles a revision conflict so delete and undo can complete with remote truth', async () => {
+  it('preserves both paragraph truths, blocks Delete and Clear, and applies Keep Saved explicitly', async () => {
     const user = userEvent.setup();
-    const { canvas } = await mountBoard();
-    await user.click(screen.getByRole('button', { name: 'Pen' }));
-    pointer(canvas, 'pointerdown', 80, 110);
-    pointer(canvas, 'pointerup', 210, 220);
-    await waitFor(() => expect(canvas).toHaveAttribute('data-object-count', '1'));
+    const block = await createBoardParagraph('original paragraph');
+    const { canvas } = await mountBoard(undefined, boardStateFor(block));
+    fireEvent.doubleClick(await screen.findByRole('button', { name: /Text object/ }));
+    const editor = await screen.findByRole('textbox', { name: 'Edit whiteboard text' });
+    await user.clear(editor);
+    await user.type(editor, 'local paragraph truth');
+    fireEvent.blur(editor);
+    await repositories.journals.updateBlock({
+      id: block.id,
+      content: { type: 'paragraph', text: 'remote paragraph truth' },
+    }, expectedRevision(block.revision));
 
-    await user.click(screen.getByRole('button', { name: 'Red' }));
-    await user.click(screen.getByRole('button', { name: 'Apply color to selection' }));
-    const original = (await repositories.journals.listBlocks(journalId))[0]!;
-    if (original.content.type !== 'drawing') throw new Error('Expected drawing');
-    const remote = await repositories.journals.updateBlock({
-      id: original.id,
-      content: {
-        ...original.content,
-        drawingData: {
-          ...original.content.drawingData,
-          strokes: original.content.drawingData.strokes.map((stroke) => ({
-            ...stroke,
-            color: '#458588',
-          })),
-        },
-      },
-    }, expectedRevision(original.revision));
+    const conflict = await screen.findByRole('alert', {}, { timeout: 2_000 });
+    expect(conflict).toHaveTextContent('Saved version: remote paragraph truth');
+    expect(conflict).toHaveTextContent('Your version: local paragraph truth');
+    expect(within(canvas).getByText('local paragraph truth')).toBeVisible();
+    expect((await repositories.journals.getBlockById(block.id))?.content)
+      .toMatchObject({ type: 'paragraph', text: 'remote paragraph truth' });
 
     fireEvent.keyDown(canvas, { key: 'Delete' });
-    await waitFor(async () => {
-      expect(await repositories.journals.listBlocks(journalId)).toHaveLength(0);
-      expect(await repositories.journals.listDeletedBlocks(journalId)).toHaveLength(1);
-    });
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(
+      'Resolve this object conflict before deleting it.',
+    )).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(screen.queryByRole('button', { name: 'Clear whiteboard' })).not.toBeInTheDocument();
+    expect(screen.getByText('Resolve object conflicts before clearing the whiteboard.'))
+      .toBeInTheDocument();
+    expect(await repositories.journals.listBlocks(journalId)).toHaveLength(1);
+    expect(await repositories.journals.listDeletedBlocks(journalId)).toHaveLength(0);
 
-    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    await user.click(screen.getByRole('button', { name: 'Keep Saved' }));
     await waitFor(async () => {
-      const restored = (await repositories.journals.listBlocks(journalId))[0];
-      expect(restored?.revision).toBe(remote.revision + 2);
-      expect(restored?.content.type === 'drawing' && restored.content.drawingData.strokes[0]?.color)
-        .toBe('#458588');
+      expect(screen.queryByText('Conflict:')).not.toBeInTheDocument();
+      expect((await repositories.journals.getBlockById(block.id))?.content)
+        .toMatchObject({ type: 'paragraph', text: 'remote paragraph truth' });
     });
     expect(canvas).toHaveAttribute('data-object-count', '1');
+    expect(recoverDrafts().has(block.id)).toBe(false);
+  });
+
+  it('preserves drawing truths, applies Use My Version, and cannot replay stale Undo or Redo history', async () => {
+    const user = userEvent.setup();
+    const block = await createBoardDrawing();
+    await mountBoard(undefined, boardStateFor(block));
+    const object = await screen.findByRole('button', { name: /Drawing object/ });
+    object.focus();
+    await user.click(screen.getByRole('button', { name: 'Red' }));
+    await user.click(screen.getByRole('button', { name: 'Apply color to selection' }));
+    await repositories.journals.updateBlock({
+      id: block.id,
+      content: drawingWithStrokes(['remote-one', 'remote-two'], '#458588'),
+    }, expectedRevision(block.revision));
+
+    const conflict = await screen.findByRole('alert', {}, { timeout: 2_000 });
+    expect(conflict).toHaveTextContent('Saved version: Drawing — 2 strokes');
+    expect(conflict).toHaveTextContent('Your version: Drawing — 1 stroke');
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Redo' })).toBeDisabled();
+    expect(await screen.findByText(
+      'Undo and redo history was reset because an object changed elsewhere.',
+    )).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Use My Version' }));
+    await waitFor(async () => {
+      const saved = await repositories.journals.getBlockById(block.id);
+      expect(saved?.content.type === 'drawing' && saved.content.drawingData.strokes).toHaveLength(1);
+      expect(saved?.content.type === 'drawing' && saved.content.drawingData.strokes[0]?.color)
+        .toBe('#cc241d');
+    });
+    expect(screen.queryByText('Conflict:')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Redo' })).toBeDisabled();
+  });
+
+  it('keeps a failed resolution retryable and preserves both truths until Retry succeeds', async () => {
+    const user = userEvent.setup();
+    const block = await createBoardParagraph('original');
+    await mountBoard(undefined, boardStateFor(block));
+    fireEvent.doubleClick(await screen.findByRole('button', { name: /Text object/ }));
+    const editor = await screen.findByRole('textbox', { name: 'Edit whiteboard text' });
+    await user.clear(editor);
+    await user.type(editor, 'local retry truth');
+    fireEvent.blur(editor);
+    await repositories.journals.updateBlock({
+      id: block.id,
+      content: { type: 'paragraph', text: 'remote retry truth' },
+    }, expectedRevision(block.revision));
+    await screen.findByRole('alert', {}, { timeout: 2_000 });
+
+    vi.spyOn(repositories.journals, 'updateBlock').mockRejectedValueOnce(new Error('write failed'));
+    await user.click(screen.getByRole('button', { name: 'Use My Version' }));
+    const retry = await screen.findByRole('button', { name: 'Retry' });
+    expect(screen.getByRole('alert')).toHaveTextContent('Both versions are still preserved.');
+    expect((await repositories.journals.getBlockById(block.id))?.content)
+      .toMatchObject({ type: 'paragraph', text: 'remote retry truth' });
+
+    await user.click(retry);
+    await waitFor(async () => {
+      expect((await repositories.journals.getBlockById(block.id))?.content)
+        .toMatchObject({ type: 'paragraph', text: 'local retry truth' });
+      expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    });
+    expect(await repositories.journals.listBlocks(journalId)).toHaveLength(1);
+  });
+
+  it('recovers exact whiteboard text across the pre-debounce crash window without copies', async () => {
+    const user = userEvent.setup();
+    const block = await createBoardParagraph('saved text');
+    const initialState = boardStateFor(block);
+    const rendered = await mountBoard(undefined, initialState);
+    fireEvent.doubleClick(await screen.findByRole('button', { name: /Text object/ }));
+    const editor = await screen.findByRole('textbox', { name: 'Edit whiteboard text' });
+    await user.clear(editor);
+    await user.type(editor, 'exact crash-window text');
+    fireEvent.blur(editor);
+    expect(recoverDrafts().get(block.id)?.text).toBe('exact crash-window text');
+
+    const update = vi.spyOn(repositories.journals, 'updateBlock').mockRejectedValue(new Error('page closing'));
+    fireEvent(window, new Event('pagehide'));
+    await screen.findByRole('button', { name: 'Retry saving' });
+    rendered.unmount();
+    update.mockRestore();
+
+    await mountBoard(undefined, initialState);
+    expect(await screen.findByText('exact crash-window text')).toBeVisible();
+    await waitFor(async () => {
+      const blocks = await repositories.journals.listBlocks(journalId);
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0]?.id).toBe(block.id);
+      expect(blocks[0]?.sourceLocation).toEqual(location);
+      expect(blocks[0]?.content).toMatchObject({ type: 'paragraph', text: 'exact crash-window text' });
+      expect(recoverDrafts().has(block.id)).toBe(false);
+    });
+  });
+
+  it('flushes whole drawing content on pagehide before the debounce expires', async () => {
+    const user = userEvent.setup();
+    const block = await createBoardDrawing();
+    await mountBoard(undefined, boardStateFor(block));
+    (await screen.findByRole('button', { name: /Drawing object/ })).focus();
+    await user.click(screen.getByRole('button', { name: 'Red' }));
+    await user.click(screen.getByRole('button', { name: 'Apply color to selection' }));
+    const update = vi.spyOn(repositories.journals, 'updateBlock');
+    fireEvent(window, new Event('pagehide'));
+
+    await waitFor(async () => {
+      const saved = await repositories.journals.getBlockById(block.id);
+      expect(saved?.content.type === 'drawing' && saved.content.drawingData.strokes[0]?.color)
+        .toBe('#cc241d');
+    });
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(await repositories.journals.listBlocks(journalId)).toHaveLength(1);
+  });
+
+  it('keeps failed recovered text visible and retryable', async () => {
+    const user = userEvent.setup();
+    const block = await createBoardParagraph('saved text');
+    stashDraft({ blockId: block.id, doc: undefined, text: 'recovered local text' });
+    vi.spyOn(repositories.journals, 'updateBlock').mockRejectedValueOnce(new Error('disk unavailable'));
+    await mountBoard(undefined, boardStateFor(block));
+
+    expect(await screen.findByText('recovered local text')).toBeVisible();
+    const retry = await screen.findByRole('button', { name: 'Retry saving' });
+    expect(recoverDrafts().get(block.id)?.text).toBe('recovered local text');
+    await user.click(retry);
+    await waitFor(async () => {
+      expect((await repositories.journals.getBlockById(block.id))?.content)
+        .toMatchObject({ type: 'paragraph', text: 'recovered local text' });
+      expect(recoverDrafts().has(block.id)).toBe(false);
+    });
+    expect(await repositories.journals.listBlocks(journalId)).toHaveLength(1);
   });
 
   it('keeps a transiently failed edit pending and refuses to clear its canonical object', async () => {

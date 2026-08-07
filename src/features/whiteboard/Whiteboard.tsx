@@ -190,7 +190,11 @@ export function Whiteboard({
   onViewportCommit,
   onLayoutCommit,
 }: WhiteboardProps) {
-  const journal = useWhiteboardJournal(sourceId, journalId, active);
+  const boardBlockIds = useMemo(
+    () => new Set(Object.keys(state.layout) as EntityId[]),
+    [state.layout],
+  );
+  const journal = useWhiteboardJournal(sourceId, journalId, active, boardBlockIds);
   const [tool, setTool] = useState<WhiteboardTool>('select');
   const [color, setColor] = useState<string>(QUICK_COLORS[0].value);
   const [recentColors, setRecentColors] = useState<string[]>([]);
@@ -213,6 +217,7 @@ export function Whiteboard({
   const [clearRequested, setClearRequested] = useState(false);
   const [busy, setBusy] = useState(false);
   const history = useRef(new WhiteboardCommandHistory(200));
+  const observedHistoryEpoch = useRef(0);
   const canvasRef = useRef<SVGSVGElement>(null);
   const spaceHeld = useRef(false);
   const viewportDriftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -238,6 +243,14 @@ export function Whiteboard({
   useEffect(() => () => {
     if (viewportDriftTimer.current) clearTimeout(viewportDriftTimer.current);
   }, []);
+
+  useEffect(() => {
+    if (journal.historyEpoch === observedHistoryEpoch.current) return;
+    observedHistoryEpoch.current = journal.historyEpoch;
+    history.current.clear();
+    setHistoryState({ canUndo: false, canRedo: false });
+    setAnnouncement('Undo and redo history was reset because an object changed elsewhere.');
+  }, [journal.historyEpoch]);
 
   const boardBlocks = useMemo(() => (journal.blocks ?? []).filter(
     (block) => state.layout[block.id] && isBoardBlock(block),
@@ -274,36 +287,41 @@ export function Whiteboard({
   }, []);
 
   const pushHistory = useCallback((command: Parameters<WhiteboardCommandHistory['push']>[0]) => {
+    if (journal.conflicts.size > 0) return;
     history.current.push(command);
     setHistoryState({ canUndo: history.current.canUndo, canRedo: history.current.canRedo });
-  }, []);
+  }, [journal.conflicts.size]);
 
   const deleteObject = useCallback(async (blockId: EntityId, recordHistory = true) => {
     const position = layoutRef.current[blockId];
     if (!position) return;
-    const before = layoutRef.current;
-    const next = await deleteCanonicalBoardObject({
-      deleteBlock: journal.deleteBlock,
-      commitLayout,
-    }, blockId, before);
-    setSelectedId((current) => current === blockId ? null : current);
-    setAnnouncement('Deleted the selected object. Undo is available.');
-    if (recordHistory) {
-      pushHistory({
-        label: 'delete object',
-        undo: async () => {
-          await journal.restoreBlock(blockId);
-          commitLayout({ ...layoutRef.current, [blockId]: position });
-        },
-        redo: async () => {
-          await deleteCanonicalBoardObject({
-            deleteBlock: journal.deleteBlock,
-            commitLayout,
-          }, blockId, layoutRef.current);
-        },
-      });
+    try {
+      const before = layoutRef.current;
+      const next = await deleteCanonicalBoardObject({
+        deleteBlock: journal.deleteBlock,
+        commitLayout,
+      }, blockId, before);
+      setSelectedId((current) => current === blockId ? null : current);
+      setAnnouncement('Deleted the selected object. Undo is available.');
+      if (recordHistory) {
+        pushHistory({
+          label: 'delete object',
+          undo: async () => {
+            await journal.restoreBlock(blockId);
+            commitLayout({ ...layoutRef.current, [blockId]: position });
+          },
+          redo: async () => {
+            await deleteCanonicalBoardObject({
+              deleteBlock: journal.deleteBlock,
+              commitLayout,
+            }, blockId, layoutRef.current);
+          },
+        });
+      }
+      layoutRef.current = next;
+    } catch (error) {
+      setAnnouncement(error instanceof Error ? error.message : 'The object could not be deleted.');
     }
-    layoutRef.current = next;
   }, [commitLayout, journal, pushHistory]);
 
   const createDrawing = useCallback(async (gesture: DrawingGesture) => {
@@ -425,7 +443,7 @@ export function Whiteboard({
   }, [journal, pushHistory, rememberColor, selected]);
 
   const undo = useCallback(async () => {
-    if (busy) return;
+    if (busy || journal.conflicts.size > 0) return;
     setBusy(true);
     try {
       const label = await history.current.undo();
@@ -436,10 +454,10 @@ export function Whiteboard({
     } finally {
       setBusy(false);
     }
-  }, [busy]);
+  }, [busy, journal.conflicts.size]);
 
   const redo = useCallback(async () => {
-    if (busy) return;
+    if (busy || journal.conflicts.size > 0) return;
     setBusy(true);
     try {
       const label = await history.current.redo();
@@ -450,7 +468,7 @@ export function Whiteboard({
     } finally {
       setBusy(false);
     }
-  }, [busy]);
+  }, [busy, journal.conflicts.size]);
 
   const zoomBy = useCallback((factor: number, commit = true) => {
     const box = canvasRef.current?.getBoundingClientRect();
@@ -499,6 +517,10 @@ export function Whiteboard({
     setClearRequested(false);
     const entries = boardBlocks.map((block) => ({ blockId: block.id, position: layoutRef.current[block.id]! }));
     if (entries.length === 0) return;
+    if (entries.some((entry) => journal.conflicts.has(entry.blockId))) {
+      setAnnouncement('Resolve object conflicts before clearing the whiteboard.');
+      return;
+    }
     setBusy(true);
     try {
       for (const entry of entries) await journal.deleteBlock(entry.blockId);
@@ -529,6 +551,14 @@ export function Whiteboard({
       setBusy(false);
     }
   }, [boardBlocks, commitLayout, journal, pushHistory]);
+
+  const requestClear = useCallback(() => {
+    if (journal.conflicts.size > 0) {
+      setAnnouncement('Resolve object conflicts before clearing the whiteboard.');
+      return;
+    }
+    setClearRequested(true);
+  }, [journal.conflicts.size]);
 
   const worldPoint = useCallback((event: Pick<ReactPointerEvent<SVGSVGElement>, 'clientX' | 'clientY'>) => {
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -782,15 +812,15 @@ export function Whiteboard({
         </div>
 
         <div className="cn-whiteboard__tools" role="group" aria-label="History and view">
-          <button type="button" onClick={() => void undo()} disabled={!historyState.canUndo || busy}>Undo</button>
-          <button type="button" onClick={() => void redo()} disabled={!historyState.canRedo || busy}>Redo</button>
+          <button type="button" onClick={() => void undo()} disabled={!historyState.canUndo || busy || journal.conflicts.size > 0}>Undo</button>
+          <button type="button" onClick={() => void redo()} disabled={!historyState.canRedo || busy || journal.conflicts.size > 0}>Redo</button>
           <button type="button" aria-label="Zoom out" onClick={() => zoomBy(1 / 1.2)}>−</button>
           <output aria-label="Whiteboard zoom">
             {active ? `${Math.round(viewport.zoom * 100)}%` : null}
           </output>
           <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1.2)}>+</button>
           <button type="button" onClick={fitBoard}>Fit</button>
-          <button type="button" onClick={() => setClearRequested(true)} disabled={boardBlocks.length === 0}>Clear</button>
+          <button type="button" onClick={requestClear} disabled={boardBlocks.length === 0}>Clear</button>
         </div>
 
         <div className="cn-whiteboard__style" role="group" aria-label="Object style">
@@ -1002,6 +1032,30 @@ export function Whiteboard({
           {message}
           <button type="button" onClick={() => void journal.flush(blockId)}>Retry saving</button>
         </p>
+      ))}
+
+      {[...journal.conflicts.entries()].map(([blockId, conflict]) => (
+        <div key={blockId} className="cn-whiteboard__conflict" role="alert">
+          <strong>Conflict:</strong> This object changed in another window.
+          <p><strong>Saved version:</strong> {conflict.remoteSummary}</p>
+          <p><strong>Your version:</strong> {conflict.localSummary}</p>
+          {conflict.resolutionError ? (
+            <p>Conflict resolution failed. Both versions are still preserved.</p>
+          ) : null}
+          <div className="cn-whiteboard__conflict-actions">
+            <button type="button" onClick={() => void journal.resolveKeepSaved(blockId)}>
+              Keep Saved
+            </button>
+            <button type="button" onClick={() => void journal.resolveUseMyVersion(blockId)}>
+              Use My Version
+            </button>
+            {conflict.resolutionError ? (
+              <button type="button" onClick={() => void journal.retryResolution(blockId)}>
+                Retry
+              </button>
+            ) : null}
+          </div>
+        </div>
       ))}
 
       <p className="cn-visually-hidden" role="status" aria-live="polite">{announcement}</p>

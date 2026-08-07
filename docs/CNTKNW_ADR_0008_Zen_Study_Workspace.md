@@ -23,7 +23,8 @@ place where books and artworks are read, annotated and written over.
 
 The whiteboard is not a second store. It is a **projection over the same
 canonical journal blocks** that appear in the write pane; strokes are stored
-in the existing block schema (`DrawingData.strokes: Point[][]`) through the
+in the existing block schema (`DrawingData.strokes: DrawingStroke[]`, each
+stroke carrying `{id, color, width, opacity?, points[]}`) through the
 existing `createPageLinkedBlock` boundary and the guarded `pendingEdit`
 flush seam. Turning a source's journal into a whiteboard view, back into the
 journal, or into a compare view never duplicates a block and never forks its
@@ -60,18 +61,35 @@ the rest of the shell.
 
 ## 4. The whiteboard as a projection
 
-- The whiteboard mounts the same blocks as the write pane, in the same
-  canonical order, and renders the same kinds.
-- `DrawingData` is unchanged: strokes are an array of `Point[][]` polylines.
-  The whiteboard's own saved shape is a journal block of kind `drawing`.
+- Canonical records are **shared** between the write pane and the
+  whiteboard: both project the same journal blocks, and neither copies
+  content. Projection visibility and layout are **presentation state**
+  (`WhiteboardStateSchema.layout`, a blockId → position map owned by the
+  workspace state), never a second content truth.
+- Projection membership does **not** imply full inline rendering in the
+  write pane. Objects authored exclusively on the whiteboard (present in
+  the board layout) are filtered out of the write projection, so ordinary
+  pen strokes and shapes never flood the blank writing surface as a
+  sequence of drawing editors. Journal-authored prose remains visible in
+  the write pane and on the board alike. Deleting a whiteboard block
+  deletes the same canonical block the journal would show.
+- `DrawingData` is unchanged: strokes are `DrawingStroke[]`, each with
+  `{id, color, width, opacity?, points[]}`. The whiteboard's own saved
+  shape is a journal block of kind `drawing`.
 - All saves go through `createPageLinkedBlock` plus the `pendingEdit`
   guarded flush seam; the same optimistic-concurrency guards (revision
   checks) apply as everywhere else. On a `RevisionConflictError` the flush
-  re-reads the remote block, refreshes the revision, and clears the stale
-  pending edit before any delete/undo replay proceeds — the identical rule
-  as the journal pane.
-- The whiteboard is therefore a view, never a parallel truth. Deleting a
-  whiteboard block deletes the same block the journal would show.
+  **preserves both truths**: the local pending edit stays pending, the
+  remote block is re-read and summarized, and a restrained conflict notice
+  offers explicit **Keep Saved** (discard the local edit only after the
+  user chooses) or **Use My Version** (re-read the current remote, reapply
+  the preserved local edit against the current revision, revision-guard
+  the write; a failed resolution write keeps both truths and allows
+  Retry). Delete, Clear and destructive history operations are blocked
+  while an object's latest content has an unresolved conflict, and local
+  Undo/Redo history is invalidated on conflict so stale snapshots can
+  never replay over the accepted truth.
+- The whiteboard is therefore a view, never a parallel truth.
 
 ## 5. Journal blank-page composing
 

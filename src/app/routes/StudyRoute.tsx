@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useRepositories } from '@app/providers/RepositoryProvider';
 import { useAsyncResource } from '@app/hooks/useAsyncResource';
@@ -150,6 +150,10 @@ export function StudyWorkspace({ context }: { context: ResumedSourceContext }) {
   const [contextOpen, setContextOpen] = useState(false);
   const contextTriggerRef = useRef<HTMLButtonElement>(null);
   const readerRef = useRef<PdfReaderHandle>(null);
+  const whiteboardBlockIds = useMemo(
+    () => new Set(Object.keys(state.whiteboard.layout)),
+    [state.whiteboard.layout],
+  );
 
   const assetId = context.primaryAsset?.id;
 
@@ -424,6 +428,7 @@ export function StudyWorkspace({ context }: { context: ResumedSourceContext }) {
                   sourceId={context.source.id}
                   journalId={context.journal.id}
                   location={state.activeLocation}
+                  excludedBlockIds={whiteboardBlockIds}
                   scrollOffset={state.journalView.scrollOffset}
                   onScroll={(scrollOffset) =>
                     drift({ journalView: { ...state.journalView, scrollOffset } })

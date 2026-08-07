@@ -57,7 +57,15 @@ guards raw values), a persisted four-mode layout
 `write`/`whiteboard` projection, focus-trapped dialogs, blank-page composing,
 an infinite whiteboard that is a projection over the canonical journal (no
 second store), and a fully local Pomodoro (zero network, no per-second
-writes, in-memory wall-clock deadline). See `CNTKNW_ADR_0008_Zen_Study_Workspace.md`.
+writes, in-memory wall-clock deadline). The S7 acceptance corrections
+landed: whiteboard revision conflicts preserve BOTH truths with explicit
+Keep Saved / Use My Version resolution (Retry on failure), Delete/Clear and
+destructive history are blocked while unresolved, local Undo/Redo history is
+invalidated on conflict, whiteboard text edits reuse the synchronous
+draftBuffer recovery with pagehide/visibilitychange/cleanup flushes, and
+projection membership (`WhiteboardState.layout`) is presentation state so
+whiteboard-authored objects stay off the blank Write surface with one
+canonical record per object. See `CNTKNW_ADR_0008_Zen_Study_Workspace.md`.
 
 **Phases 0A–0E are complete and verified.** 
 

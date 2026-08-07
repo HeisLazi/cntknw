@@ -44,7 +44,8 @@
 .cn-whiteboard__toolbar button,
 .cn-whiteboard__toolbar input,
 .cn-whiteboard__toolbar output,
-.cn-whiteboard__error button {
+.cn-whiteboard__error button,
+.cn-whiteboard__conflict button {
   min-height: var(--cn-chrome-control-size);
   border: var(--cn-border-width) solid var(--cn-border);
   border-radius: var(--cn-radius-sm);
@@ -220,6 +221,30 @@
   background: var(--cn-danger-quiet);
   color: var(--cn-ink-strong);
   font-size: var(--cn-text-sm);
+}
+
+.cn-whiteboard__conflict {
+  position: absolute;
+  inset-inline: var(--cn-space-sm);
+  inset-block-end: var(--cn-space-3xl);
+  z-index: var(--cn-z-sticky);
+  max-width: var(--cn-reading-width);
+  padding: var(--cn-space-sm) var(--cn-space-md);
+  border-left: var(--cn-border-width-thick) solid var(--cn-warning);
+  background: var(--cn-warning-quiet);
+  color: var(--cn-ink-strong);
+  box-shadow: var(--cn-shadow-md);
+}
+
+.cn-whiteboard__conflict p {
+  margin: var(--cn-space-2xs) 0;
+}
+
+.cn-whiteboard__conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cn-space-xs);
+  margin-top: var(--cn-space-xs);
 }
 
 @media (max-width: 56.25rem) {

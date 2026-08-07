@@ -84,12 +84,22 @@ Implemented, reviewed and verified:
   focus re-render; the Menu primitive opens on primary `pointerdown` with
   the follow-up click suppressed while keyboard activation (`detail === 0`)
   still toggles — restoring mouse/keyboard parity on empty composing blocks;
-- infinite whiteboard: `rightWorkspace = whiteboard` renders the same
+- infinite whiteboard: `rightWorkspace = whiteboard` projects the same
   canonical journal blocks as the write pane (a projection, not a second
   store); `DrawingData.strokes` unchanged; saves travel
-  `createPageLinkedBlock` + the `pendingEdit` revision-guarded flush, with
-  the conflict-path rule of re-reading the remote block, refreshing the
-  revision and clearing the stale pending edit on `RevisionConflictError`;
+  `createPageLinkedBlock` + the `pendingEdit` revision-guarded flush;
+  on `RevisionConflictError` the flush preserves BOTH truths — the local
+  pending edit stays pending, the remote block is re-read and summarized,
+  and a restrained conflict notice offers explicit Keep Saved / Use My
+  Version (revision-guarded reapply, Retry on failure); Delete/Clear and
+  destructive history are blocked while unresolved, and local Undo/Redo
+  history is invalidated on conflict so stale snapshots cannot replay;
+  whiteboard text edits reuse the synchronous draftBuffer recovery and
+  whole-content edits flush on pagehide/visibilitychange/cleanup;
+  projection membership (`WhiteboardState.layout`) is presentation state —
+  whiteboard-authored objects are filtered out of the Write projection so
+  the blank writing surface stays clean, with one canonical record per
+  object and no duplicate projection records;
 - Pomodoro: pure reducer over an in-memory wall-clock deadline;
   zero network writes, zero per-second persistence writes (start = 1 create,
   0 updates; transitions only), `pagehide` flushes the snapshot (§
