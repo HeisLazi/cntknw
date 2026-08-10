@@ -1,0 +1,48 @@
+name: Bug report
+description: Report reproducible broken behavior with verification evidence.
+title: "[Bug] "
+body:
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Observed behavior
+      description: What happened, including the exact error when available?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      placeholder: |
+        1. Start from...
+        2. Perform...
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment and version
+      placeholder: OS, browser/runtime, commit, branch, dependency versions
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Add logs, screenshots, failing tests, or a minimal reproduction. Remove secrets and private data.
+    validations:
+      required: true
+  - type: textarea
+    id: regression
+    attributes:
+      label: Regression test
+      description: Describe the test that should fail before the fix and pass afterward.
+    validations:
+      required: true
