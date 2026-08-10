@@ -2,7 +2,7 @@
 
 Updated: 2026-08-06
 Repository: `HeisLazi/cntknw`
-Authoritative checkout: `/home/lazi/Projects/personal/heisprojects/cntknw`
+Authoritative checkout: `<repo-root>`
 Branch: `main`
 
 Volatile repository HEAD fields (local HEAD, origin/main and the

@@ -5,7 +5,7 @@ shell. Implemented by Codex. Do NOT touch the Whiteboard (S3) or Pomodoro (S5).
 
 ## Repo / git state
 
-- Repo: /home/lazi/Projects/personal/heisprojects/cntknw, branch `main`.
+- Repo: <repo-root>, branch `main`.
 - S1 changes are already in the working tree OR committed — run `git status`
   and `git log --oneline -3` and read AGENTS.md/state names first. Working
   tree MUST still have only `docs/CNTKNW_Canonical_Documentation_Package_v0.2.zip`

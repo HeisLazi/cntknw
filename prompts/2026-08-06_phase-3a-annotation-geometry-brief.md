@@ -9,7 +9,7 @@
 
 ## 1. Verified repository state (do not re-derive; re-verify before acting)
 
-- Checkout: `/home/lazi/Projects/personal/heisprojects/cntknw` (repo `HeisLazi/cntknw`)
+- Checkout: `<repo-root>` (repo `HeisLazi/cntknw`)
 - Branch: `main`; local HEAD == origin/main == `8197d3683f60d5d0d503dcd6888e0d6888d44413`
 - Untracked file that MUST be preserved byte-for-byte and NEVER staged:
   `docs/CNTKNW_Canonical_Documentation_Package_v0.2.zip`

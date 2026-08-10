@@ -4,7 +4,7 @@ Run AFTER S1 (it provides the left-overlay + top-chrome slots). Implemented by
 Codex. Pomodoro only — no Whiteboard, no journal redesign.
 
 ## Repo / git state
-- Repo: /home/lazi/Projects/personal/heisprojects/cntknw, branch `main`.
+- Repo: <repo-root>, branch `main`.
 - Only unrelated untracked files remain `docs/CNTKNW_Canonical_Documentation_Package_v0.2.zip`
   and `install.sh` — never touch. No `docs/` edits, no commit, no push.
 - Read AGENTS.md, state docs, `git status` first.
