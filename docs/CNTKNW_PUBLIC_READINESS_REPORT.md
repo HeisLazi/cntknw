@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-10  
 **Branch:** `portfolio/public-readiness`  
-**Current HEAD:** the commit carrying this report update (final branch commit — `docs: finalize commit status in public readiness report`)  
+**Current HEAD:** this report is committed on branch `portfolio/public-readiness`; Git is authoritative for the exact HEAD SHA (see §7)  
 **Origin/main:** `5734da541460e74330ca60980189c809368147af`  
 **Target repository:** `HeisLazi/cntknw`  
 **Report type:** final Phase 3 deliverable — publication-readiness effort summary
@@ -185,11 +185,10 @@ Until these actions are completed, the repository should be considered **conditi
 
 ## 7. Commit status on the branch
 
-- `855b722` — `docs(ai): record owner-approved model fallback routing policy` (AGENTS.md routing policy).
-- `10d5a42` — `docs: prepare repository for public publication (audit, README, screenshots, sanitization)` (16 files: README rewrite, this report, the publication audit, 3 screenshots, path sanitization, prompts index update).
-- The commit carrying this report update — `docs: finalize commit status in public readiness report` (this section's status finalization).
-- All three commits are on `portfolio/public-readiness` only. **Nothing has been pushed** — `origin/main` remains at `5734da541460e74330ca60980189c809368147af`.
-- Working tree is clean except for the 3 protected untracked files (`docs/CNTKNW_Canonical_Documentation_Package_v0.2.zip`, `install.sh`, `prompts/2026-08-06_workspace-ux1-s7-corrections-brief.md`), which are preserved and not part of any commit.
+- All publication-readiness changes described in this report are committed locally on branch `portfolio/public-readiness`.
+- The exact commit list is available via `git log origin/main..HEAD`. Git is authoritative — specific SHAs are intentionally not enumerated here, as the list grows with every fix commit.
+- **Nothing has been pushed** — `origin/main` remains at `5734da541460e74330ca60980189c809368147af`.
+- The working tree is clean except the three protected untracked files (`docs/CNTKNW_Canonical_Documentation_Package_v0.2.zip`, `install.sh`, `prompts/2026-08-06_workspace-ux1-s7-corrections-brief.md`), which are preserved and not part of any commit.
 
 ---
 
