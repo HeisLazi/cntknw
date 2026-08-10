@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-10  
 **Branch:** `portfolio/public-readiness`  
-**Current HEAD:** `855b72241efd9472c7e737af4d64ae8c8fc51fab`  
+**Current HEAD:** the commit carrying this report update (final branch commit — `docs: finalize commit status in public readiness report`)  
 **Origin/main:** `5734da541460e74330ca60980189c809368147af`  
 **Target repository:** `HeisLazi/cntknw`  
 **Report type:** final Phase 3 deliverable — publication-readiness effort summary
@@ -187,7 +187,8 @@ Until these actions are completed, the repository should be considered **conditi
 
 - `855b722` — `docs(ai): record owner-approved model fallback routing policy` (AGENTS.md routing policy).
 - `10d5a42` — `docs: prepare repository for public publication (audit, README, screenshots, sanitization)` (16 files: README rewrite, this report, the publication audit, 3 screenshots, path sanitization, prompts index update).
-- Both commits are on `portfolio/public-readiness` only. **Nothing has been pushed** — `origin/main` remains at `5734da541460e74330ca60980189c809368147af`.
+- The commit carrying this report update — `docs: finalize commit status in public readiness report` (this section's status finalization).
+- All three commits are on `portfolio/public-readiness` only. **Nothing has been pushed** — `origin/main` remains at `5734da541460e74330ca60980189c809368147af`.
 - Working tree is clean except for the 3 protected untracked files (`docs/CNTKNW_Canonical_Documentation_Package_v0.2.zip`, `install.sh`, `prompts/2026-08-06_workspace-ux1-s7-corrections-brief.md`), which are preserved and not part of any commit.
 
 ---
@@ -221,7 +222,7 @@ Until these actions are completed, the repository should be considered **conditi
 | `prompts/2026-08-06_workspace-ux1-s4-pomodoro-brief.md` | path sanitization |
 | `prompts/README.md` | index updated |
 | `AGENTS.md` | routing policy added (commit `855b722`) |
-| `docs/CNTKNW_PUBLIC_READINESS_REPORT.md` | this report (uncommitted, untracked at creation time) |
+| `docs/CNTKNW_PUBLIC_READINESS_REPORT.md` | this report (committed on `portfolio/public-readiness`) |
 
 ---
 
