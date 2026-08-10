@@ -185,9 +185,10 @@ Until these actions are completed, the repository should be considered **conditi
 
 ## 7. Commit status on the branch
 
-- `855b722` is committed locally on `portfolio/public-readiness`.
-- The remaining Phase 3 changes (README rewrite, screenshots, path sanitization, prompts index update) are present in the working tree and staged/committed at the time the branch is reviewed for publication, but they are **not pushed** to the remote repository in this report's scope.
-- The report itself is uncommitted and untracked, consistent with the instruction not to stage or commit anything other than this file creation.
+- `855b722` — `docs(ai): record owner-approved model fallback routing policy` (AGENTS.md routing policy).
+- `10d5a42` — `docs: prepare repository for public publication (audit, README, screenshots, sanitization)` (16 files: README rewrite, this report, the publication audit, 3 screenshots, path sanitization, prompts index update).
+- Both commits are on `portfolio/public-readiness` only. **Nothing has been pushed** — `origin/main` remains at `5734da541460e74330ca60980189c809368147af`.
+- Working tree is clean except for the 3 protected untracked files (`docs/CNTKNW_Canonical_Documentation_Package_v0.2.zip`, `install.sh`, `prompts/2026-08-06_workspace-ux1-s7-corrections-brief.md`), which are preserved and not part of any commit.
 
 ---
 
