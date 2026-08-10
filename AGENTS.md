@@ -66,6 +66,12 @@ unhealthy, and retry only during an explicit health check.
 Free/direct provider model IDs are temporary and may disappear; routing must
 tolerate disappearance by falling back. Do not create unnecessary swarms.
 
+When a routed model is unavailable (usage limit, transport/auth failure, or
+server error), reroute to a model of equal capability on a different platform;
+if that is also unavailable, fall back to a free model. Record the unavailable
+model as temporarily unhealthy and retry it only during an explicit health
+check.
+
 ## Delegation contract
 
 Implementation briefs must include verified SHAs/status, milestone, invariants, exact scope/non-goals, acceptance criteria, required tests, docs, Git safety, commit message, push/post-push verification, and report format. The worker owns implementation, tests, docs, intentional staging, normal push, and post-push verification.
