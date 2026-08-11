@@ -1,0 +1,61 @@
+name: Feature or improvement
+description: Propose bounded product work with a verifiable outcome.
+title: "[Feature] "
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: What user or product result must be true when this is complete?
+      placeholder: A user can...
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence and context
+      description: Link relevant code, product docs, research, screenshots, or prior decisions.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: In scope
+      placeholder: |
+        - Required behavior
+        - Required integration
+    validations:
+      required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-goals
+      description: Explicitly state what must not be changed or added.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - [ ] Observable requirement
+        - [ ] Automated or manual verification
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks and human decisions
+      description: Note security, privacy, licensing, cost, public-release, payment, migration, or destructive decisions.
+    validations:
+      required: true
+  - type: dropdown
+    id: lane
+    attributes:
+      label: Suggested lane
+      options:
+        - OpenCode implementation
+        - Codex review
+        - Human decision
+    validations:
+      required: true
