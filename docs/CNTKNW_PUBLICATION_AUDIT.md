@@ -71,9 +71,9 @@ Commit metadata records author/committer name **Lazarus Petrus** with the primar
 `AGENTS.md` (tracked, versioned) and `cntknw-orchestrator/SKILL.md` (tracked) contain the owner's model-routing config (provider/model IDs, Hermes workflow rules, "DeepSeek direct route not authenticated / keep dormant", sensitivity guidance for free models). No credentials; purely operational configuration. A staged (uncommitted to HEAD) 6-line `AGENTS.md` change (reroute/fallback policy text) is benign.
 *Remediation:* owner review only — decide whether routing configuration should be public. No security impact.
 
-**F-6. No repository LICENSE file.**
-Third-party dependencies are all licensed (see §5), and `cntknw-orchestrator/SKILL.md` declares MIT in its frontmatter, but the repository itself carries no `LICENSE`.
-*Remediation:* add a `LICENSE` (owner choice) before publication if licensing intent matters.
+**F-6. Repository license selection — resolved.**
+The repository is licensed under the MIT License through the root `LICENSE` file. Third-party dependencies retain their respective licenses (see §5).
+*Resolution:* the owner selected MIT and a root `LICENSE` was added before publication.
 
 **F-7. Stale prompts archive index.**
 `prompts/README.md` indexes only 1 of the 15 tracked briefs. Publication-quality issue, not security.
@@ -145,7 +145,7 @@ No images, screenshots, `.db`, `.sqlite`, or user-data exports ever existed in h
 
 **Other:** `cntknw-orchestrator/SKILL.md` — declares MIT in its skill frontmatter. `src/legacy-v1/*` and `src/legacy/v1/*` are the owner's own legacy code (no third-party provenance).
 
-**License gaps:** no root `LICENSE` for the repository itself (F-6); the bundled PDF/DOCX canonical documents are generated from the repo's own Markdown and carry no external attribution obligations identified.
+**License status:** the repository now has a root MIT `LICENSE`; the bundled PDF/DOCX canonical documents are generated from the repository's own Markdown and carry no external attribution obligations identified.
 
 ---
 
