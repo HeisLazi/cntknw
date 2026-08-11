@@ -5,7 +5,7 @@ largest workstream of UX-1.
 
 ## Repo / git state
 
-- Repo: /home/lazi/Projects/personal/heisprojects/cntknw, branch `main`.
+- Repo: <repo-root>, branch `main`.
 - Read AGENTS.md, docs/AI_PROJECT_STATE.md, and git status/log first. The only
   unrelated untracked files are `docs/CNTKNW_Canonical_Documentation_Package_v0.2.zip`
   and `install.sh` — NEVER touch them. No `docs/` edits (manager writes docs

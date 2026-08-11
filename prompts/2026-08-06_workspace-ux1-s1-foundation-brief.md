@@ -6,7 +6,7 @@ presentation-layer foundation.
 
 ## Repo / git state (verified by manager)
 
-- Repo: /home/lazi/Projects/personal/heisprojects/cntknw (HeisLazi/CNTKNW), branch `main`.
+- Repo: <repo-root> (HeisLazi/CNTKNW), branch `main`.
 - local HEAD == origin/main == 3b2c33320ad2167800707e932a9a57d1b58006fe (accepted baseline).
 - Working tree: ONLY two untracked files exist, `docs/CNTKNW_Canonical_Documentation_Package_v0.2.zip` and `install.sh`. NEVER stage, modify, delete or rewrite either.
 - No amend. No force-push. No history rewrite. No `git add .` in a dirty tree.

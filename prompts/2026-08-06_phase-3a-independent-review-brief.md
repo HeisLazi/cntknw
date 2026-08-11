@@ -8,7 +8,7 @@ INSPECTION is allowed, but never in a way that changes the tree).
 
 ## Context
 
-- Repo: `/home/lazi/Projects/personal/heisprojects/cntknw` (HeisLazi/cntknw), branch `main`
+- Repo: `<repo-root>` (HeisLazi/cntknw), branch `main`
 - Base SHA: `8197d3683f60d5d0d503dcd6888e0d6888d44413` (chore(ai): optimize model routing)
 - Implementation: UNCOMMITTED working tree (do not rely on commit SHAs)
 - Start with `git status --short` and `git diff --stat` to see the change set.

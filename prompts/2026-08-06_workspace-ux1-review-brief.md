@@ -2,7 +2,7 @@
 
 You are the independent read-only reviewer for WORKSPACE UX-1 (Zen/Gruvbox
 study desk + infinite whiteboard + pomodoro) in the CNTKNW repo at
-/home/lazi/Projects/personal/heisprojects/cntknw. Do NOT edit, commit, push,
+<repo-root>. Do NOT edit, commit, push,
 or stage anything. Produce a written review only.
 
 ## Baseline

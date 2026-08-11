@@ -4,7 +4,7 @@ Date: 06 August 2026. Manager: Hermes. Implementer: Codex CLI (gpt-5.6-sol, high
 
 ## 1. Repo state (verified by manager)
 
-- Repo: HeisLazi/cntknw, branch `main`, checkout `/home/lazi/Projects/personal/heisprojects/cntknw`.
+- Repo: HeisLazi/cntknw, branch `main`, checkout `<repo-root>`.
 - HEAD == origin/main == `d5da063ce6cac6c9b58db10e1490e10d0168c637` (Phase 3B committed, pushed).
 - Working tree clean EXCEPT the untracked canonical docs ZIP:
   `docs/CNTKNW_Canonical_Documentation_Package_v0.2.zip` — NEVER stage, modify, or delete it.
