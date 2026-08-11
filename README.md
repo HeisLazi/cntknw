@@ -2,6 +2,8 @@
 
 CNTKNW is a local-first, offline reading and annotation environment. It treats PDFs and artworks as objects in a personal knowledge museum: you read, you write in a continuous journal bound to exact page locations, you annotate, you draw, and you study on a Zen workspace that projects your work without duplicating it.
 
+> **Status: active development.** CNTKNW has a tested working vertical slice, but the broader product and roadmap are unfinished. This repository documents ongoing engineering work; it is not presented as a finished release.
+
 ## What works today
 
 The current vertical slice is complete through **Phase 3 (annotations & drawing)** and **WORKSPACE UX-1 (Zen study desk)**:
