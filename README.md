@@ -98,3 +98,7 @@ This project was built with heavy AI assistance: agent-managed development, AI-g
 ## Documentation
 
 Start with `docs/CNTKNW_READ_ME_FIRST_v0.2.md`. The canonical v0.2 package is checksummed and sealed; do not edit those files in place. `docs/CNTKNW_Documentation_Index.md` is the reading guide for ADRs, checkpoint reports, and approved amendments.
+
+## License
+
+CNTKNW is available under the [MIT License](LICENSE).
