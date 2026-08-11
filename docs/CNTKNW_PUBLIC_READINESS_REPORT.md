@@ -58,7 +58,7 @@ This report documents the baseline state, the Phase 2 audit findings (with their
 | F-3 | LOW | `/home/lazi/` local absolute paths in 9 tracked files at HEAD. | **Remediated** — replaced with `<repo-root>`; 0 occurrences remain at HEAD. |
 | F-4 | LOW | Committer identity (name + 2 personal Gmail accounts) permanently public in all 43 commits. | **Owner acceptance** — cannot be changed without rewriting history; conscious acceptance required. |
 | F-5 | LOW | `AGENTS.md` + `cntknw-orchestrator/SKILL.md` routing config tracked. | **Owner review** — no credentials; decide whether to keep public. |
-| F-6 | LOW | No root `LICENSE` file. | **Owner decision** — add a license before publication if desired. |
+| F-6 | LOW | No root `LICENSE` file at audit time. | **Resolved** — owner selected MIT; root `LICENSE` added before publication. |
 | F-7 | LOW | `prompts/README.md` index stale (listed 1 of 15 briefs). | **Remediated** — index now lists all 15 tracked briefs. |
 
 **History scan (from Phase 2 audit):**
@@ -177,7 +177,7 @@ Scan performed with the geometry-probe / `__cntknwProbe` / harness-client / `e2e
 | Never mirror-push; optionally delete local `refs/codex/*` | F-2 | Avoid `git push --mirror` or `refs/*:refs/*` refspecs. Optional: `git update-ref -d` on each `refs/codex/turn-diffs/*` ref, then `git gc --prune=now`. |
 | Accept public commit identity | F-4 | Commit metadata records the name and two personal Gmail accounts across 43 commits. This cannot be changed without history rewrite, which is out of scope. |
 | Review routing-config publicity | F-5 | Decide whether `AGENTS.md` and `cntknw-orchestrator/SKILL.md` should remain public. No security impact — they contain operational model aliases, not credentials. |
-| Decide on root LICENSE | F-6 | Add a `LICENSE` file if licensing intent matters; dependencies are already individually licensed. |
+| License selection completed | F-6 | MIT License added at the repository root; dependencies retain their individual licenses. |
 
 Until these actions are completed, the repository should be considered **conditionally** ready for publication.
 
@@ -197,7 +197,7 @@ Until these actions are completed, the repository should be considered **conditi
 - **History is immutable.** The pre-sanitization `/home/lazi/...` path occurrences remain in older commit blobs even though HEAD is clean. They expose only the already-public local account name and the repository name.
 - **Screenshots are synthetic.** They show real Chromium-rendered UI but use invented placeholder source content.
 - **E2E coverage is Chromium-only.** The verified 102/102 run used the Chromium project. Playwright was installed specifically for this gate; the first install attempt produced two flaky browser-crash failures that were resolved before the successful uninterrupted rerun.
-- **No root LICENSE** exists yet; licensing intent is left to the owner.
+- **Repository license:** MIT License selected by the owner and added at the repository root.
 - **Protected untracked files** (`install.sh`, the canonical documentation zip, and the S7 corrections brief) remain local-only and will not be published unless explicitly staged and pushed.
 
 ---
